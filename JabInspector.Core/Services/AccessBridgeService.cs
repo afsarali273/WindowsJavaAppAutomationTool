@@ -1,0 +1,195 @@
+using JabInspector.Core.Diagnostics;
+using JabInspector.Native;
+using System.Text;
+
+namespace JabInspector.Core.Services;
+
+public sealed class AccessBridgeService : IDisposable
+{
+    private readonly InspectorLogger _logger;
+    private bool _initialized;
+    public AccessBridgeService(InspectorLogger logger) => _logger = logger;
+
+    public bool Initialize()
+    {
+        if (_initialized) return true;
+        try { AccessBridgeNative.WindowsRun(); _initialized = true; return true; }
+        catch (DllNotFoundException) { _logger.Log("WindowsAccessBridge-64.dll was not found. Ensure Java Access Bridge is installed, JAVA_HOME is set, and the application is running as x64."); }
+        catch (Exception ex) { _logger.Log($"Access Bridge initialization failed: {ex.Message}"); }
+        return false;
+    }
+
+    public bool IsJavaWindow(IntPtr hwnd)
+    {
+        try { return _initialized && AccessBridgeNative.isJavaWindow(hwnd); }
+        catch (Exception ex) { _logger.Log($"Window probe failed: {ex.Message}"); return false; }
+    }
+
+    public bool IsSameObject(int vmId, long first, long second)
+    { try { return first != 0 && second != 0 && AccessBridgeNative.isSameObject(vmId, first, second); } catch { return false; } }
+
+    public bool TryGetAccessibleContextFromHwnd(IntPtr hwnd, out int vmId, out long context)
+    {
+        vmId = 0; context = 0;
+        try { return _initialized && AccessBridgeNative.getAccessibleContextFromHWND(hwnd, out vmId, out context); }
+        catch (Exception ex) { _logger.Log($"Could not obtain root context: {ex.Message}"); return false; }
+    }
+
+    public bool TryGetAccessibleContextInfo(int vmId, long context, out AccessibleContextInfo info)
+    {
+        info = default;
+        try { return context != 0 && AccessBridgeNative.getAccessibleContextInfo(vmId, context, out info); }
+        catch (Exception ex) { _logger.Log($"Could not read context {context}: {ex.Message}. If values look corrupted, verify AccessibleContextInfo against AccessBridgePackages.h for the installed JDK."); return false; }
+    }
+
+    public bool TryGetChildContext(int vmId, long context, int index, out long child)
+    {
+        child = 0;
+        try { child = AccessBridgeNative.getAccessibleChildFromContext(vmId, context, index); return child != 0; }
+        catch (Exception ex) { _logger.Log($"Could not read child {index}: {ex.Message}"); return false; }
+    }
+
+    public bool TryGetAccessibleContextAt(int vmId, long parentContext, int x, int y, out long context)
+    {
+        context = 0;
+        try { return AccessBridgeNative.getAccessibleContextAt(vmId, parentContext, x, y, out context) && context != 0; }
+        catch (Exception ex) { _logger.Log($"Hover inspection failed at ({x}, {y}): {ex.Message}"); return false; }
+    }
+
+    public bool TryGetParentContext(int vmId, long context, out long parent)
+    {
+        parent = 0;
+        try { parent = AccessBridgeNative.getAccessibleParentFromContext(vmId, context); return parent != 0; }
+        catch (Exception ex) { _logger.Log($"Could not resolve hover parent: {ex.Message}"); return false; }
+    }
+
+    public void ReleaseObject(int vmId, long context)
+    { if (context == 0) return; try { AccessBridgeNative.releaseJavaObject(vmId, context); } catch { } }
+
+    public IReadOnlyList<string> GetAccessibleActions(int vmId, long context)
+    {
+        try
+        {
+            var actions = new AccessibleActions { ActionInfo = new AccessibleActionInfo[256] };
+            if (!AccessBridgeNative.getAccessibleActions(vmId, context, ref actions)) return [];
+            return actions.ActionInfo.Take(Math.Clamp(actions.ActionsCount, 0, actions.ActionInfo.Length))
+                .Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+        }
+        catch (Exception ex) { _logger.Log($"Could not read accessible actions: {ex.Message}"); return []; }
+    }
+
+    public bool DoAccessibleAction(int vmId, long context, string actionName, out int failure)
+    {
+        failure = -1;
+        try
+        {
+            var actions = new AccessibleActionsToDo { ActionsCount = 1, Actions = new AccessibleActionInfo[32] };
+            actions.Actions[0].Name = actionName;
+            return AccessBridgeNative.doAccessibleActions(vmId, context, ref actions, out failure);
+        }
+        catch (Exception ex) { _logger.Log($"Accessible action failed: {ex.Message}"); return false; }
+    }
+
+    public bool RequestFocus(int vmId, long context)
+    { try { return AccessBridgeNative.requestFocus(vmId, context); } catch (Exception ex) { _logger.Log($"Focus request failed: {ex.Message}"); return false; } }
+
+    public bool SetText(int vmId, long context, string text)
+    { try { return AccessBridgeNative.setTextContents(vmId, context, text); } catch (Exception ex) { _logger.Log($"Set text failed: {ex.Message}"); return false; } }
+
+    public string? GetText(int vmId, long context, int x, int y)
+    {
+        try
+        {
+            if (AccessBridgeNative.getAccessibleTextInfo(vmId, context, out var info, x, y) && info.CharCount > 0)
+            {
+                var length = Math.Min(info.CharCount + 1, short.MaxValue);
+                var text = new StringBuilder(length);
+                if (AccessBridgeNative.getAccessibleTextRange(vmId, context, 0, Math.Min(info.CharCount - 1, short.MaxValue - 2), text, (short)length)) return text.ToString();
+            }
+            var value = new StringBuilder(1024);
+            if (AccessBridgeNative.getCurrentAccessibleValueFromContext(vmId, context, value, 1024) && value.Length > 0) return value.ToString();
+            return null;
+        }
+        catch (Exception ex) { _logger.Log($"Get text failed: {ex.Message}"); return null; }
+    }
+
+    public string? GetSelectedOrVirtualText(int vmId, long context, out string source)
+    {
+        source = "";
+        try
+        {
+            var selectionCount = Math.Clamp(AccessBridgeNative.getAccessibleSelectionCountFromContext(vmId, context), 0, 100);
+            for (var i = 0; i < selectionCount; i++)
+            {
+                var selected = AccessBridgeNative.getAccessibleSelectionFromContext(vmId, context, i);
+                if (selected == 0) continue;
+                try
+                {
+                    var label = ReadContextLabel(vmId, selected) ?? FindNamedDescendant(vmId, selected, 2, true);
+                    if (!string.IsNullOrWhiteSpace(label)) { source = "AccessibleSelection"; return label; }
+                }
+                finally { ReleaseObject(vmId, selected); }
+            }
+
+            var active = AccessBridgeNative.getActiveDescendent(vmId, context);
+            if (active != 0)
+            {
+                try
+                {
+                    var label = ReadContextLabel(vmId, active) ?? FindNamedDescendant(vmId, active, 2, false);
+                    if (!string.IsNullOrWhiteSpace(label)) { source = "active descendant"; return label; }
+                }
+                finally { ReleaseObject(vmId, active); }
+            }
+
+            var selectedDescendant = FindNamedDescendant(vmId, context, 3, true);
+            if (!string.IsNullOrWhiteSpace(selectedDescendant)) { source = "selected descendant"; return selectedDescendant; }
+
+            var virtualName = new StringBuilder(1024);
+            if (AccessBridgeNative.getVirtualAccessibleName(vmId, context, virtualName, virtualName.Capacity) && virtualName.Length > 0)
+            { source = "virtual accessible name"; return virtualName.ToString(); }
+        }
+        catch (Exception ex) { _logger.Log($"Combo/selection text lookup failed: {ex.Message}"); }
+        return null;
+    }
+
+    private string? ReadContextLabel(int vmId, long context)
+    {
+        if (!TryGetAccessibleContextInfo(vmId, context, out var info)) return null;
+        if (!string.IsNullOrWhiteSpace(info.Name)) return info.Name;
+        if (!string.IsNullOrWhiteSpace(info.Description)) return info.Description;
+        var virtualName = new StringBuilder(1024);
+        return AccessBridgeNative.getVirtualAccessibleName(vmId, context, virtualName, virtualName.Capacity) && virtualName.Length > 0
+            ? virtualName.ToString() : null;
+    }
+
+    private string? FindNamedDescendant(int vmId, long context, int depth, bool requireSelected)
+    {
+        if (depth <= 0 || !TryGetAccessibleContextInfo(vmId, context, out var parentInfo)) return null;
+        var childCount = Math.Min(Math.Max(parentInfo.ChildrenCount, 0), 250);
+        for (var i = 0; i < childCount; i++)
+        {
+            if (!TryGetChildContext(vmId, context, i, out var child)) continue;
+            try
+            {
+                if (!TryGetAccessibleContextInfo(vmId, child, out var childInfo)) continue;
+                var states = $"{childInfo.States} {childInfo.StatesEnUs}";
+                var selected = states.Contains("selected", StringComparison.OrdinalIgnoreCase) || states.Contains("focused", StringComparison.OrdinalIgnoreCase) || states.Contains("active", StringComparison.OrdinalIgnoreCase);
+                if ((!requireSelected || selected) && !string.IsNullOrWhiteSpace(childInfo.Name)) return childInfo.Name;
+                var nested = FindNamedDescendant(vmId, child, depth - 1, requireSelected);
+                if (!string.IsNullOrWhiteSpace(nested)) return nested;
+            }
+            finally { ReleaseObject(vmId, child); }
+        }
+        return null;
+    }
+
+    public void Shutdown()
+    {
+        // shutdownAccessBridge is part of Oracle's AccessBridgeCalls.c helper,
+        // not an export of WindowsAccessBridge-64.dll. The native bridge is
+        // released when this process exits.
+        _initialized = false;
+    }
+    public void Dispose() => Shutdown();
+}
