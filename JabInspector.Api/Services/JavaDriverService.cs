@@ -27,8 +27,11 @@ public sealed class JavaDriverService : IDisposable
 
     public IReadOnlyList<JavaWindowInfo> GetWindows()
     {
-        var discovery = new JavaWindowDiscoveryService(_bridge, _logger);
-        return discovery.GetJavaWindows();
+        lock (_sync)
+        {
+            var discovery = new JavaWindowDiscoveryService(_bridge, _logger);
+            return discovery.GetJavaWindows();
+        }
     }
 
     public DriverResult CreateSession(CreateSessionRequest request)
@@ -57,14 +60,22 @@ public sealed class JavaDriverService : IDisposable
         }
     }
 
-    public IReadOnlyList<JavaSessionSummary> GetSessions() =>
-        _sessions.Values.Select(ToSummary).OrderBy(x => x.CreatedAtUtc).ToList();
+    public IReadOnlyList<JavaSessionSummary> GetSessions()
+    {
+        lock (_sync)
+        {
+            return _sessions.Values.Select(ToSummary).OrderBy(x => x.CreatedAtUtc).ToList();
+        }
+    }
 
     public bool DeleteSession(string sessionId)
     {
-        var removed = _sessions.TryRemove(sessionId, out _);
-        if (removed) _logger.Log($"API session deleted. SessionId={sessionId}.");
-        return removed;
+        lock (_sync)
+        {
+            var removed = _sessions.TryRemove(sessionId, out _);
+            if (removed) _logger.Log($"API session deleted. SessionId={sessionId}.");
+            return removed;
+        }
     }
 
     public DriverResult RefreshSession(string sessionId)
@@ -75,21 +86,24 @@ public sealed class JavaDriverService : IDisposable
 
     public DriverResult GetSessionWindows(string sessionId)
     {
-        if (!TryGetSession(sessionId, out var session, out var result)) return result;
-        var windows = GetRelatedWindows(session)
-            .Select(window => new
-            {
-                isActive = window.Hwnd == session.Window.Hwnd,
-                window = JavaWindowDto.From(window)
-            })
-            .ToList();
-
-        return Ok("Session windows returned.", sessionId, new
+        lock (_sync)
         {
-            activeWindow = JavaWindowDto.From(session.Window),
-            count = windows.Count,
-            windows
-        });
+            if (!TryGetSession(sessionId, out var session, out var result)) return result;
+            var windows = GetRelatedWindows(session)
+                .Select(window => new
+                {
+                    isActive = window.Hwnd == session.Window.Hwnd,
+                    window = JavaWindowDto.From(window)
+                })
+                .ToList();
+
+            return Ok("Session windows returned.", sessionId, new
+            {
+                activeWindow = JavaWindowDto.From(session.Window),
+                count = windows.Count,
+                windows
+            });
+        }
     }
 
     public DriverResult SwitchSessionWindow(string sessionId, SwitchWindowRequest request)
@@ -122,111 +136,126 @@ public sealed class JavaDriverService : IDisposable
 
     public DriverResult GetTree(string sessionId)
     {
-        if (!TryGetSession(sessionId, out var session, out var result)) return result;
-        if (session.Root is null) return Fail("Session has no tree yet. Call refresh first.", sessionId);
-        return Ok("Tree returned.", sessionId, new
+        lock (_sync)
         {
-            session = ToSummary(session),
-            root = session.Root
-        });
+            if (!TryGetSession(sessionId, out var session, out var result)) return result;
+            if (session.Root is null) return Fail("Session has no tree yet. Call refresh first.", sessionId);
+            return Ok("Tree returned.", sessionId, new
+            {
+                session = ToSummary(session),
+                root = session.Root
+            });
+        }
     }
 
     public DriverResult LoadRepository(string sessionId, LoadRepositoryRequest request)
     {
-        if (!TryGetSession(sessionId, out var session, out var result)) return result;
-        if (string.IsNullOrWhiteSpace(request.Path) || !File.Exists(request.Path))
-            return Fail($"Repository/project file was not found: {request.Path}", sessionId);
+        lock (_sync)
+        {
+            if (!TryGetSession(sessionId, out var session, out var result)) return result;
+            if (string.IsNullOrWhiteSpace(request.Path) || !File.Exists(request.Path))
+                return Fail($"Repository/project file was not found: {request.Path}", sessionId);
 
-        try
-        {
-            var project = _repositoryService.LoadProject(request.Path);
-            session.Repository.Clear();
-            session.Repository.AddRange(project.Repository);
-            _logger.Log($"API repository loaded. SessionId={sessionId}, Path='{request.Path}', Objects={session.Repository.Count}.");
-            return Ok("Repository loaded.", sessionId, new
+            try
             {
-                project.SessionName,
-                project.ApplicationAlias,
-                objectCount = session.Repository.Count,
-                objects = session.Repository.Select(ToRepositorySummary).ToList()
-            });
-        }
-        catch (Exception ex)
-        {
-            return Fail($"Could not load repository: {ex.Message}", sessionId);
+                var project = _repositoryService.LoadProject(request.Path);
+                session.Repository.Clear();
+                session.Repository.AddRange(project.Repository);
+                _logger.Log($"API repository loaded. SessionId={sessionId}, Path='{request.Path}', Objects={session.Repository.Count}.");
+                return Ok("Repository loaded.", sessionId, new
+                {
+                    project.SessionName,
+                    project.ApplicationAlias,
+                    objectCount = session.Repository.Count,
+                    objects = session.Repository.Select(ToRepositorySummary).ToList()
+                });
+            }
+            catch (Exception ex)
+            {
+                return Fail($"Could not load repository: {ex.Message}", sessionId);
+            }
         }
     }
 
     public DriverResult GetRepository(string sessionId)
     {
-        if (!TryGetSession(sessionId, out var session, out var result)) return result;
-        return Ok("Repository returned.", sessionId, session.Repository.Select(ToRepositorySummary).ToList());
+        lock (_sync)
+        {
+            if (!TryGetSession(sessionId, out var session, out var result)) return result;
+            return Ok("Repository returned.", sessionId, session.Repository.Select(ToRepositorySummary).ToList());
+        }
     }
 
     public DriverResult ResolveElement(string sessionId, ResolveElementRequest request)
     {
-        if (!TryGetSession(sessionId, out var session, out var result)) return result;
-        var routed = RouteSessionWindow(session, request.ObjectKey, request.Window, request.AutoSwitchWindow);
-        if (!routed.Success) return routed;
-
-        if (request.RefreshTree || session.Root is null)
+        lock (_sync)
         {
-            var refresh = RefreshSessionTree(session);
-            if (!refresh.Success) return refresh;
+            if (!TryGetSession(sessionId, out var session, out var result)) return result;
+            var routed = RouteSessionWindow(session, request.ObjectKey, request.Window, request.AutoSwitchWindow);
+            if (!routed.Success) return routed;
+
+            if (request.RefreshTree || session.Root is null)
+            {
+                var refresh = RefreshSessionTree(session);
+                if (!refresh.Success) return refresh;
+            }
+
+            var resolution = ResolveNode(session, request.ObjectKey, request.Locator);
+            if (!resolution.Success || resolution.Node is null)
+                return Fail(resolution.Message, sessionId);
+
+            var locator = LocatorGenerator.GenerateLocator(resolution.Node);
+            return Ok("Element resolved.", sessionId, new ResolvedElementDto(
+                resolution.Node.DisplayName,
+                locator,
+                _automation.GetActions(resolution.Node)));
         }
-
-        var resolution = ResolveNode(session, request.ObjectKey, request.Locator);
-        if (!resolution.Success || resolution.Node is null)
-            return Fail(resolution.Message, sessionId);
-
-        var locator = LocatorGenerator.GenerateLocator(resolution.Node);
-        return Ok("Element resolved.", sessionId, new ResolvedElementDto(
-            resolution.Node.DisplayName,
-            locator,
-            _automation.GetActions(resolution.Node)));
     }
 
     public DriverResult ExecuteAction(string sessionId, JavaActionRequest request)
     {
-        if (!TryGetSession(sessionId, out var session, out var result)) return result;
-        var routed = RouteSessionWindow(session, request.ObjectKey, request.Window, request.AutoSwitchWindow);
-        if (!routed.Success) return routed;
-
-        if (request.RefreshTree || session.Root is null)
+        lock (_sync)
         {
-            var refresh = RefreshSessionTree(session);
-            if (!refresh.Success) return refresh;
+            if (!TryGetSession(sessionId, out var session, out var result)) return result;
+            var routed = RouteSessionWindow(session, request.ObjectKey, request.Window, request.AutoSwitchWindow);
+            if (!routed.Success) return routed;
+
+            if (request.RefreshTree || session.Root is null)
+            {
+                var refresh = RefreshSessionTree(session);
+                if (!refresh.Success) return refresh;
+            }
+
+            var resolution = ResolveNode(session, request.ObjectKey, request.Locator);
+            if (!resolution.Success || resolution.Node is null)
+                return Fail(resolution.Message, sessionId);
+
+            var node = resolution.Node;
+            if (!TryNormalizeAction(request.Action, out var action, out var actionError))
+                return Fail(actionError, sessionId);
+
+            SetForegroundWindow(session.Window.Hwnd);
+            var success = action switch
+            {
+                JavaRecordedActionKind.Focus => _automation.Focus(node),
+                JavaRecordedActionKind.Click => ExecuteClick(node, request.PreferAccessibleAction),
+                JavaRecordedActionKind.DoubleClick => PhysicalClick(node, 2),
+                JavaRecordedActionKind.SetText => _automation.SetText(node, request.Text ?? ""),
+                JavaRecordedActionKind.TypeText => _automation.SetText(node, request.Text ?? ""),
+                JavaRecordedActionKind.GetText => true,
+                _ => false
+            };
+
+            var text = action == JavaRecordedActionKind.GetText ? _automation.GetText(node) : null;
+            if (!success) return Fail($"Action '{request.Action}' failed for {node.DisplayName}.", sessionId);
+
+            return Ok($"Action '{action}' executed.", sessionId, new
+            {
+                action,
+                element = new ResolvedElementDto(node.DisplayName, LocatorGenerator.GenerateLocator(node), _automation.GetActions(node)),
+                text
+            });
         }
-
-        var resolution = ResolveNode(session, request.ObjectKey, request.Locator);
-        if (!resolution.Success || resolution.Node is null)
-            return Fail(resolution.Message, sessionId);
-
-        var node = resolution.Node;
-        if (!TryNormalizeAction(request.Action, out var action, out var actionError))
-            return Fail(actionError, sessionId);
-
-        SetForegroundWindow(session.Window.Hwnd);
-        var success = action switch
-        {
-            JavaRecordedActionKind.Focus => _automation.Focus(node),
-            JavaRecordedActionKind.Click => ExecuteClick(node, request.PreferAccessibleAction),
-            JavaRecordedActionKind.DoubleClick => PhysicalClick(node, 2),
-            JavaRecordedActionKind.SetText => _automation.SetText(node, request.Text ?? ""),
-            JavaRecordedActionKind.TypeText => _automation.SetText(node, request.Text ?? ""),
-            JavaRecordedActionKind.GetText => true,
-            _ => false
-        };
-
-        var text = action == JavaRecordedActionKind.GetText ? _automation.GetText(node) : null;
-        if (!success) return Fail($"Action '{request.Action}' failed for {node.DisplayName}.", sessionId);
-
-        return Ok($"Action '{action}' executed.", sessionId, new
-        {
-            action,
-            element = new ResolvedElementDto(node.DisplayName, LocatorGenerator.GenerateLocator(node), _automation.GetActions(node)),
-            text
-        });
     }
 
     private JavaWindowInfo? FindWindow(CreateSessionRequest request)

@@ -5,6 +5,13 @@ using JabInspector.Core.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 4 * 1024 * 1024;
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(15);
+    options.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(30);
+});
+
 builder.Services.AddSingleton<InspectorLogger>();
 builder.Services.AddSingleton<AccessBridgeService>();
 builder.Services.AddSingleton<JavaDriverService>();
@@ -26,6 +33,34 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 var app = builder.Build();
+
+app.Use(async (context, next) =>
+{
+    var logger = context.RequestServices.GetRequiredService<InspectorLogger>();
+    var started = DateTime.UtcNow;
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        logger.Log($"API unhandled error. Method={context.Request.Method}, Path={context.Request.Path}, Error={ex.Message}");
+        if (!context.Response.HasStarted)
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                success = false,
+                message = "The API server handled an internal error without terminating. Check the server log for details."
+            });
+        }
+    }
+    finally
+    {
+        var elapsed = DateTime.UtcNow - started;
+        logger.Debug($"API request completed. Method={context.Request.Method}, Path={context.Request.Path}, Status={context.Response.StatusCode}, DurationMs={elapsed.TotalMilliseconds:0}.");
+    }
+});
 
 app.UseSwagger();
 app.UseSwaggerUI(options =>

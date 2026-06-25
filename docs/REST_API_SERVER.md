@@ -14,6 +14,12 @@ Swagger UI is available at:
 http://127.0.0.1:5055/swagger
 ```
 
+The OpenAPI JSON document is available at:
+
+```text
+http://127.0.0.1:5055/swagger/v1/swagger.json
+```
+
 ## Basic flow
 
 1. Discover Java windows.
@@ -130,6 +136,18 @@ Content-Type: application/json
 - `getText`
 
 The resolver uses the same rich locator snapshot as the desktop inspector/recorder: path, indexPath, XPath, semantic fields, parent identity, depth, state, bounds, text/value metadata, and action names.
+
+## Stability and production-readiness notes
+
+The API now includes Swagger UI, request logging, global exception handling, request-size/time limits, and serialized Java Access Bridge operations so simultaneous client calls do not poke the same native automation bridge at the same time.
+
+For real production/distribution use, still treat it as a local automation driver and run it behind your own security boundary:
+
+- bind to `127.0.0.1` by default unless you intentionally expose it;
+- add authentication/API keys before allowing remote access;
+- run it under the same Windows desktop/user session as the target Java application;
+- supervise it with a service runner or process monitor if you need automatic restart;
+- avoid parallel actions against the same Java app; the server serializes operations, but UI automation itself is stateful.
 
 ## Modal and window handling
 
