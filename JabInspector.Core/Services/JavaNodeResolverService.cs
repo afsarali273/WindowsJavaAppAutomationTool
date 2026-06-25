@@ -7,18 +7,37 @@ public sealed class JavaNodeResolverService
     public AccessibleNode? Resolve(AccessibleNode root, JavaObjectRepositoryEntry entry, JavaRecordedStep? step = null)
     {
         var nodes = Enumerate(root).ToList();
+        var locator = step?.ObjectLocator ?? entry.Locator;
+
+        var uniqueLocatorMatch = TryResolveByUniqueLocator(nodes, entry, locator);
+        if (uniqueLocatorMatch is not null) return uniqueLocatorMatch;
 
         var exactIndexPath = TryResolveByAbsoluteIndexPath(root, entry);
-        if (exactIndexPath is not null && Score(exactIndexPath, entry, step) >= 40) return exactIndexPath;
+        if (exactIndexPath is not null &&
+            Score(exactIndexPath, entry, step) >= 70 &&
+            HasStableIdentityMatch(exactIndexPath, entry, locator))
+        {
+            return exactIndexPath;
+        }
 
         var exactPath = nodes
             .Where(node => EqualsNormalized(node.Path, entry.Path))
             .OrderByDescending(node => Score(node, entry, step))
             .FirstOrDefault();
-        if (exactPath is not null && Score(exactPath, entry, step) >= 55) return exactPath;
+        if (exactPath is not null &&
+            Score(exactPath, entry, step) >= 70 &&
+            HasStableIdentityMatch(exactPath, entry, locator))
+        {
+            return exactPath;
+        }
 
         var indexedWeak = TryResolveByIndexedPath(root, entry);
-        if (indexedWeak is not null && Score(indexedWeak, entry, step) >= 52) return indexedWeak;
+        if (indexedWeak is not null &&
+            Score(indexedWeak, entry, step) >= 72 &&
+            HasStableIdentityMatch(indexedWeak, entry, locator))
+        {
+            return indexedWeak;
+        }
 
         var ranked = nodes
             .Select(node => (Node: node, Score: Score(node, entry, step)))
@@ -29,16 +48,46 @@ public sealed class JavaNodeResolverService
         if (ranked.Count == 0) return null;
 
         var best = ranked[0];
-        if (best.Score < 52) return null;
+        if (best.Score < 72) return null;
 
         if (ranked.Count > 1)
         {
             var second = ranked[1];
-            var ambiguous = best.Score - second.Score < 10;
+            var ambiguous = best.Score - second.Score < 18;
             if (ambiguous && !HasStrongDiscriminatorMatch(best.Node, entry, step)) return null;
         }
 
         return best.Node;
+    }
+
+    private static AccessibleNode? TryResolveByUniqueLocator(
+        IReadOnlyList<AccessibleNode> nodes,
+        JavaObjectRepositoryEntry entry,
+        LocatorSuggestion? locator)
+    {
+        var attempts = new Func<AccessibleNode, bool>[]
+        {
+            node => MatchesExactIndexPath(node, entry, locator) && HasFullIdentityMatch(node, entry, locator),
+            node => MatchesExactXPath(node, locator) && HasFullIdentityMatch(node, entry, locator),
+            node => MatchesExactPath(node, entry, locator) && HasFullIdentityMatch(node, entry, locator),
+            node => MatchesExactIndexPath(node, entry, locator) && HasStableIdentityMatch(node, entry, locator),
+            node => MatchesExactXPath(node, locator) && HasStableIdentityMatch(node, entry, locator),
+            node => MatchesExactPath(node, entry, locator) && HasStableIdentityMatch(node, entry, locator),
+            node => HasSemanticIdentityMatch(node, entry, locator) && BoundsAreCompatible(node, entry, locator)
+        };
+
+        foreach (var attempt in attempts)
+        {
+            var matches = nodes
+                .Where(attempt)
+                .OrderByDescending(node => IdentityScore(node, entry, locator))
+                .Take(2)
+                .ToList();
+
+            if (matches.Count == 1) return matches[0];
+        }
+
+        return null;
     }
 
     private static IEnumerable<AccessibleNode> Enumerate(AccessibleNode root)
@@ -181,6 +230,132 @@ public sealed class JavaNodeResolverService
                EqualsNormalized(node.Description, entry.Description) ||
                node.IndexInParent == entry.IndexInParent;
     }
+
+    private static bool MatchesExactPath(AccessibleNode node, JavaObjectRepositoryEntry entry, LocatorSuggestion? locator)
+    {
+        var path = locator?.Path ?? entry.Path;
+        return !string.IsNullOrWhiteSpace(path) && EqualsNormalized(node.Path, path);
+    }
+
+    private static bool MatchesExactIndexPath(AccessibleNode node, JavaObjectRepositoryEntry entry, LocatorSuggestion? locator)
+    {
+        var indexPath = locator?.IndexPath ?? entry.IndexPath;
+        return !string.IsNullOrWhiteSpace(indexPath) && EqualsNormalized(LocatorGenerator.BuildIndexPath(node), indexPath);
+    }
+
+    private static bool MatchesExactXPath(AccessibleNode node, LocatorSuggestion? locator)
+    {
+        if (locator is null) return false;
+        return (!string.IsNullOrWhiteSpace(locator.XPath) && EqualsNormalized(LocatorGenerator.BuildXPath(node), locator.XPath)) ||
+               (!string.IsNullOrWhiteSpace(locator.IndexXPath) && EqualsNormalized(LocatorGenerator.BuildIndexXPath(node), locator.IndexXPath));
+    }
+
+    private static bool HasFullIdentityMatch(AccessibleNode node, JavaObjectRepositoryEntry entry, LocatorSuggestion? locator)
+    {
+        if (!HasStableIdentityMatch(node, entry, locator)) return false;
+
+        var required = 0;
+        var matched = 0;
+        CountMatch(EqualsNormalized(node.StatesEnUs, locator?.StatesEnUs ?? entry.StatesEnUs) ||
+                   EqualsNormalized(node.States, locator?.States ?? entry.States), HasAny(locator?.StatesEnUs, locator?.States, entry.StatesEnUs, entry.States), ref required, ref matched);
+        CountMatch(node.ChildrenCount == (locator?.ChildrenCount ?? entry.ChildrenCount), locator?.ChildrenCount >= 0 || entry.ChildrenCount >= 0, ref required, ref matched);
+        CountMatch(node.HasManagedDescendantAncestor == (locator?.HasManagedDescendantAncestor ?? entry.HasManagedDescendantAncestor), true, ref required, ref matched);
+
+        var actions = locator?.ActionNames ?? entry.ActionNames;
+        if (actions.Count > 0)
+        {
+            required++;
+            if (node.ActionNames.Count > 0 && actions.All(action => node.ActionNames.Any(recorded => EqualsNormalized(action, recorded)))) matched++;
+        }
+
+        return required == 0 || matched >= Math.Max(1, required - 1);
+    }
+
+    private static bool HasStableIdentityMatch(AccessibleNode node, JavaObjectRepositoryEntry entry, LocatorSuggestion? locator)
+    {
+        if (!RoleMatches(node, locator?.RoleEnUs ?? locator?.Role ?? entry.RoleEnUs) &&
+            !RoleMatches(node, entry.Role))
+        {
+            return false;
+        }
+
+        var required = 0;
+        var matched = 0;
+
+        CountMatch(EqualsNormalized(node.Name, locator?.Name ?? entry.Name), HasAny(locator?.Name, entry.Name), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.VirtualAccessibleName, locator?.VirtualAccessibleName ?? entry.VirtualAccessibleName), HasAny(locator?.VirtualAccessibleName, entry.VirtualAccessibleName), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.Description, locator?.Description ?? entry.Description), HasAny(locator?.Description, entry.Description), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.Parent?.Role, locator?.ParentRole ?? entry.ParentRole), HasAny(locator?.ParentRole, entry.ParentRole), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.Parent?.Name, locator?.ParentName ?? entry.ParentName), HasAny(locator?.ParentName, entry.ParentName), ref required, ref matched);
+        CountMatch(node.IndexInParent == (locator?.IndexInParent ?? entry.IndexInParent), (locator?.IndexInParent ?? entry.IndexInParent) >= 0, ref required, ref matched);
+        CountMatch(node.ObjectDepth == (locator?.ObjectDepth ?? entry.ObjectDepth), (locator?.ObjectDepth ?? entry.ObjectDepth) >= 0, ref required, ref matched);
+
+        if (HasAny(locator?.TextPreview))
+        {
+            required++;
+            if (EqualsNormalized(node.TextPreview, locator!.TextPreview)) matched++;
+        }
+
+        if (HasAny(locator?.CurrentValue))
+        {
+            required++;
+            if (EqualsNormalized(node.CurrentValue, locator!.CurrentValue)) matched++;
+        }
+
+        return required == 0
+            ? MatchesExactPath(node, entry, locator) || MatchesExactIndexPath(node, entry, locator) || MatchesExactXPath(node, locator)
+            : matched >= Math.Min(required, 3);
+    }
+
+    private static bool HasSemanticIdentityMatch(AccessibleNode node, JavaObjectRepositoryEntry entry, LocatorSuggestion? locator)
+    {
+        if (!HasStableIdentityMatch(node, entry, locator)) return false;
+
+        var hasStrongName = EqualsNormalized(node.Name, locator?.Name ?? entry.Name) ||
+                            EqualsNormalized(node.VirtualAccessibleName, locator?.VirtualAccessibleName ?? entry.VirtualAccessibleName) ||
+                            EqualsNormalized(node.Description, locator?.Description ?? entry.Description) ||
+                            EqualsNormalized(node.TextPreview, locator?.TextPreview);
+        var hasStructure = node.IndexInParent == (locator?.IndexInParent ?? entry.IndexInParent) &&
+                           node.ObjectDepth == (locator?.ObjectDepth ?? entry.ObjectDepth);
+        var hasParent = EqualsNormalized(node.Parent?.Role, locator?.ParentRole ?? entry.ParentRole) ||
+                        EqualsNormalized(node.Parent?.Name, locator?.ParentName ?? entry.ParentName);
+
+        return hasStrongName && hasStructure && hasParent;
+    }
+
+    private static int IdentityScore(AccessibleNode node, JavaObjectRepositoryEntry entry, LocatorSuggestion? locator)
+    {
+        var score = 0;
+        if (MatchesExactPath(node, entry, locator)) score += 100;
+        if (MatchesExactIndexPath(node, entry, locator)) score += 100;
+        if (MatchesExactXPath(node, locator)) score += 90;
+        if (RoleMatches(node, locator?.RoleEnUs ?? locator?.Role ?? entry.RoleEnUs)) score += 30;
+        if (EqualsNormalized(node.Name, locator?.Name ?? entry.Name)) score += 30;
+        if (EqualsNormalized(node.VirtualAccessibleName, locator?.VirtualAccessibleName ?? entry.VirtualAccessibleName)) score += 28;
+        if (EqualsNormalized(node.Description, locator?.Description ?? entry.Description)) score += 18;
+        if (EqualsNormalized(node.Parent?.Role, locator?.ParentRole ?? entry.ParentRole)) score += 18;
+        if (EqualsNormalized(node.Parent?.Name, locator?.ParentName ?? entry.ParentName)) score += 18;
+        if (node.IndexInParent == (locator?.IndexInParent ?? entry.IndexInParent)) score += 18;
+        if (node.ObjectDepth == (locator?.ObjectDepth ?? entry.ObjectDepth)) score += 14;
+        if (BoundsAreCompatible(node, entry, locator)) score += 8;
+        return score;
+    }
+
+    private static bool BoundsAreCompatible(AccessibleNode node, JavaObjectRepositoryEntry entry, LocatorSuggestion? locator)
+    {
+        if (locator is not null && locator.Bounds.Width > 0 && locator.Bounds.Height > 0)
+            return BoundsDistance(node, locator.Bounds) <= 40;
+        return BoundsDistance(node, entry) <= 40;
+    }
+
+    private static void CountMatch(bool matches, bool hasRecordedValue, ref int required, ref int matched)
+    {
+        if (!hasRecordedValue) return;
+        required++;
+        if (matches) matched++;
+    }
+
+    private static bool HasAny(params string?[] values) => values.Any(value => !string.IsNullOrWhiteSpace(value));
 
     private static int BoundsDistance(AccessibleNode node, JavaObjectRepositoryEntry entry)
     {
