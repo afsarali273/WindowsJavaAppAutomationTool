@@ -40,7 +40,7 @@ public partial class RecordingStudioWindow : Window
     {
         ViewModel.StopJavaRecordingSession();
         OwnerWindow.UpdateRecordingBadge();
-        HighlightOverlay.HidePersistent();
+        OwnerWindow.ClearHighlights();
         OwnerWindow.Show();
         OwnerWindow.Activate();
         Activate();

@@ -45,18 +45,20 @@ Why: inspector and recorder should never disagree about which element is under t
 
 ### P0/P1 - Highlight manager
 
-- [ ] Create an app-layer `HighlightManager` abstraction.
-- [ ] Support separate highlight modes:
+- [x] Create an app-layer `HighlightManager` abstraction.
+- [x] Support separate highlight modes:
   - transient hover highlight;
   - hierarchy selection flash;
   - persistent keep-highlight;
   - recorder action flash;
   - playback step highlight.
-- [ ] Always clear/reset previous highlight before showing another highlight.
-- [ ] Avoid multiple stale highlights.
-- [ ] Keep persistent highlight independent from mouse movement.
+- [x] Always clear/reset previous highlight before showing another highlight.
+- [x] Avoid multiple stale highlights.
+- [x] Keep persistent highlight independent from mouse movement.
 - [ ] Ensure all highlight modes use the same DPI/multi-monitor physical bounds logic.
-- [ ] Integrate `HighlightManager` into `MainWindow.xaml.cs` to replace direct `HighlightOverlay` calls.
+- [x] Integrate `HighlightManager` into `MainWindow.xaml.cs` to replace direct `HighlightOverlay` calls.
+
+**Completed:** Added an app-layer `HighlightManager` in `JabInspector.App` and routed MainWindow highlight ownership through it. The manager coordinates transient flashes, hover/picker persistent highlights, recorder action flashes, playback-style modes, and full cleanup while retaining the existing native physical-pixel `HighlightOverlay` renderer.
 
 Why: current highlight behavior has improved, but highlight ownership is still spread across UI code.
 

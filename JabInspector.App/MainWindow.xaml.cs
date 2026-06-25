@@ -16,6 +16,7 @@ namespace JabInspector.App;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel = new();
+    private readonly HighlightManager _highlightManager = new();
     private readonly System.Windows.Threading.DispatcherTimer _hoverTimer;
     private readonly System.Windows.Threading.DispatcherTimer _recordingMonitorTimer;
     private RecordingStudioWindow? _recordingStudioWindow;
@@ -57,7 +58,7 @@ public partial class MainWindow : Window
             _hoverTimer.Stop();
             _pickerTimer.Stop();
             _recordingMonitorTimer.Stop();
-            HighlightOverlay.HidePersistent();
+            _highlightManager.ClearAll();
             _recordingBadgeOverlay?.Detach();
             _recordingStudioWindow?.Close();
             _viewModel.Dispose();
@@ -128,7 +129,7 @@ public partial class MainWindow : Window
             if (node is null) { _viewModel.Log("Select an element before highlighting."); return; }
             if (!TryGetHighlightBounds(node, out var visualNode, out var physicalBounds))
             { _viewModel.Log("The selected Windows element and its ancestors have no on-screen bounds and cannot be highlighted."); return; }
-            HighlightOverlay.Show(physicalBounds);
+            _highlightManager.Flash(physicalBounds, HighlightMode.HierarchySelectionFlash);
             var fallback = ReferenceEquals(node, visualNode) ? "" : $" using nearest on-screen ancestor {visualNode.DisplayName}";
             _viewModel.Log($"Highlighted {node.DisplayName}{fallback} at physical bounds ({physicalBounds.X}, {physicalBounds.Y}, {physicalBounds.Width}, {physicalBounds.Height}).");
             return;
@@ -138,7 +139,7 @@ public partial class MainWindow : Window
         if (javaNode is null) { _viewModel.Log("Select an element before highlighting."); return; }
         if (!TryGetHighlightBounds(javaNode, out var visualNodeJava, out var physicalBoundsJava))
         { _viewModel.Log("The selected element and its ancestors have no on-screen bounds and cannot be highlighted."); return; }
-        HighlightOverlay.Show(physicalBoundsJava);
+        _highlightManager.Flash(physicalBoundsJava, HighlightMode.HierarchySelectionFlash);
         var fallbackJava = ReferenceEquals(javaNode, visualNodeJava) ? "" : $" using nearest on-screen ancestor {visualNodeJava.DisplayName}";
         _viewModel.Log($"Highlighted {javaNode.DisplayName}{fallbackJava} at physical bounds ({physicalBoundsJava.X}, {physicalBoundsJava.Y}, {physicalBoundsJava.Width}, {physicalBoundsJava.Height}); JAB bounds were ({visualNodeJava.X}, {visualNodeJava.Y}, {visualNodeJava.Width}, {visualNodeJava.Height}).");
     }
@@ -172,7 +173,7 @@ public partial class MainWindow : Window
         _lastActivatedNode = node; _lastActivationAt = DateTime.UtcNow;
         if (TryGetHighlightBounds(node, out var visualNode, out var bounds))
         {
-            HighlightOverlay.Show(bounds);
+            _highlightManager.Flash(bounds, HighlightMode.HierarchySelectionFlash);
             var fallback = ReferenceEquals(node, visualNode) ? "" : $" using nearest on-screen ancestor {visualNode.DisplayName}";
             _viewModel.Log($"Highlighted {node.DisplayName}{fallback}.");
         }
@@ -183,7 +184,7 @@ public partial class MainWindow : Window
     {
         if (TryGetHighlightBounds(node, out var visualNode, out var bounds))
         {
-            HighlightOverlay.Show(bounds);
+            _highlightManager.Flash(bounds, HighlightMode.HierarchySelectionFlash);
             var fallback = ReferenceEquals(node, visualNode) ? "" : $" using nearest on-screen ancestor {visualNode.DisplayName}";
             _viewModel.Log($"Highlighted {node.DisplayName}{fallback}.");
         }
@@ -247,7 +248,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            _hoverTimer.Stop(); HighlightOverlay.HidePersistent();
+            _hoverTimer.Stop(); _highlightManager.ClearPersistent();
             _viewModel.Log("Hover inspection disabled.");
         }
     }
@@ -262,7 +263,7 @@ public partial class MainWindow : Window
         _lastHoverPoint = point;
         if (!TryResolveJavaNodeAtScreenPoint(point, out var node, out var bounds) || node is null)
         {
-            HighlightOverlay.HidePersistent();
+            _highlightManager.ClearPersistent();
             return;
         }
 
@@ -274,7 +275,7 @@ public partial class MainWindow : Window
             _lastHierarchyNode = node;
         }
         DetailsTabs.SelectedItem = PropertiesTab;
-        if (HasOnScreenBounds(bounds)) HighlightOverlay.ShowPersistent(bounds); else HighlightOverlay.HidePersistent();
+        if (HasOnScreenBounds(bounds)) _highlightManager.ShowPersistent(bounds, HighlightMode.TransientHover); else _highlightManager.ClearPersistent();
     }
 
     private void PickerButton_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -320,13 +321,13 @@ public partial class MainWindow : Window
 
         if (_viewModel.Root is null || _viewModel.CurrentWindow is null)
         {
-            HighlightOverlay.HidePersistent();
+            _highlightManager.ClearPersistent();
             return;
         }
 
         if (!TryResolveJavaNodeAtScreenPoint(point, out var node, out var bounds) || node is null)
         {
-            HighlightOverlay.HidePersistent();
+            _highlightManager.ClearPersistent();
             return;
         }
 
@@ -341,9 +342,9 @@ public partial class MainWindow : Window
         DetailsTabs.SelectedItem = PropertiesTab;
 
         if (HasOnScreenBounds(bounds))
-            HighlightOverlay.ShowPersistent(bounds);
+            _highlightManager.ShowPersistent(bounds, HighlightMode.TransientHover);
         else
-            HighlightOverlay.HidePersistent();
+            _highlightManager.ClearPersistent();
     }
 
     private void RecordingMonitorTimer_Tick(object? sender, EventArgs e)
@@ -425,7 +426,7 @@ public partial class MainWindow : Window
         _viewModel.SelectedNode = node;
         _hoverSelectingNode = node;
         _lastHierarchyNode = node;
-        HighlightOverlay.Show(bounds, TimeSpan.FromSeconds(1.1));
+        _highlightManager.Flash(bounds, HighlightMode.RecorderActionFlash);
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
         {
             SelectNodeInHierarchy(node);
@@ -1308,8 +1309,10 @@ public partial class MainWindow : Window
     {
         if (_viewModel.SelectedNode is null) return;
         if (!TryGetHighlightBounds(_viewModel.SelectedNode, out _, out var bounds)) return;
-        HighlightOverlay.Show(bounds, TimeSpan.FromSeconds(2.2));
+        _highlightManager.Flash(bounds, HighlightMode.HierarchySelectionFlash, TimeSpan.FromSeconds(2.2));
     }
+
+    public void ClearHighlights() => _highlightManager.ClearAll();
 
     public void UpdateRecordingBadge()
     {
@@ -1362,21 +1365,21 @@ public partial class MainWindow : Window
         {
             if (TryGetHighlightBounds(_viewModel.SelectedNode, out _, out var selectedBounds))
             {
-                HighlightOverlay.ShowPersistent(selectedBounds);
+            _highlightManager.ShowPersistent(selectedBounds, HighlightMode.Persistent);
             }
             return;
         }
 
         if (_viewModel.Root is null) return;
         if (!TryGetHighlightBounds(_viewModel.Root, out _, out var bounds)) return;
-        HighlightOverlay.ShowPersistent(bounds);
+        _highlightManager.ShowPersistent(bounds);
     }
 
     private void StopRecordingFromFloatingPanel()
     {
         _viewModel.StopJavaRecordingSession();
         _recordingBadgeOverlay?.Detach();
-        HighlightOverlay.HidePersistent();
+        _highlightManager.ClearPersistent();
         Show();
         Activate();
         OpenRecordingStudio();

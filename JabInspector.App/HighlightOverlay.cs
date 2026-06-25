@@ -69,6 +69,14 @@ public static class HighlightOverlay
         PersistentWindows.Clear(); _persistentBounds = null;
     }
 
+    public static void HideTransient() => ClearTransient();
+
+    public static void ClearAll()
+    {
+        ClearTransient();
+        HidePersistent();
+    }
+
     private static void ClearTransient()
     {
         _transientTimer?.Stop();
