@@ -4,34 +4,41 @@ namespace JabInspector.Core.Services;
 
 public sealed class JavaNodeResolverService
 {
-    public AccessibleNode? Resolve(AccessibleNode root, JavaObjectRepositoryEntry entry)
+    public AccessibleNode? Resolve(AccessibleNode root, JavaObjectRepositoryEntry entry, JavaRecordedStep? step = null)
     {
         var nodes = Enumerate(root).ToList();
 
         var exactIndexPath = TryResolveByAbsoluteIndexPath(root, entry);
-        if (exactIndexPath is not null && Score(exactIndexPath, entry) >= 40) return exactIndexPath;
+        if (exactIndexPath is not null && Score(exactIndexPath, entry, step) >= 40) return exactIndexPath;
 
         var exactPath = nodes
             .Where(node => EqualsNormalized(node.Path, entry.Path))
-            .OrderByDescending(node => Score(node, entry))
+            .OrderByDescending(node => Score(node, entry, step))
             .FirstOrDefault();
-        if (exactPath is not null && Score(exactPath, entry) >= 55) return exactPath;
+        if (exactPath is not null && Score(exactPath, entry, step) >= 55) return exactPath;
 
         var indexedWeak = TryResolveByIndexedPath(root, entry);
-        if (indexedWeak is not null && Score(indexedWeak, entry) >= 45) return indexedWeak;
+        if (indexedWeak is not null && Score(indexedWeak, entry, step) >= 52) return indexedWeak;
 
-        var bestNode = default(AccessibleNode);
-        var bestScore = int.MinValue;
+        var ranked = nodes
+            .Select(node => (Node: node, Score: Score(node, entry, step)))
+            .OrderByDescending(candidate => candidate.Score)
+            .Take(2)
+            .ToList();
 
-        foreach (var node in nodes)
+        if (ranked.Count == 0) return null;
+
+        var best = ranked[0];
+        if (best.Score < 52) return null;
+
+        if (ranked.Count > 1)
         {
-            var score = Score(node, entry);
-            if (score <= bestScore) continue;
-            bestScore = score;
-            bestNode = node;
+            var second = ranked[1];
+            var ambiguous = best.Score - second.Score < 10;
+            if (ambiguous && !HasStrongDiscriminatorMatch(best.Node, entry, step)) return null;
         }
 
-        return bestScore >= 42 ? bestNode : null;
+        return best.Node;
     }
 
     private static IEnumerable<AccessibleNode> Enumerate(AccessibleNode root)
@@ -46,19 +53,26 @@ public sealed class JavaNodeResolverService
         }
     }
 
-    private static int Score(AccessibleNode node, JavaObjectRepositoryEntry entry)
+    private static int Score(AccessibleNode node, JavaObjectRepositoryEntry entry, JavaRecordedStep? step)
     {
         var score = 0;
 
         if (EqualsNormalized(node.Path, entry.Path)) score += 70;
+        else if (!string.IsNullOrWhiteSpace(entry.Path)) score -= 14;
         if (EqualsNormalized(LocatorGenerator.BuildIndexPath(node), entry.IndexPath)) score += 64;
+        else if (!string.IsNullOrWhiteSpace(entry.IndexPath)) score -= 12;
         if (EqualsNormalized(node.RoleEnUs, entry.RoleEnUs)) score += 18;
         else if (EqualsNormalized(node.Role, entry.Role)) score += 16;
+        else if (!string.IsNullOrWhiteSpace(entry.RoleEnUs) || !string.IsNullOrWhiteSpace(entry.Role)) score -= 20;
         if (EqualsNormalized(node.Name, entry.Name)) score += 22;
+        else if (!string.IsNullOrWhiteSpace(entry.Name)) score -= 16;
         if (EqualsNormalized(node.VirtualAccessibleName, entry.VirtualAccessibleName)) score += 20;
+        else if (!string.IsNullOrWhiteSpace(entry.VirtualAccessibleName)) score -= 14;
         if (EqualsNormalized(node.Description, entry.Description)) score += 10;
+        else if (!string.IsNullOrWhiteSpace(entry.Description)) score -= 5;
         if (EqualsNormalized(node.Parent?.Role, entry.ParentRole)) score += 8;
         if (EqualsNormalized(node.Parent?.Name, entry.ParentName)) score += 10;
+        else if (!string.IsNullOrWhiteSpace(entry.ParentName)) score -= 6;
         if (node.IndexInParent == entry.IndexInParent) score += 5;
         if (entry.ObjectDepth >= 0 && node.ObjectDepth == entry.ObjectDepth) score += 6;
         if (node.ChildrenCount == entry.ChildrenCount) score += 2;
@@ -78,6 +92,8 @@ public sealed class JavaNodeResolverService
         if (boundsDistance == 0 && entry.Width > 0 && entry.Height > 0) score += 8;
         else if (boundsDistance <= 12) score += 5;
         else if (boundsDistance <= 40) score += 2;
+
+        score += ScoreStepContext(node, step);
 
         return score;
     }
@@ -107,7 +123,10 @@ public sealed class JavaNodeResolverService
             }
 
             next ??= matchingRoleSiblings.FirstOrDefault(child => WeakMatches(child, entry));
-            next ??= matchingRoleSiblings.FirstOrDefault();
+            if (next is null && i < segments.Length - 1)
+            {
+                next = matchingRoleSiblings.FirstOrDefault();
+            }
             if (next is null) return null;
             cursor = next;
         }
@@ -170,6 +189,93 @@ public sealed class JavaNodeResolverService
         var dy = Math.Abs(node.Y - entry.Y);
         var dw = Math.Abs(node.Width - entry.Width);
         var dh = Math.Abs(node.Height - entry.Height);
+        return dx + dy + dw + dh;
+    }
+
+    private static int ScoreStepContext(AccessibleNode node, JavaRecordedStep? step)
+    {
+        if (step is null) return 0;
+
+        var score = 0;
+        var locator = step.ObjectLocator;
+        var stepPath = locator?.Path ?? step.ObjectPath;
+        if (EqualsNormalized(node.Path, stepPath)) score += 34;
+        else if (!string.IsNullOrWhiteSpace(stepPath)) score -= 8;
+
+        if (locator is not null)
+        {
+            if (EqualsNormalized(LocatorGenerator.BuildIndexPath(node), locator.IndexPath)) score += 26;
+            else if (!string.IsNullOrWhiteSpace(locator.IndexPath)) score -= 6;
+
+            if (EqualsNormalized(LocatorGenerator.BuildXPath(node), locator.XPath)) score += 20;
+            if (EqualsNormalized(LocatorGenerator.BuildIndexXPath(node), locator.IndexXPath)) score += 18;
+            if (EqualsNormalized(node.RoleEnUs, locator.RoleEnUs)) score += 8;
+            else if (EqualsNormalized(node.Role, locator.Role)) score += 6;
+            if (EqualsNormalized(node.Parent?.Role, locator.ParentRole)) score += 8;
+            if (EqualsNormalized(node.Parent?.Name, locator.ParentName)) score += 10;
+            if (node.IndexInParent == locator.IndexInParent) score += 8;
+            if (node.ChildrenCount == locator.ChildrenCount) score += 3;
+            if (EqualsNormalized(node.StatesEnUs, locator.StatesEnUs)) score += 4;
+            else if (EqualsNormalized(node.States, locator.States)) score += 3;
+
+            var locatorBoundsDistance = BoundsDistance(node, locator.Bounds);
+            if (locatorBoundsDistance == 0 && locator.Bounds.Width > 0 && locator.Bounds.Height > 0) score += 8;
+            else if (locatorBoundsDistance <= 12) score += 5;
+            else if (locatorBoundsDistance <= 40) score += 2;
+        }
+
+        if (EqualsNormalized(node.Name, locator?.Name ?? step.ObjectName)) score += 18;
+        if (EqualsNormalized(node.VirtualAccessibleName, locator?.VirtualAccessibleName ?? step.ObjectVirtualAccessibleName)) score += 14;
+        if (EqualsNormalized(node.Description, locator?.Description ?? step.ObjectDescription)) score += 6;
+
+        var depth = locator?.ObjectDepth ?? step.ObjectDepth;
+        if (depth >= 0 && node.ObjectDepth == depth) score += 6;
+
+        if (step.RecordedScreenX.HasValue && step.RecordedScreenY.HasValue && node.Width > 0 && node.Height > 0)
+        {
+            var px = step.RecordedScreenX.Value;
+            var py = step.RecordedScreenY.Value;
+            var containsPoint = px >= node.X && px < node.X + node.Width && py >= node.Y && py < node.Y + node.Height;
+            if (containsPoint) score += 22;
+            else
+            {
+                var cx = node.X + node.Width / 2;
+                var cy = node.Y + node.Height / 2;
+                var distance = Math.Abs(cx - px) + Math.Abs(cy - py);
+                if (distance <= 40) score += 8;
+                else if (distance <= 120) score += 2;
+                else score -= 10;
+            }
+        }
+
+        return score;
+    }
+
+    private static bool HasStrongDiscriminatorMatch(AccessibleNode node, JavaObjectRepositoryEntry entry, JavaRecordedStep? step)
+    {
+        if (EqualsNormalized(node.Path, entry.Path)) return true;
+        if (!string.IsNullOrWhiteSpace(entry.IndexPath) && EqualsNormalized(LocatorGenerator.BuildIndexPath(node), entry.IndexPath)) return true;
+        if (step is not null && !string.IsNullOrWhiteSpace(step.ObjectPath) && EqualsNormalized(node.Path, step.ObjectPath)) return true;
+        if (step?.ObjectLocator is { } locator)
+        {
+            if (!string.IsNullOrWhiteSpace(locator.Path) && EqualsNormalized(node.Path, locator.Path)) return true;
+            if (!string.IsNullOrWhiteSpace(locator.IndexPath) && EqualsNormalized(LocatorGenerator.BuildIndexPath(node), locator.IndexPath)) return true;
+            if (!string.IsNullOrWhiteSpace(locator.XPath) && EqualsNormalized(LocatorGenerator.BuildXPath(node), locator.XPath)) return true;
+            if (!string.IsNullOrWhiteSpace(locator.IndexXPath) && EqualsNormalized(LocatorGenerator.BuildIndexXPath(node), locator.IndexXPath)) return true;
+        }
+
+        var hasIdentity = EqualsNormalized(node.Name, entry.Name) || EqualsNormalized(node.VirtualAccessibleName, entry.VirtualAccessibleName);
+        var hasParent = EqualsNormalized(node.Parent?.Name, entry.ParentName) || EqualsNormalized(node.Parent?.Role, entry.ParentRole);
+        return hasIdentity && hasParent;
+    }
+
+    private static int BoundsDistance(AccessibleNode node, ElementBounds bounds)
+    {
+        if (bounds.Width <= 0 || bounds.Height <= 0 || node.Width <= 0 || node.Height <= 0) return int.MaxValue;
+        var dx = Math.Abs(node.X - bounds.X);
+        var dy = Math.Abs(node.Y - bounds.Y);
+        var dw = Math.Abs(node.Width - bounds.Width);
+        var dh = Math.Abs(node.Height - bounds.Height);
         return dx + dy + dw + dh;
     }
 

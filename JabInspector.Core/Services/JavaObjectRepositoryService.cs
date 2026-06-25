@@ -29,28 +29,29 @@ public sealed class JavaObjectRepositoryService
             WindowProcessId = window.ProcessId,
             WindowVmId = window.VmId,
             Engine = locator.Engine,
+            Locator = locator,
             LocatorJson = JsonExportService.Serialize(locator),
-            Role = node.Role,
-            RoleEnUs = node.RoleEnUs,
-            Name = node.Name,
-            VirtualAccessibleName = node.VirtualAccessibleName,
-            Description = node.Description,
-            States = node.States,
-            StatesEnUs = node.StatesEnUs,
-            Path = string.IsNullOrWhiteSpace(node.Path) ? LocatorGenerator.BuildPath(node) : node.Path,
+            Role = locator.Role,
+            RoleEnUs = locator.RoleEnUs,
+            Name = locator.Name,
+            VirtualAccessibleName = locator.VirtualAccessibleName,
+            Description = locator.Description,
+            States = locator.States,
+            StatesEnUs = locator.StatesEnUs,
+            Path = locator.Path,
             IndexPath = locator.IndexPath,
             XPath = locator.XPath,
             IndexXPath = locator.IndexXPath,
             SemanticXPath = locator.SemanticXPath,
-            ParentRole = node.Parent?.Role ?? "",
-            ParentName = node.Parent?.Name ?? "",
-            IndexInParent = node.IndexInParent,
-            ObjectDepth = node.ObjectDepth,
-            ChildrenCount = node.ChildrenCount,
-            X = node.X,
-            Y = node.Y,
-            Width = node.Width,
-            Height = node.Height,
+            ParentRole = locator.ParentRole,
+            ParentName = locator.ParentName,
+            IndexInParent = locator.IndexInParent,
+            ObjectDepth = locator.ObjectDepth,
+            ChildrenCount = locator.ChildrenCount,
+            X = locator.Bounds.X,
+            Y = locator.Bounds.Y,
+            Width = locator.Bounds.Width,
+            Height = locator.Bounds.Height,
             AccessibleComponent = node.AccessibleComponent,
             AccessibleAction = node.AccessibleAction,
             AccessibleSelection = node.AccessibleSelection,
@@ -58,8 +59,8 @@ public sealed class JavaObjectRepositoryService
             AccessibleValue = node.AccessibleValue,
             AccessibleTable = node.AccessibleTable,
             AccessibleInterfaces = node.AccessibleInterfaces,
-            HasManagedDescendantAncestor = node.HasManagedDescendantAncestor,
-            ActionNames = node.ActionNames.ToList()
+            HasManagedDescendantAncestor = locator.HasManagedDescendantAncestor,
+            ActionNames = locator.ActionNames.ToList()
         };
 
         entry.Properties =
@@ -96,10 +97,95 @@ public sealed class JavaObjectRepositoryService
             Property("accessible.table", entry.AccessibleTable.ToString(), false),
             Property("accessible.interfaces", entry.AccessibleInterfaces.ToString(), false),
             Property("volatile.managedDescendantAncestor", entry.HasManagedDescendantAncestor.ToString(), false),
-            Property("actions", string.Join(",", entry.ActionNames), false)
+            Property("actions", string.Join(",", entry.ActionNames), false),
+            Property("text.preview", locator.TextPreview, false),
+            Property("text.previewSource", locator.TextPreviewSource, false),
+            Property("text.charCount", locator.TextCharCount.ToString(), false),
+            Property("text.caretIndex", locator.TextCaretIndex.ToString(), false),
+            Property("text.indexAtPoint", locator.TextIndexAtPoint.ToString(), false),
+            Property("text.selected", locator.TextSelected, false),
+            Property("text.word", locator.TextWord, false),
+            Property("text.sentence", locator.TextSentence, false),
+            Property("value.current", locator.CurrentValue, false),
+            Property("value.minimum", locator.MinimumValue, false),
+            Property("value.maximum", locator.MaximumValue, false)
         ];
 
         return entry;
+    }
+
+    public JavaRecordedStep CreateRecordedStep(
+        JavaObjectRepositoryEntry entry,
+        JavaRecordedActionKind actionKind,
+        int sequence,
+        string? inputText,
+        JavaWindowInfo? window,
+        int? recordedScreenX,
+        int? recordedScreenY,
+        int? windowOffsetX,
+        int? windowOffsetY)
+    {
+        var locator = entry.Locator ?? TryDeserializeLocator(entry.LocatorJson);
+        var locatorJson = locator is null
+            ? entry.LocatorJson
+            : JsonExportService.Serialize(locator);
+
+        return new JavaRecordedStep
+        {
+            Sequence = sequence,
+            StepName = $"{actionKind} {entry.ObjectKey}",
+            ActionKind = actionKind,
+            ObjectKey = entry.ObjectKey,
+            InputText = inputText ?? "",
+            CapturedAtUtc = DateTime.UtcNow,
+            WindowHwndDisplay = window?.HwndDisplay ?? entry.WindowHwndDisplay,
+            WindowTitle = window?.Title ?? entry.WindowTitle,
+            WindowClassName = window?.ClassName ?? entry.WindowClassName,
+            WindowProcessId = window?.ProcessId ?? entry.WindowProcessId,
+            WindowVmId = window?.VmId ?? entry.WindowVmId,
+            RecordedScreenX = recordedScreenX,
+            RecordedScreenY = recordedScreenY,
+            WindowOffsetX = windowOffsetX,
+            WindowOffsetY = windowOffsetY,
+            ObjectLocator = locator,
+            ObjectLocatorJson = locatorJson,
+            ObjectRole = locator?.Role ?? entry.Role,
+            ObjectName = locator?.Name ?? entry.Name,
+            ObjectVirtualAccessibleName = locator?.VirtualAccessibleName ?? entry.VirtualAccessibleName,
+            ObjectDescription = locator?.Description ?? entry.Description,
+            ObjectPath = locator?.Path ?? entry.Path,
+            ObjectDepth = locator?.ObjectDepth ?? entry.ObjectDepth
+        };
+    }
+
+    public JavaRecordedStep PromoteClickToDoubleClick(JavaRecordedStep step)
+    {
+        return new JavaRecordedStep
+        {
+            Sequence = step.Sequence,
+            StepName = $"{JavaRecordedActionKind.DoubleClick} {step.ObjectKey}",
+            ActionKind = JavaRecordedActionKind.DoubleClick,
+            ObjectKey = step.ObjectKey,
+            InputText = step.InputText,
+            CapturedAtUtc = DateTime.UtcNow,
+            WindowHwndDisplay = step.WindowHwndDisplay,
+            WindowTitle = step.WindowTitle,
+            WindowClassName = step.WindowClassName,
+            WindowProcessId = step.WindowProcessId,
+            WindowVmId = step.WindowVmId,
+            RecordedScreenX = step.RecordedScreenX,
+            RecordedScreenY = step.RecordedScreenY,
+            WindowOffsetX = step.WindowOffsetX,
+            WindowOffsetY = step.WindowOffsetY,
+            ObjectLocator = step.ObjectLocator,
+            ObjectLocatorJson = step.ObjectLocatorJson,
+            ObjectRole = step.ObjectRole,
+            ObjectName = step.ObjectName,
+            ObjectVirtualAccessibleName = step.ObjectVirtualAccessibleName,
+            ObjectDescription = step.ObjectDescription,
+            ObjectPath = step.ObjectPath,
+            ObjectDepth = step.ObjectDepth
+        };
     }
 
     public string BuildPropertiesPreview(JavaObjectRepositoryEntry entry)
@@ -126,6 +212,14 @@ public sealed class JavaObjectRepositoryService
     public string BuildStepPreview(JavaRecordedStep step)
     {
         var builder = new StringBuilder();
+        var locator = step.ObjectLocator ?? TryDeserializeLocator(step.ObjectLocatorJson);
+        if (locator is not null)
+        {
+            builder.AppendLine("[object.locator.json]");
+            builder.AppendLine(JsonExportService.Serialize(locator));
+            builder.AppendLine();
+        }
+
         builder.AppendLine($"step.sequence={step.Sequence}");
         builder.AppendLine($"step.name={step.StepName}");
         builder.AppendLine($"step.action={step.ActionKind}");
@@ -137,12 +231,34 @@ public sealed class JavaObjectRepositoryService
         builder.AppendLine($"step.windowVmId={step.WindowVmId}");
         if (step.RecordedScreenX.HasValue && step.RecordedScreenY.HasValue) builder.AppendLine($"step.recordedScreenPoint={step.RecordedScreenX.Value},{step.RecordedScreenY.Value}");
         if (step.WindowOffsetX.HasValue && step.WindowOffsetY.HasValue) builder.AppendLine($"step.windowOffset={step.WindowOffsetX.Value},{step.WindowOffsetY.Value}");
-        if (!string.IsNullOrWhiteSpace(step.ObjectRole)) builder.AppendLine($"object.role={step.ObjectRole}");
-        if (!string.IsNullOrWhiteSpace(step.ObjectName)) builder.AppendLine($"object.name={step.ObjectName}");
-        if (!string.IsNullOrWhiteSpace(step.ObjectVirtualAccessibleName)) builder.AppendLine($"object.virtualAccessibleName={step.ObjectVirtualAccessibleName}");
-        if (!string.IsNullOrWhiteSpace(step.ObjectDescription)) builder.AppendLine($"object.description={step.ObjectDescription}");
-        if (!string.IsNullOrWhiteSpace(step.ObjectPath)) builder.AppendLine($"object.path={step.ObjectPath}");
-        if (step.ObjectDepth >= 0) builder.AppendLine($"object.depth={step.ObjectDepth}");
+        if (!string.IsNullOrWhiteSpace(locator?.Role ?? step.ObjectRole)) builder.AppendLine($"object.role={locator?.Role ?? step.ObjectRole}");
+        if (!string.IsNullOrWhiteSpace(locator?.RoleEnUs)) builder.AppendLine($"object.roleEnUs={locator.RoleEnUs}");
+        if (!string.IsNullOrWhiteSpace(locator?.Name ?? step.ObjectName)) builder.AppendLine($"object.name={locator?.Name ?? step.ObjectName}");
+        if (!string.IsNullOrWhiteSpace(locator?.VirtualAccessibleName ?? step.ObjectVirtualAccessibleName)) builder.AppendLine($"object.virtualAccessibleName={locator?.VirtualAccessibleName ?? step.ObjectVirtualAccessibleName}");
+        if (!string.IsNullOrWhiteSpace(locator?.Description ?? step.ObjectDescription)) builder.AppendLine($"object.description={locator?.Description ?? step.ObjectDescription}");
+        if (!string.IsNullOrWhiteSpace(locator?.States)) builder.AppendLine($"object.states={locator.States}");
+        if (!string.IsNullOrWhiteSpace(locator?.StatesEnUs)) builder.AppendLine($"object.statesEnUs={locator.StatesEnUs}");
+        if (!string.IsNullOrWhiteSpace(locator?.Path ?? step.ObjectPath)) builder.AppendLine($"object.path={locator?.Path ?? step.ObjectPath}");
+        if (!string.IsNullOrWhiteSpace(locator?.IndexPath)) builder.AppendLine($"object.indexPath={locator.IndexPath}");
+        if (!string.IsNullOrWhiteSpace(locator?.XPath)) builder.AppendLine($"object.xPath={locator.XPath}");
+        if (!string.IsNullOrWhiteSpace(locator?.IndexXPath)) builder.AppendLine($"object.indexXPath={locator.IndexXPath}");
+        if (!string.IsNullOrWhiteSpace(locator?.SemanticXPath)) builder.AppendLine($"object.semanticXPath={locator.SemanticXPath}");
+        if (!string.IsNullOrWhiteSpace(locator?.ParentRole)) builder.AppendLine($"object.parentRole={locator.ParentRole}");
+        if (!string.IsNullOrWhiteSpace(locator?.ParentName)) builder.AppendLine($"object.parentName={locator.ParentName}");
+        if (locator is not null)
+        {
+            builder.AppendLine($"object.indexInParent={locator.IndexInParent}");
+            builder.AppendLine($"object.depth={locator.ObjectDepth}");
+            builder.AppendLine($"object.childrenCount={locator.ChildrenCount}");
+            builder.AppendLine($"object.bounds={locator.Bounds.X},{locator.Bounds.Y},{locator.Bounds.Width},{locator.Bounds.Height}");
+            if (locator.ActionNames.Count > 0) builder.AppendLine($"object.actionNames={string.Join(",", locator.ActionNames)}");
+            if (!string.IsNullOrWhiteSpace(locator.TextPreview)) builder.AppendLine($"object.textPreview={locator.TextPreview.Replace(Environment.NewLine, " ")}");
+            if (!string.IsNullOrWhiteSpace(locator.CurrentValue)) builder.AppendLine($"object.currentValue={locator.CurrentValue}");
+        }
+        else if (step.ObjectDepth >= 0)
+        {
+            builder.AppendLine($"object.depth={step.ObjectDepth}");
+        }
         if (!string.IsNullOrWhiteSpace(step.InputText)) builder.AppendLine($"step.inputText={step.InputText}");
         builder.AppendLine($"step.capturedAtUtc={step.CapturedAtUtc:O}");
         return builder.ToString().TrimEnd();
@@ -181,6 +297,19 @@ public sealed class JavaObjectRepositoryService
         Value = value,
         IsPrimary = primary
     };
+
+    private static LocatorSuggestion? TryDeserializeLocator(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<LocatorSuggestion>(json, JsonExportService.Options);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private static string Sanitize(string value)
     {

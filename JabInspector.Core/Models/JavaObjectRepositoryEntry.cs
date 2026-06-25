@@ -11,6 +11,7 @@ public sealed class JavaObjectRepositoryEntry
     public int WindowProcessId { get; set; }
     public int WindowVmId { get; set; }
     public string Engine { get; set; } = "java-access-bridge";
+    public LocatorSuggestion? Locator { get; set; }
     public string LocatorJson { get; set; } = "";
     public string Role { get; set; } = "";
     public string RoleEnUs { get; set; } = "";

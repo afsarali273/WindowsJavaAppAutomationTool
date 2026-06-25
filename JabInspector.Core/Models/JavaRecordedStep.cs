@@ -17,6 +17,8 @@ public sealed class JavaRecordedStep
     public int? RecordedScreenY { get; set; }
     public int? WindowOffsetX { get; set; }
     public int? WindowOffsetY { get; set; }
+    public LocatorSuggestion? ObjectLocator { get; set; }
+    public string ObjectLocatorJson { get; set; } = "";
     public string ObjectRole { get; set; } = "";
     public string ObjectName { get; set; } = "";
     public string ObjectVirtualAccessibleName { get; set; } = "";
@@ -27,14 +29,23 @@ public sealed class JavaRecordedStep
     {
         get
         {
-            var label = !string.IsNullOrWhiteSpace(ObjectName)
+            var role = !string.IsNullOrWhiteSpace(ObjectLocator?.Role)
+                ? ObjectLocator.Role
+                : ObjectRole;
+            var label = !string.IsNullOrWhiteSpace(ObjectLocator?.Name)
+                ? ObjectLocator.Name
+                : !string.IsNullOrWhiteSpace(ObjectName)
                 ? ObjectName
-                : !string.IsNullOrWhiteSpace(ObjectVirtualAccessibleName)
+                : !string.IsNullOrWhiteSpace(ObjectLocator?.VirtualAccessibleName)
+                    ? ObjectLocator.VirtualAccessibleName
+                    : !string.IsNullOrWhiteSpace(ObjectVirtualAccessibleName)
                     ? ObjectVirtualAccessibleName
-                    : !string.IsNullOrWhiteSpace(ObjectDescription)
+                    : !string.IsNullOrWhiteSpace(ObjectLocator?.Description)
+                        ? ObjectLocator.Description
+                        : !string.IsNullOrWhiteSpace(ObjectDescription)
                         ? ObjectDescription
                         : ObjectKey;
-            return string.IsNullOrWhiteSpace(ObjectRole) ? label : $"{ObjectRole}: {label}";
+            return string.IsNullOrWhiteSpace(role) ? label : $"{role}: {label}";
         }
     }
 

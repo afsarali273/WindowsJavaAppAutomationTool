@@ -790,10 +790,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                                                              string.Equals(x.Name, SelectedNode.Name, StringComparison.Ordinal));
         if (existing is not null)
         {
-            SelectedRepositoryEntry = existing;
-            RecordingStatus = $"Repository already contains {existing.ObjectKey}.";
-            _logger.Log($"Repository capture reused existing object. ObjectKey='{existing.ObjectKey}', Path='{existing.Path}', Name='{existing.Name}'.");
-            return existing;
+            var refreshed = _javaRepository.CreateEntry(CurrentWindow, SelectedNode, existing.ObjectKey, existing.FriendlyName);
+            var index = RepositoryEntries.IndexOf(existing);
+            RepositoryEntries[index] = refreshed;
+            SelectedRepositoryEntry = refreshed;
+            RecordingStatus = $"Repository refreshed {refreshed.ObjectKey}.";
+            RefreshRecordingSurface();
+            _logger.Log($"Repository capture refreshed existing object. ObjectKey='{refreshed.ObjectKey}', Path='{refreshed.Path}', Name='{refreshed.Name}', LocatorJsonLength={refreshed.LocatorJson.Length}.");
+            return refreshed;
         }
 
         var preferredName = friendlyName ?? $"{SelectedNode.Role}_{SelectedNode.Name}_{SelectedNode.IndexInParent}";
@@ -823,30 +827,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return null;
         }
 
-        var step = new JavaRecordedStep
-        {
-            Sequence = RecordedSteps.Count + 1,
-            StepName = $"{actionKind} {entry.ObjectKey}",
-            ActionKind = actionKind,
-            ObjectKey = entry.ObjectKey,
-            InputText = inputText ?? "",
-            CapturedAtUtc = DateTime.UtcNow,
-            WindowHwndDisplay = CurrentWindow?.HwndDisplay ?? "",
-            WindowTitle = CurrentWindow?.Title ?? "",
-            WindowClassName = CurrentWindow?.ClassName ?? "",
-            WindowProcessId = CurrentWindow?.ProcessId ?? 0,
-            WindowVmId = CurrentWindow?.VmId ?? 0,
-            RecordedScreenX = recordedScreenX,
-            RecordedScreenY = recordedScreenY,
-            WindowOffsetX = windowOffsetX,
-            WindowOffsetY = windowOffsetY,
-            ObjectRole = entry.Role,
-            ObjectName = entry.Name,
-            ObjectVirtualAccessibleName = entry.VirtualAccessibleName,
-            ObjectDescription = entry.Description,
-            ObjectPath = entry.Path,
-            ObjectDepth = entry.ObjectDepth
-        };
+        var step = _javaRepository.CreateRecordedStep(
+            entry,
+            actionKind,
+            RecordedSteps.Count + 1,
+            inputText,
+            CurrentWindow,
+            recordedScreenX,
+            recordedScreenY,
+            windowOffsetX,
+            windowOffsetY);
         RecordedSteps.Add(step);
         SelectedRecordedStep = step;
         RecordingStatus = $"Recorded step {step.Sequence}: {actionKind} on {entry.ObjectKey}.";
@@ -878,30 +868,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return false;
         }
 
-        var upgraded = new JavaRecordedStep
-        {
-            Sequence = last.Sequence,
-            StepName = $"{JavaRecordedActionKind.DoubleClick} {entry.ObjectKey}",
-            ActionKind = JavaRecordedActionKind.DoubleClick,
-            ObjectKey = last.ObjectKey,
-            InputText = last.InputText,
-            CapturedAtUtc = DateTime.UtcNow,
-            WindowHwndDisplay = last.WindowHwndDisplay,
-            WindowTitle = last.WindowTitle,
-            WindowClassName = last.WindowClassName,
-            WindowProcessId = last.WindowProcessId,
-            WindowVmId = last.WindowVmId,
-            RecordedScreenX = last.RecordedScreenX,
-            RecordedScreenY = last.RecordedScreenY,
-            WindowOffsetX = last.WindowOffsetX,
-            WindowOffsetY = last.WindowOffsetY,
-            ObjectRole = last.ObjectRole,
-            ObjectName = last.ObjectName,
-            ObjectVirtualAccessibleName = last.ObjectVirtualAccessibleName,
-            ObjectDescription = last.ObjectDescription,
-            ObjectPath = last.ObjectPath,
-            ObjectDepth = last.ObjectDepth
-        };
+        var upgraded = _javaRepository.PromoteClickToDoubleClick(last);
 
         RecordedSteps[^1] = upgraded;
         SelectedRecordedStep = upgraded;
@@ -1013,7 +980,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return null;
         }
 
-        var resolved = _javaResolver.Resolve(Root, entry);
+        var resolved = _javaResolver.Resolve(Root, entry, step);
         if (resolved is null)
         {
             message = $"Could not resolve '{step.ObjectKey}' against the current Java hierarchy.";
