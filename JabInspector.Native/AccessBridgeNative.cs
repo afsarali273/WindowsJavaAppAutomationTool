@@ -75,6 +75,14 @@ public static class AccessBridgeNative
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool getAccessibleTextInfo(int vmId, long context, out AccessibleTextInfo info, int x, int y);
 
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool getAccessibleTextItems(int vmId, long context, out AccessibleTextItemsInfo textItems, int index);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool getAccessibleTextSelectionInfo(int vmId, long context, out AccessibleTextSelectionInfo textSelection);
+
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool getAccessibleTextRange(int vmId, long context, int start, int end, StringBuilder text, short length);
@@ -82,6 +90,14 @@ public static class AccessBridgeNative
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool getCurrentAccessibleValueFromContext(int vmId, long context, StringBuilder value, short length);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool getMaximumAccessibleValueFromContext(int vmId, long context, StringBuilder value, short length);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool getMinimumAccessibleValueFromContext(int vmId, long context, StringBuilder value, short length);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern int getAccessibleSelectionCountFromContext(int vmId, long context);
@@ -95,4 +111,7 @@ public static class AccessBridgeNative
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool getVirtualAccessibleName(int vmId, long context, StringBuilder name, int length);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int getObjectDepth(int vmId, long context);
 }

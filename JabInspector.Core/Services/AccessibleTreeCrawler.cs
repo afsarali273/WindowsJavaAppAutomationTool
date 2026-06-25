@@ -30,6 +30,10 @@ public sealed class AccessibleTreeCrawler(AccessBridgeService bridge, InspectorL
         if (!bridge.TryGetAccessibleContextInfo(vmId, context, out var info))
             return new AccessibleNode { VmId = vmId, Context = context, Parent = parent, Role = "unknown", Name = "(failed to read)" };
         var node = Map(vmId, context, info); node.Parent = parent;
+        node.VirtualAccessibleName = bridge.GetVirtualAccessibleName(vmId, context);
+        node.ObjectDepth = bridge.GetObjectDepth(vmId, context);
+        node.HasManagedDescendantAncestor = parent?.HasManagedDescendantAncestor == true || parent?.ManagesDescendants == true;
+        if (node.AccessibleAction) node.ActionNames = bridge.GetAccessibleActions(vmId, context).ToList();
         if (depth >= MaxDepth) return node;
         var limit = Math.Min(Math.Max(info.ChildrenCount, 0), MaxChildrenPerNode);
         for (var index = 0; index < limit; index++)

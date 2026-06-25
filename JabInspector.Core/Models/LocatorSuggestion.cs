@@ -1,5 +1,36 @@
 namespace JabInspector.Core.Models;
 
 public sealed record ElementBounds(int X, int Y, int Width, int Height);
-public sealed record LocatorSuggestion(string Engine, string Role, string Name, string Description, string States,
-    int IndexInParent, string Path, ElementBounds Bounds);
+public sealed record LocatorSuggestion(
+    string Engine,
+    string Role,
+    string RoleEnUs,
+    string Name,
+    string VirtualAccessibleName,
+    string Description,
+    string States,
+    string StatesEnUs,
+    int IndexInParent,
+    int ObjectDepth,
+    int ChildrenCount,
+    string Path,
+    string IndexPath,
+    string XPath,
+    string IndexXPath,
+    string SemanticXPath,
+    string ParentRole,
+    string ParentName,
+    bool HasManagedDescendantAncestor,
+    IReadOnlyList<string> ActionNames,
+    string TextPreview,
+    string TextPreviewSource,
+    int TextCharCount,
+    int TextCaretIndex,
+    int TextIndexAtPoint,
+    string TextSelected,
+    string TextWord,
+    string TextSentence,
+    string CurrentValue,
+    string MinimumValue,
+    string MaximumValue,
+    ElementBounds Bounds);

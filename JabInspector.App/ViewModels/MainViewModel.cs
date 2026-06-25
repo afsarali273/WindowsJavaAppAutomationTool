@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Windows;
@@ -18,6 +19,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly InspectorLogger _logger = new();
     private readonly AccessBridgeService _bridge;
     private readonly AutomationService _automation;
+    private readonly JavaElementInspectionService _javaInspection;
+    private readonly JavaObjectRepositoryService _javaRepository = new();
+    private readonly JavaNodeResolverService _javaResolver = new();
     private readonly WindowsWindowDiscoveryService _windowsDiscovery = new();
     private readonly WindowsAutomationRouter _windowsRouter = new();
     private readonly WindowsAutomationActionService _windowsActions = new();
@@ -26,6 +30,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private WindowsWindowViewModel? _selectedWindowsWindow;
     private AccessibleNode? _selectedNode;
     private WindowsAutomationNode? _selectedWindowsNode;
+    private JavaObjectRepositoryEntry? _selectedRepositoryEntry;
+    private JavaRecordedStep? _selectedRecordedStep;
     private AccessibleNode? _root;
     private WindowsAutomationNode? _windowsRoot;
     private InspectorMode _selectedMode = InspectorMode.Java;
@@ -35,6 +41,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly List<long> _hoverContexts = [];
     private readonly List<AccessibleNode> _dynamicHoverNodes = [];
     private readonly Dictionary<long, AccessibleNode> _nodesByContext = [];
+    private bool _suppressAutoAttachOnSelection;
     private string _automationOutput = "Automation results will appear here.";
     private string _supportedActions = "Select an accessibility node.";
     private string _settingsSummary = "Review Java Access Bridge requirements and common setup actions.";
@@ -43,11 +50,22 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _bridgeDllPath = "(not found)";
     private string _javaHomePath = "(not set)";
     private string _accessibilityRegistrationPath = "(not found)";
+    private string _recordingSessionName = "No active recording session";
+    private string _recordingApplicationAlias = "";
+    private string _recordingProjectPath = "";
+    private string _recordingStatus = "Create a Java recording session to capture a locator repository and playback steps.";
+    private string _recordingRepositoryPreview = "Select a recorded object to inspect its repository properties.";
+    private string _recordingStepPreview = "Select a recorded step to inspect its playback metadata.";
+    private string _playbackOutput = "Playback output will appear here.";
+    private bool _isRecordingActive;
+    private bool _isRecordingPaused;
 
     public ObservableCollection<JavaWindowViewModel> JavaWindows { get; } = [];
     public ObservableCollection<WindowsWindowViewModel> WindowsDesktopWindows { get; } = [];
     public ObservableCollection<AccessibleNode> Tree { get; } = [];
     public ObservableCollection<WindowsAutomationNode> WindowsTree { get; } = [];
+    public ObservableCollection<JavaObjectRepositoryEntry> RepositoryEntries { get; } = [];
+    public ObservableCollection<JavaRecordedStep> RecordedSteps { get; } = [];
     public ObservableCollection<string> Logs { get; } = [];
     public ObservableCollection<RequirementCheckViewModel> RequirementChecks { get; } = [];
     public IReadOnlyList<InspectorMode> AvailableModes { get; } = Enum.GetValues<InspectorMode>();
@@ -65,11 +83,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         _bridge = new AccessBridgeService(_logger);
         _automation = new AutomationService(_bridge, _logger);
-        _logger.MessageLogged += message => App.Current.Dispatcher.Invoke(() =>
+        _javaInspection = new JavaElementInspectionService(_bridge, _logger);
+        _logger.MessageLogged += message => App.Current.Dispatcher.BeginInvoke(new Action(() =>
         {
             Logs.Add(message);
             while (Logs.Count > 500) Logs.RemoveAt(0);
-        });
+        }));
 
         RefreshWindowsCommand = new RelayCommand(RefreshWindows, () => !IsBusy);
         AttachCommand = new RelayCommand(Attach, () => !IsBusy && (IsJavaMode ? SelectedJavaWindow is not null : SelectedWindowsWindow is not null));
@@ -80,6 +99,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         DisableJavaAccessBridgeCommand = new RelayCommand(DisableJavaAccessBridge, () => HasJabSwitch);
         OpenEaseOfAccessCommand = new RelayCommand(OpenEaseOfAccess);
 
+        _logger.Log($"Log file path: {_logger.LogFilePath}");
         RunDiagnostics();
         RefreshRequirements();
     }
@@ -92,6 +112,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (!Set(ref _selectedJavaWindow, value)) return;
             OnPropertyChanged(nameof(SelectedWindowItem));
             AttachCommand.RaiseCanExecuteChanged();
+            if (!_suppressAutoAttachOnSelection && IsJavaMode && value is not null) _ = SafeAutoAttachSelectedWindowAsync();
         }
     }
 
@@ -104,6 +125,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             OnPropertyChanged(nameof(SelectedWindowItem));
             RefreshPropertySurface();
             AttachCommand.RaiseCanExecuteChanged();
+            if (IsWindowsMode && value is not null) _ = SafeAutoAttachSelectedWindowAsync();
         }
     }
 
@@ -130,6 +152,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (!Set(ref _selectedNode, value)) return;
             if (IsJavaMode)
             {
+                if (value is not null) RefreshBounds(value);
                 LocatorPreview = value is null ? "Select an element to generate a resilient locator." : JsonExportService.Serialize(LocatorGenerator.GenerateLocator(value));
                 SupportedActions = value is null ? "Select an accessibility node." : "Open this tab to discover semantic actions.";
             }
@@ -153,6 +176,26 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             CopyLocatorCommand.RaiseCanExecuteChanged();
             OnPropertyChanged(nameof(HasSelection));
             RefreshPropertySurface();
+        }
+    }
+
+    public JavaObjectRepositoryEntry? SelectedRepositoryEntry
+    {
+        get => _selectedRepositoryEntry;
+        set
+        {
+            if (!Set(ref _selectedRepositoryEntry, value)) return;
+            RecordingRepositoryPreview = value is null ? "Select a recorded object to inspect its repository properties." : _javaRepository.BuildPropertiesPreview(value);
+        }
+    }
+
+    public JavaRecordedStep? SelectedRecordedStep
+    {
+        get => _selectedRecordedStep;
+        set
+        {
+            if (!Set(ref _selectedRecordedStep, value)) return;
+            RecordingStepPreview = value is null ? "Select a recorded step to inspect its playback metadata." : _javaRepository.BuildStepPreview(value);
         }
     }
 
@@ -222,6 +265,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string PropertyRawIdsValue => IsJavaMode
         ? FormatJavaIds(SelectedNode)
         : FormatWindowsIds(SelectedWindowsNode);
+    public string PropertyLocatorPathValue => IsJavaMode && SelectedNode is not null ? LocatorGenerator.BuildPath(SelectedNode) : "";
+    public string PropertyIndexPathValue => IsJavaMode && SelectedNode is not null ? LocatorGenerator.BuildIndexPath(SelectedNode) : "";
+    public string PropertyXPathValue => IsJavaMode && SelectedNode is not null ? LocatorGenerator.BuildXPath(SelectedNode) : "";
+    public string PropertyTextPreviewValue => IsJavaMode ? FormatTextPreview(SelectedNode) : SelectedWindowsNode?.Value ?? "";
+    public string PropertyTextDetailsValue => IsJavaMode ? FormatTextDetails(SelectedNode) : "";
+    public string PropertyValueDetailsValue => IsJavaMode ? FormatValueDetails(SelectedNode) : "";
     public Visibility JavaSelectionVisibility => IsJavaMode ? Visibility.Visible : Visibility.Collapsed;
     public Visibility WindowsSelectionVisibility => IsWindowsMode ? Visibility.Visible : Visibility.Collapsed;
 
@@ -232,6 +281,21 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string JavaHomePath { get => _javaHomePath; private set => Set(ref _javaHomePath, value); }
     public string AccessibilityRegistrationPath { get => _accessibilityRegistrationPath; private set => Set(ref _accessibilityRegistrationPath, value); }
     public bool HasJabSwitch => !string.Equals(JabSwitchPath, "(not found)", StringComparison.OrdinalIgnoreCase);
+    public bool IsRecordingActive { get => _isRecordingActive; private set => Set(ref _isRecordingActive, value); }
+    public bool IsRecordingPaused { get => _isRecordingPaused; private set => Set(ref _isRecordingPaused, value); }
+    public string RecordingSessionName { get => _recordingSessionName; private set => Set(ref _recordingSessionName, value); }
+    public string RecordingApplicationAlias { get => _recordingApplicationAlias; private set => Set(ref _recordingApplicationAlias, value); }
+    public string RecordingProjectPath { get => _recordingProjectPath; private set => Set(ref _recordingProjectPath, value); }
+    public string RecordingStatus { get => _recordingStatus; private set => Set(ref _recordingStatus, value); }
+    public string RecordingRepositoryPreview { get => _recordingRepositoryPreview; private set => Set(ref _recordingRepositoryPreview, value); }
+    public string RecordingStepPreview { get => _recordingStepPreview; private set => Set(ref _recordingStepPreview, value); }
+    public string PlaybackOutput { get => _playbackOutput; private set => Set(ref _playbackOutput, value); }
+    public bool CanUseJavaRecording => IsJavaMode && CurrentWindow is not null && Root is not null;
+    public int RecordingStepCount => RecordedSteps.Count;
+    public int RecordingObjectCount => RepositoryEntries.Count;
+    public string RecordingBadgeText => IsRecordingActive
+        ? IsRecordingPaused ? $"PAUSED  {RecordingStepCount} STEP(S)" : $"REC  {RecordingStepCount} STEP(S)"
+        : "RECORDER IDLE";
 
     public bool IsBusy
     {
@@ -261,6 +325,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 SelectedJavaWindow = JavaWindows.FirstOrDefault();
                 Status = windows.Count == 0 ? "No Java windows found" : $"{windows.Count} Java window(s) available";
             }
+            catch (Exception ex)
+            {
+                Status = $"Java window refresh failed: {ex.Message}";
+                _logger.Log($"Java window refresh failed: {ex}");
+            }
             finally
             {
                 OnPropertyChanged(nameof(WindowItemCount));
@@ -281,6 +350,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             Status = windows.Count == 0 ? "No desktop windows found" : $"{windows.Count} desktop window(s) available";
             _logger.Log($"Windows mode discovered {windows.Count} top-level window(s).");
         }
+        catch (Exception ex)
+        {
+            Status = $"Desktop window refresh failed: {ex.Message}";
+            _logger.Log($"Desktop window refresh failed: {ex}");
+        }
         finally
         {
             OnPropertyChanged(nameof(WindowItemCount));
@@ -290,6 +364,34 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     private async void Attach()
+    {
+        try
+        {
+            await AutoAttachSelectedWindowAsync();
+        }
+        catch (Exception ex)
+        {
+            Status = $"Attach failed: {ex.Message}";
+            _logger.Log($"Attach failed: {ex}");
+            IsBusy = false;
+        }
+    }
+
+    private async Task SafeAutoAttachSelectedWindowAsync()
+    {
+        try
+        {
+            await AutoAttachSelectedWindowAsync();
+        }
+        catch (Exception ex)
+        {
+            Status = $"Attach failed: {ex.Message}";
+            _logger.Log($"Attach failed: {ex}");
+            IsBusy = false;
+        }
+    }
+
+    private async Task AutoAttachSelectedWindowAsync()
     {
         if (IsJavaMode)
         {
@@ -424,7 +526,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool RefreshBounds(AccessibleNode node)
     {
         if (!_bridge.TryGetAccessibleContextInfo(node.VmId, node.Context, out var info)) return false;
-        node.X = info.X; node.Y = info.Y; node.Width = info.Width; node.Height = info.Height;
+        ApplyInfo(node, info);
         if (ReferenceEquals(node, SelectedNode)) RefreshPropertySurface();
         return true;
     }
@@ -453,14 +555,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         for (var depth = 0; depth < 25 && _bridge.TryGetParentContext(_root.VmId, currentContext, out var parentContext); depth++)
         {
             if (_bridge.IsSameObject(_root.VmId, parentContext, _root.Context))
-            { child.Parent = _root; _bridge.ReleaseObject(_root.VmId, parentContext); break; }
+            { child.Parent = _root; child.HasManagedDescendantAncestor = _root.HasManagedDescendantAncestor || _root.ManagesDescendants; _bridge.ReleaseObject(_root.VmId, parentContext); break; }
             if (_nodesByContext.TryGetValue(parentContext, out var indexedParent))
-            { child.Parent = indexedParent; _bridge.ReleaseObject(_root.VmId, parentContext); break; }
+            { child.Parent = indexedParent; child.HasManagedDescendantAncestor = indexedParent.HasManagedDescendantAncestor || indexedParent.ManagesDescendants; _bridge.ReleaseObject(_root.VmId, parentContext); break; }
             if (!_bridge.TryGetAccessibleContextInfo(_root.VmId, parentContext, out var parentInfo))
             { _bridge.ReleaseObject(_root.VmId, parentContext); break; }
             _hoverContexts.Add(parentContext);
             var parent = CreateNode(_root.VmId, parentContext, parentInfo);
-            child.Parent = parent; child = parent; currentContext = parentContext;
+            child.Parent = parent;
+            child.HasManagedDescendantAncestor = parent.HasManagedDescendantAncestor || parent.ManagesDescendants;
+            child = parent; currentContext = parentContext;
         }
         var resolved = ResolveTreeNode(node, out var usesDynamicNodes);
         if (resolved is not null)
@@ -470,6 +574,26 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return resolved;
         }
         return node;
+    }
+
+    public JavaInspectionResult? InspectJavaAtScreenPoint(
+        JabInspector.Core.Models.NativePoint screenPoint,
+        Func<int, int, AccessibleNode?> inspectAtJabPoint,
+        Func<AccessibleNode, ElementBounds> getPhysicalBounds,
+        Func<ElementBounds, JabInspector.Core.Models.NativePoint, bool> containsPoint,
+        string logPrefix = "[INSPECT]")
+    {
+        return _root is not null && CurrentWindow is not null
+            ? _javaInspection.InspectAtScreenPoint(
+                _root,
+                CurrentWindow.Hwnd,
+                screenPoint,
+                inspectAtJabPoint,
+                getPhysicalBounds,
+                containsPoint,
+                node => RefreshBounds(node),
+                logPrefix)
+            : null;
     }
 
     public void RefreshSupportedActions()
@@ -554,7 +678,598 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public void ReportAutomation(string result) => AutomationOutput = result;
+    public void ReportPlayback(string result) => PlaybackOutput = result;
     public void Log(string message) => _logger.Log(message);
+
+    public bool StartJavaRecordingSession(string sessionName, string applicationAlias)
+    {
+        _logger.Debug($"Recording session start requested. JavaMode={IsJavaMode}, HasWindow={CurrentWindow is not null}, HasRoot={Root is not null}, Session='{sessionName}', Alias='{applicationAlias}'.");
+        if (!IsJavaMode || CurrentWindow is null || Root is null)
+        {
+            RecordingStatus = "Attach to a Java window before starting a recording session.";
+            _logger.Log($"Recording session start rejected. Status='{RecordingStatus}'");
+            return false;
+        }
+
+        var normalizedSessionName = string.IsNullOrWhiteSpace(sessionName) ? $"JavaSession_{DateTime.Now:yyyyMMdd_HHmmss}" : sessionName.Trim();
+        var normalizedAlias = string.IsNullOrWhiteSpace(applicationAlias) ? CurrentWindow.Title : applicationAlias.Trim();
+        var safeSessionName = string.Concat(normalizedSessionName.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+        RepositoryEntries.Clear();
+        RecordedSteps.Clear();
+        SelectedRepositoryEntry = null;
+        SelectedRecordedStep = null;
+        RecordingSessionName = normalizedSessionName;
+        RecordingApplicationAlias = normalizedAlias;
+        RecordingProjectPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "JabInspectorRecordings", $"{safeSessionName}.jrecording.json");
+        IsRecordingActive = true;
+        IsRecordingPaused = false;
+        RecordingStatus = $"Preparing recorder for {normalizedAlias}...";
+        PlaybackOutput = "Playback output will appear here.";
+        RefreshRecordingSurface();
+        var preScanSucceeded = RefreshCurrentJavaTree("recording pre-scan");
+        RecordingStatus = preScanSucceeded
+            ? $"Recording session '{normalizedSessionName}' is active for {normalizedAlias}. Pre-scanned {CountNodes(Root):N0} node(s)."
+            : $"Recording session '{normalizedSessionName}' is active for {normalizedAlias}. Pre-scan could not refresh the tree.";
+        RefreshRecordingSurface();
+        _logger.Log($"Recording session started. Session='{RecordingSessionName}', Alias='{RecordingApplicationAlias}', ProjectPath='{RecordingProjectPath}', RootNode='{Root?.DisplayName ?? "(none)"}', ExistingSteps={RecordedSteps.Count}, ExistingObjects={RepositoryEntries.Count}, PreScanSucceeded={preScanSucceeded}.");
+        return true;
+    }
+
+    public void StopJavaRecordingSession()
+    {
+        IsRecordingActive = false;
+        IsRecordingPaused = false;
+        RecordingStatus = RepositoryEntries.Count == 0 && RecordedSteps.Count == 0
+            ? "Recording session stopped. No objects or steps were captured."
+            : $"Recording session stopped with {RecordingObjectCount} object(s) and {RecordingStepCount} step(s).";
+        RefreshRecordingSurface();
+        _logger.Log($"Recording session stopped. Steps={RecordingStepCount}, Objects={RecordingObjectCount}, ProjectPath='{RecordingProjectPath}'.");
+    }
+
+    public void PauseJavaRecordingSession()
+    {
+        if (!IsRecordingActive)
+        {
+            RecordingStatus = "No active recording session to pause.";
+            _logger.Log("Pause recording ignored because no recording session is active.");
+            return;
+        }
+
+        if (IsRecordingPaused) return;
+        IsRecordingPaused = true;
+        RecordingStatus = $"Recording paused. {RecordingStepCount} step(s) captured so far.";
+        RefreshRecordingSurface();
+        _logger.Log($"Recording paused. Steps={RecordingStepCount}, Objects={RecordingObjectCount}.");
+    }
+
+    public void ResumeJavaRecordingSession()
+    {
+        if (!IsRecordingActive)
+        {
+            RecordingStatus = "No active recording session to resume.";
+            _logger.Log("Resume recording ignored because no recording session is active.");
+            return;
+        }
+
+        if (!IsRecordingPaused) return;
+        IsRecordingPaused = false;
+        RecordingStatus = $"Recording resumed for {RecordingApplicationAlias}.";
+        RefreshRecordingSurface();
+        _logger.Log($"Recording resumed. Steps={RecordingStepCount}, Objects={RecordingObjectCount}.");
+    }
+
+    public void ToggleJavaRecordingPause()
+    {
+        if (IsRecordingPaused) ResumeJavaRecordingSession();
+        else PauseJavaRecordingSession();
+    }
+
+    public JavaObjectRepositoryEntry? AddSelectedNodeToRepository(string? friendlyName = null)
+    {
+        _logger.Debug($"Repository capture requested. JavaMode={IsJavaMode}, HasWindow={CurrentWindow is not null}, HasSelectedNode={SelectedNode is not null}, FriendlyName='{friendlyName ?? ""}'.");
+        if (!IsJavaMode || CurrentWindow is null || SelectedNode is null)
+        {
+            RecordingStatus = "Select a Java accessibility node before adding it to the repository.";
+            _logger.Log($"Repository capture rejected. Status='{RecordingStatus}'.");
+            return null;
+        }
+        RefreshBounds(SelectedNode);
+
+        var existing = RepositoryEntries.FirstOrDefault(x => string.Equals(x.Path, SelectedNode.Path, StringComparison.OrdinalIgnoreCase) &&
+                                                             string.Equals(x.Name, SelectedNode.Name, StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            SelectedRepositoryEntry = existing;
+            RecordingStatus = $"Repository already contains {existing.ObjectKey}.";
+            _logger.Log($"Repository capture reused existing object. ObjectKey='{existing.ObjectKey}', Path='{existing.Path}', Name='{existing.Name}'.");
+            return existing;
+        }
+
+        var preferredName = friendlyName ?? $"{SelectedNode.Role}_{SelectedNode.Name}_{SelectedNode.IndexInParent}";
+        var key = _javaRepository.CreateUniqueObjectKey(preferredName, RepositoryEntries);
+        var entry = _javaRepository.CreateEntry(CurrentWindow, SelectedNode, key, friendlyName ?? SelectedNode.DisplayName);
+        RepositoryEntries.Add(entry);
+        SelectedRepositoryEntry = entry;
+        RecordingStatus = $"Captured repository object {entry.ObjectKey}.";
+        RefreshRecordingSurface();
+        _logger.Log($"Repository object captured. ObjectKey='{entry.ObjectKey}', FriendlyName='{entry.FriendlyName}', Path='{entry.Path}', Role='{entry.Role}', Name='{entry.Name}', ParentRole='{entry.ParentRole}', ParentName='{entry.ParentName}', LocatorJsonLength={entry.LocatorJson.Length}.");
+        return entry;
+    }
+
+    public JavaRecordedStep? RecordJavaAction(JavaRecordedActionKind actionKind, string? inputText = null, int? recordedScreenX = null, int? recordedScreenY = null, int? windowOffsetX = null, int? windowOffsetY = null)
+    {
+        _logger.Debug($"Record step requested. RecordingActive={IsRecordingActive}, Paused={IsRecordingPaused}, JavaMode={IsJavaMode}, HasSelectedNode={SelectedNode is not null}, Action={actionKind}, InputLength={(inputText ?? "").Length}.");
+        if (!IsRecordingActive || IsRecordingPaused || !IsJavaMode || SelectedNode is null)
+        {
+            _logger.Debug("Record step skipped because recording is inactive, paused, mode is not Java, or no node is selected.");
+            return null;
+        }
+
+        var entry = AddSelectedNodeToRepository();
+        if (entry is null)
+        {
+            _logger.Log("Record step aborted because repository capture returned null.");
+            return null;
+        }
+
+        var step = new JavaRecordedStep
+        {
+            Sequence = RecordedSteps.Count + 1,
+            StepName = $"{actionKind} {entry.ObjectKey}",
+            ActionKind = actionKind,
+            ObjectKey = entry.ObjectKey,
+            InputText = inputText ?? "",
+            CapturedAtUtc = DateTime.UtcNow,
+            WindowHwndDisplay = CurrentWindow?.HwndDisplay ?? "",
+            WindowTitle = CurrentWindow?.Title ?? "",
+            WindowClassName = CurrentWindow?.ClassName ?? "",
+            WindowProcessId = CurrentWindow?.ProcessId ?? 0,
+            WindowVmId = CurrentWindow?.VmId ?? 0,
+            RecordedScreenX = recordedScreenX,
+            RecordedScreenY = recordedScreenY,
+            WindowOffsetX = windowOffsetX,
+            WindowOffsetY = windowOffsetY,
+            ObjectRole = entry.Role,
+            ObjectName = entry.Name,
+            ObjectVirtualAccessibleName = entry.VirtualAccessibleName,
+            ObjectDescription = entry.Description,
+            ObjectPath = entry.Path,
+            ObjectDepth = entry.ObjectDepth
+        };
+        RecordedSteps.Add(step);
+        SelectedRecordedStep = step;
+        RecordingStatus = $"Recorded step {step.Sequence}: {actionKind} on {entry.ObjectKey}.";
+        RefreshRecordingSurface();
+        _logger.Log($"Recorded step created. Sequence={step.Sequence}, Action={step.ActionKind}, ObjectKey='{step.ObjectKey}', InputLength={step.InputText.Length}, TotalSteps={RecordedSteps.Count}.");
+        return step;
+    }
+
+    public bool PromoteLastRecordedClickToDoubleClick()
+    {
+        _logger.Debug($"Promote last recorded click requested. RecordingActive={IsRecordingActive}, HasSelectedNode={SelectedNode is not null}, StepCount={RecordedSteps.Count}.");
+        if (!IsRecordingActive || SelectedNode is null || RecordedSteps.Count == 0)
+        {
+            _logger.Log("Promote last recorded click skipped because recording is inactive, no selected node exists, or there are no steps.");
+            return false;
+        }
+
+        var entry = AddSelectedNodeToRepository();
+        if (entry is null)
+        {
+            _logger.Log("Promote last recorded click aborted because repository entry resolution returned null.");
+            return false;
+        }
+
+        var last = RecordedSteps[^1];
+        if (last.ActionKind != JavaRecordedActionKind.Click || !string.Equals(last.ObjectKey, entry.ObjectKey, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.Log($"Promote last recorded click skipped because last step does not match. LastAction={last.ActionKind}, LastObjectKey='{last.ObjectKey}', CurrentObjectKey='{entry.ObjectKey}'.");
+            return false;
+        }
+
+        var upgraded = new JavaRecordedStep
+        {
+            Sequence = last.Sequence,
+            StepName = $"{JavaRecordedActionKind.DoubleClick} {entry.ObjectKey}",
+            ActionKind = JavaRecordedActionKind.DoubleClick,
+            ObjectKey = last.ObjectKey,
+            InputText = last.InputText,
+            CapturedAtUtc = DateTime.UtcNow,
+            WindowHwndDisplay = last.WindowHwndDisplay,
+            WindowTitle = last.WindowTitle,
+            WindowClassName = last.WindowClassName,
+            WindowProcessId = last.WindowProcessId,
+            WindowVmId = last.WindowVmId,
+            RecordedScreenX = last.RecordedScreenX,
+            RecordedScreenY = last.RecordedScreenY,
+            WindowOffsetX = last.WindowOffsetX,
+            WindowOffsetY = last.WindowOffsetY,
+            ObjectRole = last.ObjectRole,
+            ObjectName = last.ObjectName,
+            ObjectVirtualAccessibleName = last.ObjectVirtualAccessibleName,
+            ObjectDescription = last.ObjectDescription,
+            ObjectPath = last.ObjectPath,
+            ObjectDepth = last.ObjectDepth
+        };
+
+        RecordedSteps[^1] = upgraded;
+        SelectedRecordedStep = upgraded;
+        RecordingStatus = $"Upgraded step {upgraded.Sequence} to DoubleClick on {entry.ObjectKey}.";
+        RefreshRecordingSurface();
+        _logger.Log($"Promoted last recorded click to double-click. Sequence={upgraded.Sequence}, ObjectKey='{upgraded.ObjectKey}'.");
+        return true;
+    }
+
+    public bool SaveRecordingProject(string? path = null)
+    {
+        _logger.Debug($"Save recording project requested. HasWindow={CurrentWindow is not null}, RepositoryCount={RepositoryEntries.Count}, StepCount={RecordedSteps.Count}, RequestedPath='{path ?? ""}'.");
+        if (!IsJavaMode || CurrentWindow is null)
+        {
+            RecordingStatus = "Java recording projects can only be saved from an attached Java session.";
+            _logger.Log($"Save recording project rejected. Status='{RecordingStatus}'.");
+            return false;
+        }
+        if (RepositoryEntries.Count == 0 && RecordedSteps.Count == 0)
+        {
+            RecordingStatus = "There is nothing to save yet. Capture at least one repository object or step.";
+            _logger.Log($"Save recording project rejected. Status='{RecordingStatus}'.");
+            return false;
+        }
+
+        var savePath = string.IsNullOrWhiteSpace(path) ? RecordingProjectPath : path!;
+        var project = _javaRepository.CreateProject(
+            string.IsNullOrWhiteSpace(RecordingSessionName) ? "JavaRecording" : RecordingSessionName,
+            string.IsNullOrWhiteSpace(RecordingApplicationAlias) ? CurrentWindow.Title : RecordingApplicationAlias,
+            CurrentWindow);
+        project.Repository = RepositoryEntries.ToList();
+        project.Steps = RecordedSteps.ToList();
+        _javaRepository.SaveProject(savePath, project);
+        RecordingProjectPath = savePath;
+        RecordingStatus = $"Recording project saved to {savePath}.";
+        RefreshRecordingSurface();
+        _logger.Log($"Recording project saved. Path='{savePath}', Objects={project.Repository.Count}, Steps={project.Steps.Count}.");
+        return true;
+    }
+
+    public bool LoadRecordingProject(string path)
+    {
+        _logger.Debug($"Load recording project requested. Path='{path}'.");
+        var project = _javaRepository.LoadProject(path);
+        RepositoryEntries.Clear();
+        foreach (var entry in project.Repository) RepositoryEntries.Add(entry);
+        RecordedSteps.Clear();
+        foreach (var step in project.Steps.OrderBy(x => x.Sequence)) RecordedSteps.Add(step);
+        RecordingSessionName = project.SessionName;
+        RecordingApplicationAlias = project.ApplicationAlias;
+        RecordingProjectPath = path;
+        IsRecordingActive = false;
+        IsRecordingPaused = false;
+        SelectedRepositoryEntry = RepositoryEntries.FirstOrDefault();
+        SelectedRecordedStep = RecordedSteps.FirstOrDefault();
+        RecordingStatus = $"Loaded recording project '{project.SessionName}' with {RepositoryEntries.Count} object(s) and {RecordedSteps.Count} step(s).";
+        PlaybackOutput = "Playback output will appear here.";
+        RefreshRecordingSurface();
+        _logger.Log($"Recording project loaded. Session='{project.SessionName}', Alias='{project.ApplicationAlias}', Objects={RepositoryEntries.Count}, Steps={RecordedSteps.Count}.");
+        return true;
+    }
+
+    public AccessibleNode? ResolveRecordedStep(JavaRecordedStep step, out string message)
+    {
+        _logger.Debug($"Resolve recorded step requested. Sequence={step.Sequence}, Action={step.ActionKind}, ObjectKey='{step.ObjectKey}', HasRoot={Root is not null}.");
+        message = "";
+        if (!IsJavaMode || Root is null)
+        {
+            message = "Attach to a Java window before playback.";
+            _logger.Log($"Resolve recorded step failed. Reason='{message}'.");
+            return null;
+        }
+
+        var entry = RepositoryEntries.FirstOrDefault(x => string.Equals(x.ObjectKey, step.ObjectKey, StringComparison.OrdinalIgnoreCase));
+        if (entry is null)
+        {
+            message = $"Repository object '{step.ObjectKey}' was not found.";
+            _logger.Log($"Resolve recorded step failed. Reason='{message}'.");
+            return null;
+        }
+
+        var resolved = _javaResolver.Resolve(Root, entry);
+        if (resolved is null)
+        {
+            message = $"Could not resolve '{step.ObjectKey}' against the current Java hierarchy.";
+            _logger.Log($"Resolve recorded step failed. Reason='{message}'.");
+            return null;
+        }
+
+        message = $"Resolved {step.ObjectKey} to {resolved.DisplayName}.";
+        _logger.Debug($"Resolve recorded step succeeded. Sequence={step.Sequence}, ObjectKey='{step.ObjectKey}', ResolvedNode='{resolved.DisplayName}', Path='{resolved.Path}'.");
+        return resolved;
+    }
+
+    public bool RefreshCurrentJavaTree(string reason)
+    {
+        _logger.Debug($"Refresh current Java tree requested. Reason='{reason}', HasWindow={CurrentWindow is not null}.");
+        if (!IsJavaMode || CurrentWindow is null)
+        {
+            _logger.Log("Refresh current Java tree skipped because Java mode is inactive or no current window is attached.");
+            return false;
+        }
+
+        var crawler = new AccessibleTreeCrawler(_bridge, _logger);
+        var root = crawler.BuildTree(CurrentWindow);
+        if (root is null)
+        {
+            _logger.Log($"Refresh current Java tree failed. Reason='{reason}'.");
+            return false;
+        }
+
+        Tree.Clear();
+        _root = root;
+        Tree.Add(root);
+        _nodesByContext.Clear();
+        IndexNodes(root);
+        SelectedNode = root;
+        OnPropertyChanged(nameof(Root));
+        OnPropertyChanged(nameof(CurrentTreeItems));
+        OnPropertyChanged(nameof(CanUseJavaRecording));
+        _logger.Log($"Refresh current Java tree succeeded. Reason='{reason}', NodesIndexed={crawler.NodeCount}, Root='{root.DisplayName}'.");
+        return true;
+    }
+
+    public bool TryAutoAttachJavaWindow(IntPtr hwnd, string reason)
+    {
+        _logger.Debug($"Auto-attach requested. Reason='{reason}', TargetHwnd=0x{hwnd.ToInt64():X}, CurrentHwnd='{CurrentWindow?.HwndDisplay ?? ""}'.");
+        if (hwnd == IntPtr.Zero) return false;
+        if (CurrentWindow?.Hwnd == hwnd && Root is not null)
+        {
+            _logger.Debug("Auto-attach skipped because target Java window is already attached.");
+            return true;
+        }
+        if (!_bridge.Initialize())
+        {
+            _logger.Log("Auto-attach failed because Access Bridge initialization is not available.");
+            return false;
+        }
+        if (!_bridge.IsJavaWindow(hwnd))
+        {
+            _logger.Debug($"Auto-attach skipped because hwnd 0x{hwnd.ToInt64():X} is not a Java window.");
+            return false;
+        }
+
+        var service = new JavaWindowDiscoveryService(_bridge, _logger);
+        var windows = service.GetJavaWindows();
+        var match = windows.FirstOrDefault(x => x.Hwnd == hwnd)
+                    ?? windows.FirstOrDefault(x => x.ProcessId == CurrentWindow?.ProcessId && string.Equals(x.Title, CurrentWindow?.Title, StringComparison.Ordinal));
+        if (match is null)
+        {
+            _logger.Log($"Auto-attach failed because the target Java modal/window 0x{hwnd.ToInt64():X} was not discovered.");
+            return false;
+        }
+
+        SelectedJavaWindow = JavaWindows.FirstOrDefault(x => x.Model.Hwnd == match.Hwnd) ?? new JavaWindowViewModel(match);
+        var root = BuildStableJavaTree(match, reason, out var finalNodeCount);
+        if (root is null)
+        {
+            _logger.Log($"Auto-attach failed because tree build returned null for modal '{match.Title}'.");
+            return false;
+        }
+
+        JavaWindows.Clear();
+        foreach (var window in windows) JavaWindows.Add(new(window));
+        SelectedJavaWindow = JavaWindows.FirstOrDefault(x => x.Model.Hwnd == match.Hwnd) ?? new JavaWindowViewModel(match);
+        Tree.Clear();
+        _root = root;
+        Tree.Add(root);
+        _nodesByContext.Clear();
+        IndexNodes(root);
+        SelectedNode = root;
+        OnPropertyChanged(nameof(Root));
+        OnPropertyChanged(nameof(CurrentWindowItems));
+        OnPropertyChanged(nameof(WindowItemCount));
+        OnPropertyChanged(nameof(CanUseJavaRecording));
+        Status = $"Auto-attached {match.Title}";
+        _logger.Log($"Auto-attach succeeded. Reason='{reason}', AttachedWindow='{match.Title}', Hwnd={match.HwndDisplay}, VmId={match.VmId}, NodesIndexed={finalNodeCount}.");
+        return true;
+    }
+
+    public async Task<bool> TryAutoAttachJavaWindowAsync(IntPtr hwnd, string reason)
+    {
+        _logger.Debug($"Async auto-attach requested. Reason='{reason}', TargetHwnd=0x{hwnd.ToInt64():X}, CurrentHwnd='{CurrentWindow?.HwndDisplay ?? ""}'.");
+        if (hwnd == IntPtr.Zero) return false;
+        if (CurrentWindow?.Hwnd == hwnd && Root is not null)
+        {
+            _logger.Debug("Async auto-attach skipped because target Java window is already attached.");
+            return true;
+        }
+
+        var currentProcessId = CurrentWindow?.ProcessId;
+        var currentTitle = CurrentWindow?.Title;
+        var result = await Task.Run(() =>
+        {
+            if (!_bridge.Initialize())
+                return new AutoAttachResult(false, "Access Bridge initialization is not available.", null, [], null, 0);
+
+            if (!_bridge.IsJavaWindow(hwnd))
+                return new AutoAttachResult(false, $"hwnd 0x{hwnd.ToInt64():X} is not a Java window.", null, [], null, 0);
+
+            var service = new JavaWindowDiscoveryService(_bridge, _logger);
+            var windows = service.GetJavaWindows();
+            var match = windows.FirstOrDefault(x => x.Hwnd == hwnd)
+                        ?? windows.FirstOrDefault(x => x.ProcessId == currentProcessId && string.Equals(x.Title, currentTitle, StringComparison.Ordinal));
+
+            if (match is null)
+                return new AutoAttachResult(false, $"target Java modal/window 0x{hwnd.ToInt64():X} was not discovered.", null, windows, null, 0);
+
+            var root = BuildStableJavaTree(match, reason, out var finalNodeCount);
+            return root is null
+                ? new AutoAttachResult(false, $"tree build returned null for modal '{match.Title}'.", match, windows, null, 0)
+                : new AutoAttachResult(true, "", match, windows, root, finalNodeCount);
+        });
+
+        if (!result.Succeeded || result.Match is null || result.Root is null)
+        {
+            _logger.Log($"Async auto-attach failed. Reason='{reason}', Details='{result.Message}'.");
+            return false;
+        }
+
+        JavaWindows.Clear();
+        foreach (var window in result.Windows) JavaWindows.Add(new(window));
+        if (JavaWindows.All(x => x.Model.Hwnd != result.Match.Hwnd)) JavaWindows.Add(new(result.Match));
+
+        _suppressAutoAttachOnSelection = true;
+        try
+        {
+            SelectedJavaWindow = JavaWindows.FirstOrDefault(x => x.Model.Hwnd == result.Match.Hwnd) ?? new JavaWindowViewModel(result.Match);
+        }
+        finally
+        {
+            _suppressAutoAttachOnSelection = false;
+        }
+
+        Tree.Clear();
+        _root = result.Root;
+        Tree.Add(result.Root);
+        _nodesByContext.Clear();
+        IndexNodes(result.Root);
+        SelectedNode = result.Root;
+        OnPropertyChanged(nameof(Root));
+        OnPropertyChanged(nameof(CurrentWindowItems));
+        OnPropertyChanged(nameof(WindowItemCount));
+        OnPropertyChanged(nameof(CanUseJavaRecording));
+        Status = $"Auto-attached {result.Match.Title}";
+        _logger.Log($"Async auto-attach succeeded. Reason='{reason}', AttachedWindow='{result.Match.Title}', Hwnd={result.Match.HwndDisplay}, VmId={result.Match.VmId}, NodesIndexed={result.NodeCount}.");
+        return true;
+    }
+
+    public bool TryAutoAttachJavaWindowForRecordedStep(JavaRecordedStep step, out string message)
+    {
+        message = "";
+        if (CurrentWindow is not null
+            && string.Equals(CurrentWindow.Title, step.WindowTitle, StringComparison.Ordinal)
+            && string.Equals(CurrentWindow.ClassName, step.WindowClassName, StringComparison.Ordinal)
+            && CurrentWindow.ProcessId == step.WindowProcessId
+            && Root is not null)
+        {
+            return true;
+        }
+
+        JavaWindowInfo? match = null;
+        IReadOnlyList<JavaWindowInfo> lastWindows = [];
+        for (var attempt = 1; attempt <= 8; attempt++)
+        {
+            var service = new JavaWindowDiscoveryService(_bridge, _logger);
+            var windows = service.GetJavaWindows();
+            lastWindows = windows;
+            match = windows.FirstOrDefault(x =>
+                        string.Equals(x.Title, step.WindowTitle, StringComparison.Ordinal)
+                        && string.Equals(x.ClassName, step.WindowClassName, StringComparison.Ordinal)
+                        && x.ProcessId == step.WindowProcessId)
+                    ?? windows.FirstOrDefault(x =>
+                        string.Equals(x.Title, step.WindowTitle, StringComparison.Ordinal)
+                        && x.VmId == step.WindowVmId)
+                    ?? windows.FirstOrDefault(x =>
+                        x.ProcessId == step.WindowProcessId
+                        && string.Equals(x.ClassName, step.WindowClassName, StringComparison.Ordinal)
+                        && x.Title.Contains(step.WindowTitle, StringComparison.OrdinalIgnoreCase))
+                    ?? windows.FirstOrDefault(x =>
+                        x.ProcessId == step.WindowProcessId
+                        && string.Equals(x.Title, step.WindowTitle, StringComparison.OrdinalIgnoreCase))
+                    ?? windows.FirstOrDefault(x =>
+                        x.VmId == step.WindowVmId
+                        && string.Equals(x.Title, step.WindowTitle, StringComparison.OrdinalIgnoreCase))
+                    ?? windows.FirstOrDefault(x => string.Equals(x.HwndDisplay, step.WindowHwndDisplay, StringComparison.OrdinalIgnoreCase));
+
+            _logger.Debug($"Recorded-step auto-attach attempt {attempt} for step {step.Sequence} scanned {windows.Count} Java window(s). MatchFound={match is not null}.");
+            if (match is not null) break;
+            if (attempt < 8) Thread.Sleep(250);
+        }
+
+        if (match is null)
+        {
+            var discovered = lastWindows.Count == 0
+                ? "(none)"
+                : string.Join(" | ", lastWindows.Select(x => $"{x.Title} [{x.HwndDisplay}] pid={x.ProcessId} vm={x.VmId} class={x.ClassName}"));
+            message = $"Could not find modal/window '{step.WindowTitle}' for recorded step {step.Sequence}. Discovered Java windows: {discovered}";
+            _logger.Log(message);
+            return false;
+        }
+
+        var attached = TryAutoAttachJavaWindow(match.Hwnd, $"playback step {step.Sequence}");
+        message = attached
+            ? $"Attached modal/window '{match.Title}' for step {step.Sequence}."
+            : $"Failed to auto-attach modal/window '{match.Title}' for step {step.Sequence}.";
+        _logger.Log(message);
+        return attached;
+    }
+
+    public bool WaitForRecordedStepWindow(JavaRecordedStep step, int timeoutMs, int pollIntervalMs, out string message)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        var attempt = 0;
+        while (DateTime.UtcNow <= deadline)
+        {
+            attempt++;
+            if (TryAutoAttachJavaWindowForRecordedStep(step, out message))
+            {
+                _logger.Log($"WaitForRecordedStepWindow succeeded on attempt {attempt} for step {step.Sequence}.");
+                return true;
+            }
+
+            if (pollIntervalMs > 0) Thread.Sleep(pollIntervalMs);
+        }
+
+        message = $"Timed out waiting for recorded modal/window '{step.WindowTitle}' for step {step.Sequence}.";
+        _logger.Log(message);
+        return false;
+    }
+
+    public bool DoesStepRequireWindowTransition(JavaRecordedStep currentStep, JavaRecordedStep? nextStep)
+    {
+        if (nextStep is null) return false;
+        if (string.IsNullOrWhiteSpace(nextStep.WindowTitle)) return false;
+
+        return !string.Equals(currentStep.WindowTitle, nextStep.WindowTitle, StringComparison.Ordinal)
+               || !string.Equals(currentStep.WindowClassName, nextStep.WindowClassName, StringComparison.Ordinal)
+               || currentStep.WindowProcessId != nextStep.WindowProcessId
+               || currentStep.WindowVmId != nextStep.WindowVmId
+               || !string.Equals(currentStep.WindowHwndDisplay, nextStep.WindowHwndDisplay, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private AccessibleNode? BuildStableJavaTree(JavaWindowInfo window, string reason, out int finalNodeCount)
+    {
+        finalNodeCount = 0;
+        AccessibleNode? bestRoot = null;
+        var lastCount = -1;
+
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            var crawler = new AccessibleTreeCrawler(_bridge, _logger);
+            var root = crawler.BuildTree(window);
+            if (root is null) continue;
+
+            bestRoot = root;
+            finalNodeCount = crawler.NodeCount;
+            _logger.Debug($"Stable tree attempt {attempt} for '{window.Title}' during '{reason}' produced {crawler.NodeCount} node(s).");
+
+            if (attempt > 1 && crawler.NodeCount == lastCount)
+            {
+                _logger.Debug($"Stable tree achieved on attempt {attempt} for '{window.Title}'.");
+                break;
+            }
+
+            lastCount = crawler.NodeCount;
+            if (attempt < 3) Thread.Sleep(140);
+        }
+
+        return bestRoot;
+    }
+
+    private sealed record AutoAttachResult(
+        bool Succeeded,
+        string Message,
+        JavaWindowInfo? Match,
+        IReadOnlyList<JavaWindowInfo> Windows,
+        AccessibleNode? Root,
+        int NodeCount);
 
     public void Dispose()
     {
@@ -574,6 +1289,30 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         SelectedWindowsNode = null;
         LocatorPreview = "Select an element to generate a resilient locator.";
         SupportedActions = IsJavaMode ? "Select an accessibility node." : "Select a Windows automation node.";
+        RefreshRecordingSurface();
+    }
+
+    private void RefreshRecordingSurface()
+    {
+        OnPropertyChanged(nameof(RecordingStepCount));
+        OnPropertyChanged(nameof(RecordingObjectCount));
+        OnPropertyChanged(nameof(RecordingBadgeText));
+        OnPropertyChanged(nameof(IsRecordingPaused));
+    }
+
+    private static int CountNodes(AccessibleNode? root)
+    {
+        if (root is null) return 0;
+        var count = 0;
+        var stack = new Stack<AccessibleNode>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            count++;
+            for (var i = 0; i < node.Children.Count; i++) stack.Push(node.Children[i]);
+        }
+        return count;
     }
 
     private void RefreshPropertySurface()
@@ -589,6 +1328,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(PropertyIndexValue));
         OnPropertyChanged(nameof(PropertyChildrenValue));
         OnPropertyChanged(nameof(PropertyRawIdsValue));
+        OnPropertyChanged(nameof(PropertyLocatorPathValue));
+        OnPropertyChanged(nameof(PropertyIndexPathValue));
+        OnPropertyChanged(nameof(PropertyXPathValue));
+        OnPropertyChanged(nameof(PropertyTextPreviewValue));
+        OnPropertyChanged(nameof(PropertyTextDetailsValue));
+        OnPropertyChanged(nameof(PropertyValueDetailsValue));
     }
 
     private static string BuildWindowsLocatorPreview(WindowsAutomationNode node)
@@ -603,7 +1348,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             automationId = node.AutomationId,
             nativeHandle = $"0x{node.NativeHandle.ToInt64():X}"
         };
-        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(payload, JsonExportService.Options);
     }
 
     private static string BuildWindowsPath(WindowsAutomationNode node)
@@ -628,6 +1373,39 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private static string FormatWindowsIds(WindowsAutomationNode? node) =>
         node is null ? "" : $"HWND 0x{node.NativeHandle.ToInt64():X}";
+
+    private static string FormatTextPreview(AccessibleNode? node)
+    {
+        if (node is null) return "";
+        if (!string.IsNullOrWhiteSpace(node.TextPreview))
+            return $"{node.TextPreview}  [{node.TextPreviewSource}]";
+        return node.AccessibleText || node.AccessibleValue || node.AccessibleSelection
+            ? "(no text/value exposed by JAB for this node)"
+            : "(node does not expose AccessibleText/AccessibleValue)";
+    }
+
+    private static string FormatTextDetails(AccessibleNode? node)
+    {
+        if (node is null) return "";
+        var parts = new List<string>();
+        if (node.TextCharCount >= 0) parts.Add($"chars={node.TextCharCount}");
+        if (node.TextCaretIndex >= 0) parts.Add($"caret={node.TextCaretIndex}");
+        if (node.TextIndexAtPoint >= 0) parts.Add($"indexAtPoint={node.TextIndexAtPoint}");
+        if (!string.IsNullOrWhiteSpace(node.TextSelected)) parts.Add($"selected=\"{node.TextSelected}\"");
+        if (!string.IsNullOrWhiteSpace(node.TextWord)) parts.Add($"word=\"{node.TextWord}\"");
+        if (!string.IsNullOrWhiteSpace(node.TextSentence)) parts.Add($"sentence=\"{node.TextSentence}\"");
+        return parts.Count == 0 ? "(no AccessibleText details)" : string.Join(" · ", parts);
+    }
+
+    private static string FormatValueDetails(AccessibleNode? node)
+    {
+        if (node is null) return "";
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(node.CurrentValue)) parts.Add($"current={node.CurrentValue}");
+        if (!string.IsNullOrWhiteSpace(node.MinimumValue)) parts.Add($"min={node.MinimumValue}");
+        if (!string.IsNullOrWhiteSpace(node.MaximumValue)) parts.Add($"max={node.MaximumValue}");
+        return parts.Count == 0 ? "(no AccessibleValue details)" : string.Join(" · ", parts);
+    }
 
     private static string FormatActions(IReadOnlyList<string> actions) =>
         actions.Count == 0 ? "No semantic actions exposed" : string.Join("  ·  ", actions);
@@ -692,6 +1470,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (child is null)
             {
                 step.Parent = resolvedBase;
+                step.HasManagedDescendantAncestor = resolvedBase.HasManagedDescendantAncestor || resolvedBase.ManagesDescendants;
                 resolvedBase.Children.Add(step);
                 _nodesByContext[step.Context] = step;
                 _dynamicHoverNodes.Add(step);
@@ -708,26 +1487,33 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         var roleMatches = string.Equals(left.RoleEnUs, right.RoleEnUs, StringComparison.OrdinalIgnoreCase) ||
                           string.Equals(left.Role, right.Role, StringComparison.OrdinalIgnoreCase);
         if (!roleMatches) return false;
-        return string.IsNullOrWhiteSpace(left.Name) || string.IsNullOrWhiteSpace(right.Name) ||
-               string.Equals(left.Name, right.Name, StringComparison.Ordinal);
+        if (!string.IsNullOrWhiteSpace(left.Name) && !string.IsNullOrWhiteSpace(right.Name))
+            return string.Equals(left.Name, right.Name, StringComparison.Ordinal);
+        if (!string.IsNullOrWhiteSpace(left.VirtualAccessibleName) && !string.IsNullOrWhiteSpace(right.VirtualAccessibleName))
+            return string.Equals(left.VirtualAccessibleName, right.VirtualAccessibleName, StringComparison.Ordinal);
+        if (!string.IsNullOrWhiteSpace(left.Description) && !string.IsNullOrWhiteSpace(right.Description))
+            return string.Equals(left.Description, right.Description, StringComparison.Ordinal);
+        return true;
     }
 
-    private static AccessibleNode CreateNode(int vmId, long context, JabInspector.Native.AccessibleContextInfo info)
+    private AccessibleNode CreateNode(int vmId, long context, JabInspector.Native.AccessibleContextInfo info)
     {
         var node = new AccessibleNode { VmId = vmId, Context = context };
         ApplyInfo(node, info);
         return node;
     }
 
-    private static void ApplyInfo(AccessibleNode node, JabInspector.Native.AccessibleContextInfo x)
+    private void ApplyInfo(AccessibleNode node, JabInspector.Native.AccessibleContextInfo x)
     {
         node.Name = x.Name ?? "";
+        node.VirtualAccessibleName = _bridge.GetVirtualAccessibleName(node.VmId, node.Context);
         node.Description = x.Description ?? "";
         node.Role = string.IsNullOrWhiteSpace(x.Role) ? "unknown" : x.Role;
         node.RoleEnUs = x.RoleEnUs ?? "";
         node.States = x.States ?? "";
         node.StatesEnUs = x.StatesEnUs ?? "";
         node.IndexInParent = x.IndexInParent;
+        node.ObjectDepth = _bridge.GetObjectDepth(node.VmId, node.Context);
         node.ChildrenCount = x.ChildrenCount;
         node.X = x.X;
         node.Y = x.Y;
@@ -737,6 +1523,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         node.AccessibleAction = x.AccessibleAction;
         node.AccessibleSelection = x.AccessibleSelection;
         node.AccessibleText = x.AccessibleText;
+        node.AccessibleValue = x.AccessibleValue;
+        node.AccessibleTable = x.AccessibleTable;
         node.AccessibleInterfaces = x.AccessibleInterfaces;
+        node.HasManagedDescendantAncestor = node.Parent?.HasManagedDescendantAncestor == true || node.Parent?.ManagesDescendants == true;
+        node.ActionNames = node.AccessibleAction ? _bridge.GetAccessibleActions(node.VmId, node.Context).ToList() : [];
+        _bridge.EnrichTextAndValue(node, node.X, node.Y);
     }
 }

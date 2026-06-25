@@ -53,3 +53,19 @@ public struct AccessibleTextInfo
     public int CaretIndex;
     public int IndexAtPoint;
 }
+
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+public struct AccessibleTextItemsInfo
+{
+    public char Letter;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string Word;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 1024)] public string Sentence;
+}
+
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+public struct AccessibleTextSelectionInfo
+{
+    public int SelectionStartIndex;
+    public int SelectionEndIndex;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 1024)] public string SelectedText;
+}

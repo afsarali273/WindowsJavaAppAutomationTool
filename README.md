@@ -11,6 +11,18 @@ This project is designed to help with:
 - running common automation actions such as focus, click, type, set text, and get text;
 - evolving toward a broader Windows application automation platform.
 
+## Roadmap and TODOs
+
+The active implementation backlog is tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
+
+Near-term focus is on making the Java inspector and recorder feel as stable as tools like Inspect.exe/Spy++:
+
+- shared element resolution between tree view, hover, picker, recorder, and playback;
+- more reliable highlighting across DPI and multi-monitor setups;
+- drag-to-inspect element picking;
+- smoother Recorder Studio UX with pause, timeline, playback, and rebind flows;
+- richer locator metadata for modal-safe Java automation.
+
 ## Current Scope
 
 Today, the application supports two inspection modes through a shared UI:

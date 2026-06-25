@@ -1,14 +1,14 @@
-<Window x:Class="JabInspector.App.MainWindow"
+﻿<Window x:Class="JabInspector.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:model="clr-namespace:JabInspector.Core.Models;assembly=JabInspector.Core"
         xmlns:viewModel="clr-namespace:JabInspector.App.ViewModels"
         xmlns:winmodel="clr-namespace:WinInspector.Core.Models;assembly=WinInspector.Core"
         Title="Java Access Bridge Inspector"
-        Width="1320"
-        Height="820"
-        MinWidth="1040"
-        MinHeight="680"
+        Width="980"
+        Height="660"
+        MinWidth="820"
+        MinHeight="540"
         Background="{StaticResource PageBrush}"
         FontFamily="Segoe UI"
         WindowStartupLocation="Manual">
@@ -17,10 +17,21 @@
       <Setter Property="Background" Value="White"/>
       <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
       <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+    <Style x:Key="ToolButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Width" Value="40"/>
+      <Setter Property="Height" Value="36"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="Margin" Value="0,0,5,0"/>
+    </Style>
+    <Style x:Key="ToolPrimaryButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
+      <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
     </Style>
     <Style x:Key="SectionTitle" TargetType="TextBlock">
-      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontSize" Value="10"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
       <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
@@ -28,13 +39,13 @@
     <Style x:Key="PropertyLabel" TargetType="TextBlock">
       <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
       <Setter Property="Margin" Value="0,4"/>
-      <Setter Property="FontSize" Value="11.5"/>
+      <Setter Property="FontSize" Value="10.5"/>
     </Style>
     <Style x:Key="PropertyValue" TargetType="TextBlock">
       <Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
       <Setter Property="Margin" Value="0,4"/>
       <Setter Property="TextWrapping" Value="Wrap"/>
-      <Setter Property="FontSize" Value="11.5"/>
+      <Setter Property="FontSize" Value="10.5"/>
     </Style>
 
     <DataTemplate DataType="{x:Type viewModel:JavaWindowViewModel}">
@@ -84,11 +95,11 @@
     </DataTemplate>
 
     <HierarchicalDataTemplate DataType="{x:Type model:AccessibleNode}" ItemsSource="{Binding Children}">
-      <StackPanel Orientation="Horizontal" Margin="0,2">
-        <Border Background="{StaticResource AccentSoftBrush}" CornerRadius="4" Padding="6,2" Margin="0,0,7,0">
-          <TextBlock Text="{Binding Role}" Foreground="{StaticResource AccentBrush}" FontSize="10.5" FontWeight="SemiBold"/>
+      <StackPanel Orientation="Horizontal" Margin="0,1">
+        <Border Background="{StaticResource AccentSoftBrush}" CornerRadius="3" Padding="4,1" Margin="0,0,5,0">
+          <TextBlock Text="{Binding Role}" Foreground="{StaticResource AccentBrush}" FontSize="9.5" FontWeight="SemiBold"/>
         </Border>
-        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" FontSize="11.5">
+        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" FontSize="10.5">
           <TextBlock.Style>
             <Style TargetType="TextBlock">
               <Setter Property="Text" Value="{Binding Name}"/>
@@ -106,11 +117,11 @@
     </HierarchicalDataTemplate>
 
     <HierarchicalDataTemplate DataType="{x:Type winmodel:WindowsAutomationNode}" ItemsSource="{Binding Children}">
-      <StackPanel Orientation="Horizontal" Margin="0,2">
-        <Border Background="#EEF5FA" CornerRadius="4" Padding="6,2" Margin="0,0,7,0">
-          <TextBlock Text="{Binding Role}" Foreground="#1F5E8C" FontSize="10.5" FontWeight="SemiBold"/>
+      <StackPanel Orientation="Horizontal" Margin="0,1">
+        <Border Background="#EEF5FA" CornerRadius="3" Padding="4,1" Margin="0,0,5,0">
+          <TextBlock Text="{Binding Role}" Foreground="#1F5E8C" FontSize="9.5" FontWeight="SemiBold"/>
         </Border>
-        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontSize="11.5" TextTrimming="CharacterEllipsis"/>
+        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontSize="10.5" TextTrimming="CharacterEllipsis"/>
       </StackPanel>
     </HierarchicalDataTemplate>
   </Window.Resources>
@@ -119,26 +130,26 @@
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/>
       <RowDefinition Height="*"/>
-      <RowDefinition Height="156"/>
-      <RowDefinition Height="28"/>
+      <RowDefinition Height="108"/>
+      <RowDefinition Height="24"/>
     </Grid.RowDefinitions>
 
-    <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,12">
+    <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,6">
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto"/>
-          <ColumnDefinition Width="18"/>
+          <ColumnDefinition Width="10"/>
           <ColumnDefinition Width="*"/>
           <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
 
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <Border Width="34" Height="34" CornerRadius="9" Background="{StaticResource AccentBrush}">
-            <TextBlock Text="J" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="White"/>
+          <Border Width="26" Height="26" CornerRadius="5" Background="{StaticResource AccentBrush}">
+            <TextBlock Text="J" FontSize="13" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="White"/>
           </Border>
-          <StackPanel Margin="10,0,0,0">
-            <TextBlock Text="{Binding ShellTitle}" FontSize="16" FontWeight="SemiBold"/>
-            <TextBlock Text="{Binding HeaderSubtitle}" FontSize="10.5" Foreground="{StaticResource MutedBrush}"/>
+          <StackPanel Margin="7,0,0,0">
+            <TextBlock Text="{Binding ShellTitle}" FontSize="13" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding HeaderSubtitle}" FontSize="9.5" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="245"/>
           </StackPanel>
         </StackPanel>
 
@@ -147,37 +158,92 @@
                 Background="#F9FBFC"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="1"
-                CornerRadius="8"
-                Padding="8,6">
-          <WrapPanel VerticalAlignment="Center" ItemHeight="32">
-            <ComboBox Width="110"
+                CornerRadius="6"
+                Padding="5,4">
+          <WrapPanel VerticalAlignment="Center" ItemHeight="34">
+            <ComboBox Width="98"
                       SelectedItem="{Binding SelectedMode}"
                       ItemsSource="{Binding AvailableModes}"
-                      Margin="0,0,6,0"
+                      Margin="0,0,5,0"
+                      FontSize="11"
                       VerticalContentAlignment="Center"/>
-            <Button Command="{Binding RefreshWindowsCommand}" Content="{Binding RefreshButtonLabel}"/>
-            <Button Command="{Binding AttachCommand}" Style="{StaticResource PrimaryButton}" Content="{Binding AttachButtonLabel}"/>
-            <Button x:Name="HoverInspectButton" Click="HoverInspect_Click" Content="Hover inspect"/>
-            <Button Click="Highlight_Click" Content="Highlight"/>
-            <Button Command="{Binding CopyLocatorCommand}" Content="Copy locator"/>
-            <Button Click="Export_Click" Content="Export JSON" Margin="0"/>
+            <Button Command="{Binding RefreshWindowsCommand}" Style="{StaticResource ToolButton}" ToolTip="{Binding RefreshButtonLabel}">
+              <Viewbox Width="22" Height="22">
+                <Canvas Width="24" Height="24">
+                  <Path Stroke="#2563EB" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M20,6 L20,11 L15,11"/>
+                  <Path Stroke="#2563EB" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M19.2,10.8 A7.2,7.2 0 1 1 16.9,4.5"/>
+                </Canvas>
+              </Viewbox>
+            </Button>
+            <Button Name="PickerButton" PreviewMouseLeftButtonDown="PickerButton_PreviewMouseLeftButtonDown" PreviewMouseLeftButtonUp="PickerButton_PreviewMouseLeftButtonUp" Style="{StaticResource ToolButton}" ToolTip="Drag to pick and inspect an element from the target application">
+              <Viewbox Width="22" Height="22">
+                <Canvas Width="24" Height="24">
+                  <Ellipse Canvas.Left="6" Canvas.Top="6" Width="12" Height="12" Stroke="#7C3AED" StrokeThickness="2.2"/>
+                  <Line X1="12" Y1="2" X2="12" Y2="6" Stroke="#7C3AED" StrokeThickness="2.2" StrokeStartLineCap="Round"/>
+                  <Line X1="12" Y1="18" X2="12" Y2="22" Stroke="#7C3AED" StrokeThickness="2.2" StrokeStartLineCap="Round"/>
+                  <Line X1="2" Y1="12" X2="6" Y2="12" Stroke="#7C3AED" StrokeThickness="2.2" StrokeStartLineCap="Round"/>
+                  <Line X1="18" Y1="12" X2="22" Y2="12" Stroke="#7C3AED" StrokeThickness="2.2" StrokeStartLineCap="Round"/>
+                  <Ellipse Canvas.Left="10.25" Canvas.Top="10.25" Width="3.5" Height="3.5" Fill="#7C3AED"/>
+                </Canvas>
+              </Viewbox>
+            </Button>
+            <Button Click="Highlight_Click" Style="{StaticResource ToolButton}" ToolTip="Highlight selected element">
+              <Viewbox Width="22" Height="22">
+                <Canvas Width="24" Height="24">
+                  <Rectangle Canvas.Left="4" Canvas.Top="5" Width="16" Height="14" RadiusX="2.5" RadiusY="2.5" Stroke="#F59E0B" StrokeThickness="2.2"/>
+                  <Path Fill="#F59E0B" Opacity="0.25" Data="M6,7 L18,7 L18,17 L6,17 Z"/>
+                  <Path Stroke="#D97706" StrokeThickness="2" StrokeStartLineCap="Round" Data="M8,12 L16,12"/>
+                </Canvas>
+              </Viewbox>
+            </Button>
+            <Button Command="{Binding CopyLocatorCommand}" Style="{StaticResource ToolButton}" ToolTip="Copy locator JSON">
+              <Viewbox Width="22" Height="22">
+                <Canvas Width="24" Height="24">
+                  <Rectangle Canvas.Left="8" Canvas.Top="5" Width="11" Height="14" RadiusX="2" RadiusY="2" Stroke="#059669" StrokeThickness="2.1"/>
+                  <Path Stroke="#059669" StrokeThickness="2.1" StrokeStartLineCap="Round" StrokeLineJoin="Round" Data="M5,16 L5,8 Q5,5 8,5"/>
+                  <Path Stroke="#059669" StrokeThickness="1.8" StrokeStartLineCap="Round" Data="M11,10 L16,10 M11,14 L16,14"/>
+                </Canvas>
+              </Viewbox>
+            </Button>
+            <Button Click="Export_Click" Style="{StaticResource ToolButton}" ToolTip="Export tree JSON">
+              <Viewbox Width="22" Height="22">
+                <Canvas Width="24" Height="24">
+                  <Path Stroke="#0EA5E9" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M12,4 L12,15 M8,11 L12,15 L16,11"/>
+                  <Path Stroke="#0284C7" StrokeThickness="2.2" StrokeStartLineCap="Round" Data="M5,19 L19,19"/>
+                </Canvas>
+              </Viewbox>
+            </Button>
+            <Button Click="OpenRecording_Click" Style="{StaticResource ToolButton}" ToolTip="Open recorder studio">
+              <Viewbox Width="22" Height="22">
+                <Canvas Width="24" Height="24">
+                  <Ellipse Canvas.Left="5" Canvas.Top="5" Width="14" Height="14" Fill="#EF4444"/>
+                  <Ellipse Canvas.Left="8.5" Canvas.Top="8.5" Width="7" Height="7" Fill="#FEE2E2" Opacity="0.45"/>
+                </Canvas>
+              </Viewbox>
+            </Button>
           </WrapPanel>
         </Border>
 
         <StackPanel Grid.Column="3" Orientation="Horizontal">
-          <Button Click="Settings_Click" Content="Settings"/>
-          <Button Command="{Binding RunDiagnosticsCommand}" Content="Diagnostics" Margin="0"/>
+          <Button Click="Settings_Click" Style="{StaticResource ToolButton}" ToolTip="Settings">
+            <Viewbox Width="22" Height="22">
+              <Canvas Width="24" Height="24">
+                <Ellipse Canvas.Left="8" Canvas.Top="8" Width="8" Height="8" Stroke="#64748B" StrokeThickness="2"/>
+                <Path Stroke="#64748B" StrokeThickness="2.2" StrokeStartLineCap="Round" Data="M12,2 L12,5 M12,19 L12,22 M2,12 L5,12 M19,12 L22,12 M4.9,4.9 L7,7 M17,17 L19.1,19.1 M19.1,4.9 L17,7 M7,17 L4.9,19.1"/>
+              </Canvas>
+            </Viewbox>
+          </Button>
         </StackPanel>
       </Grid>
     </Border>
 
-    <Grid Grid.Row="1" Margin="12,12,12,8">
+    <Grid Grid.Row="1" Margin="6,6,6,4">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="236"/>
-        <ColumnDefinition Width="8"/>
-        <ColumnDefinition Width="*" MinWidth="300"/>
-        <ColumnDefinition Width="8"/>
-        <ColumnDefinition Width="356"/>
+        <ColumnDefinition Width="300"/>
+        <ColumnDefinition Width="6"/>
+        <ColumnDefinition Width="280"/>
+        <ColumnDefinition Width="6"/>
+        <ColumnDefinition Width="*" MinWidth="260"/>
       </Grid.ColumnDefinitions>
 
       <Border Grid.Column="0" Style="{StaticResource PanelBorder}">
@@ -188,11 +254,11 @@
             <RowDefinition Height="Auto"/>
           </Grid.RowDefinitions>
 
-          <Border Padding="14,12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+          <Border Padding="8,6" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
             <Grid>
               <TextBlock Style="{StaticResource SectionTitle}" Text="{Binding WindowPaneTitle}" VerticalAlignment="Center"/>
-              <Border HorizontalAlignment="Right" Background="{StaticResource AccentSoftBrush}" CornerRadius="10" Padding="8,2">
-                <TextBlock Text="{Binding WindowItemCount, StringFormat={}{0} FOUND}" Foreground="{StaticResource AccentBrush}" FontSize="10" FontWeight="SemiBold"/>
+              <Border HorizontalAlignment="Right" Background="{StaticResource AccentSoftBrush}" CornerRadius="8" Padding="5,1">
+                <TextBlock Text="{Binding WindowItemCount, StringFormat={}{0}}" Foreground="{StaticResource AccentBrush}" FontSize="9" FontWeight="SemiBold"/>
               </Border>
             </Grid>
           </Border>
@@ -202,12 +268,12 @@
                    SelectedItem="{Binding SelectedWindowItem}"
                    BorderThickness="0"
                    Background="Transparent"
-                   Padding="6"
+                   Padding="4"
                    ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemContainerStyle>
               <Style TargetType="ListBoxItem">
                 <Setter Property="Padding" Value="0"/>
-                <Setter Property="Margin" Value="0,0,0,6"/>
+                <Setter Property="Margin" Value="0,0,0,4"/>
                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Template">
@@ -217,8 +283,8 @@
                               Background="{TemplateBinding Background}"
                               BorderBrush="#E3E8EF"
                               BorderThickness="1"
-                              CornerRadius="7"
-                              Padding="9">
+                              CornerRadius="5"
+                              Padding="6">
                         <ContentPresenter/>
                       </Border>
                       <ControlTemplate.Triggers>
@@ -237,13 +303,13 @@
             </ListBox.ItemContainerStyle>
           </ListBox>
 
-          <Border Grid.Row="2" Margin="8" Padding="10" CornerRadius="7" Background="#FFF9EC">
-            <TextBlock Text="{Binding WindowPaneHint}" TextWrapping="Wrap" Foreground="#8A6522" FontSize="10.5"/>
+          <Border Grid.Row="2" Margin="5" Padding="6" CornerRadius="5" Background="#FFF9EC">
+            <TextBlock Text="{Binding WindowPaneHint}" TextWrapping="Wrap" Foreground="#8A6522" FontSize="9.5"/>
           </Border>
         </Grid>
       </Border>
 
-      <GridSplitter Grid.Column="1" Width="8" Background="Transparent" HorizontalAlignment="Stretch"/>
+      <GridSplitter Grid.Column="1" Width="6" Background="Transparent" HorizontalAlignment="Stretch"/>
 
       <Border Grid.Column="2" Style="{StaticResource PanelBorder}">
         <Grid>
@@ -251,7 +317,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
-          <Border Padding="14,12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+          <Border Padding="8,6" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
             <Grid>
               <TextBlock Style="{StaticResource SectionTitle}" Text="ACCESSIBILITY HIERARCHY"/>
               <TextBlock HorizontalAlignment="Right" Foreground="{StaticResource MutedBrush}" FontSize="10.5" Text="role · accessible name"/>
@@ -264,30 +330,30 @@
                     PreviewMouseLeftButtonUp="AccessibilityTree_PreviewMouseLeftButtonUp"
                     BorderThickness="0"
                     Background="Transparent"
-                    Padding="10"
-                    FontSize="11.5"
+                    Padding="6"
+                    FontSize="10.5"
                     VirtualizingPanel.IsVirtualizing="False"/>
         </Grid>
       </Border>
 
-      <GridSplitter Grid.Column="3" Width="8" Background="Transparent" HorizontalAlignment="Stretch"/>
+      <GridSplitter Grid.Column="3" Width="6" Background="Transparent" HorizontalAlignment="Stretch"/>
 
       <Border Grid.Column="4" Style="{StaticResource PanelBorder}">
         <TabControl x:Name="DetailsTabs" BorderThickness="0" Background="Transparent" SelectionChanged="DetailsTabs_SelectionChanged">
           <TabItem x:Name="PropertiesTab" Header="  PROPERTIES  ">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
-              <StackPanel Margin="14">
-                <Border Background="#F4F8FB" CornerRadius="8" Padding="10" Margin="0,0,0,12">
+              <StackPanel Margin="8">
+                <Border Background="#F4F8FB" CornerRadius="5" Padding="7" Margin="0,0,0,8">
                   <StackPanel>
-                    <TextBlock Text="SELECTED ELEMENT" Foreground="{StaticResource AccentBrush}" FontSize="10" FontWeight="Bold"/>
-                    <TextBlock Text="{Binding SelectedDisplayName}" FontWeight="SemiBold" FontSize="13" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                    <TextBlock Text="SELECTED ELEMENT" Foreground="{StaticResource AccentBrush}" FontSize="9" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding SelectedDisplayName}" FontWeight="SemiBold" FontSize="11.5" Margin="0,3,0,0" TextWrapping="Wrap"/>
                   </StackPanel>
                 </Border>
 
                 <TextBlock Style="{StaticResource SectionTitle}" Text="IDENTITY" Margin="0,0,0,5"/>
                 <Grid>
                   <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="106"/>
+                    <ColumnDefinition Width="88"/>
                     <ColumnDefinition Width="*"/>
                   </Grid.ColumnDefinitions>
                   <Grid.RowDefinitions>
@@ -312,11 +378,11 @@
                   <TextBlock Grid.Row="5" Grid.Column="1" Style="{StaticResource PropertyValue}" Text="{Binding PropertyStatesSecondaryValue}"/>
                 </Grid>
 
-                <Separator Margin="0,10" Background="{StaticResource BorderBrush}"/>
+                <Separator Margin="0,7" Background="{StaticResource BorderBrush}"/>
                 <TextBlock Style="{StaticResource SectionTitle}" Text="GEOMETRY AND TREE" Margin="0,0,0,5"/>
                 <Grid>
                   <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="106"/>
+                    <ColumnDefinition Width="88"/>
                     <ColumnDefinition Width="*"/>
                   </Grid.ColumnDefinitions>
                   <Grid.RowDefinitions>
@@ -336,16 +402,60 @@
                 </Grid>
 
                 <StackPanel Visibility="{Binding JavaSelectionVisibility}">
-                  <Separator Margin="0,10" Background="{StaticResource BorderBrush}"/>
-                  <TextBlock Style="{StaticResource SectionTitle}" Text="ACCESSIBLE INTERFACES" Margin="0,0,0,7"/>
+                  <Separator Margin="0,7" Background="{StaticResource BorderBrush}"/>
+                  <TextBlock Style="{StaticResource SectionTitle}" Text="LOCATORS" Margin="0,0,0,5"/>
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="88"/>
+                      <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition/>
+                      <RowDefinition/>
+                      <RowDefinition/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource PropertyLabel}" Text="Role path"/>
+                    <TextBlock Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding PropertyLocatorPathValue}" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="1" Style="{StaticResource PropertyLabel}" Text="Index path"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding PropertyIndexPathValue}" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="2" Style="{StaticResource PropertyLabel}" Text="XPath"/>
+                    <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding PropertyXPathValue}" TextWrapping="Wrap"/>
+                  </Grid>
+                </StackPanel>
+
+                <StackPanel Visibility="{Binding JavaSelectionVisibility}">
+                  <Separator Margin="0,7" Background="{StaticResource BorderBrush}"/>
+                  <TextBlock Style="{StaticResource SectionTitle}" Text="TEXT / VALUE" Margin="0,0,0,5"/>
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="88"/>
+                      <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition/>
+                      <RowDefinition/>
+                      <RowDefinition/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource PropertyLabel}" Text="Preview"/>
+                    <TextBlock Grid.Column="1" Style="{StaticResource PropertyValue}" Text="{Binding PropertyTextPreviewValue}" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="1" Style="{StaticResource PropertyLabel}" Text="Text details"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource PropertyValue}" Text="{Binding PropertyTextDetailsValue}" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="2" Style="{StaticResource PropertyLabel}" Text="Value details"/>
+                    <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource PropertyValue}" Text="{Binding PropertyValueDetailsValue}" TextWrapping="Wrap"/>
+                  </Grid>
+                </StackPanel>
+
+                <StackPanel Visibility="{Binding JavaSelectionVisibility}">
+                  <Separator Margin="0,7" Background="{StaticResource BorderBrush}"/>
+                  <TextBlock Style="{StaticResource SectionTitle}" Text="ACCESSIBLE INTERFACES" Margin="0,0,0,5"/>
                   <WrapPanel>
-                    <CheckBox Content="Component" IsChecked="{Binding SelectedNode.AccessibleComponent}" IsHitTestVisible="False" Margin="0,0,12,6"/>
-                    <CheckBox Content="Action" IsChecked="{Binding SelectedNode.AccessibleAction}" IsHitTestVisible="False" Margin="0,0,12,6"/>
-                    <CheckBox Content="Selection" IsChecked="{Binding SelectedNode.AccessibleSelection}" IsHitTestVisible="False" Margin="0,0,12,6"/>
-                    <CheckBox Content="Text" IsChecked="{Binding SelectedNode.AccessibleText}" IsHitTestVisible="False" Margin="0,0,12,6"/>
-                    <CheckBox Content="Value" IsChecked="{Binding SelectedNode.AccessibleValue}" IsHitTestVisible="False" Margin="0,0,12,6"/>
-                    <CheckBox Content="Table" IsChecked="{Binding SelectedNode.AccessibleTable}" IsHitTestVisible="False" Margin="0,0,12,6"/>
-                    <CheckBox Content="Interfaces" IsChecked="{Binding SelectedNode.AccessibleInterfaces}" IsHitTestVisible="False" Margin="0,0,12,6"/>
+                    <CheckBox Content="Component" IsChecked="{Binding SelectedNode.AccessibleComponent}" IsHitTestVisible="False" Margin="0,0,8,4" FontSize="10"/>
+                    <CheckBox Content="Action" IsChecked="{Binding SelectedNode.AccessibleAction}" IsHitTestVisible="False" Margin="0,0,8,4" FontSize="10"/>
+                    <CheckBox Content="Selection" IsChecked="{Binding SelectedNode.AccessibleSelection}" IsHitTestVisible="False" Margin="0,0,8,4" FontSize="10"/>
+                    <CheckBox Content="Text" IsChecked="{Binding SelectedNode.AccessibleText}" IsHitTestVisible="False" Margin="0,0,8,4" FontSize="10"/>
+                    <CheckBox Content="Value" IsChecked="{Binding SelectedNode.AccessibleValue}" IsHitTestVisible="False" Margin="0,0,8,4" FontSize="10"/>
+                    <CheckBox Content="Table" IsChecked="{Binding SelectedNode.AccessibleTable}" IsHitTestVisible="False" Margin="0,0,8,4" FontSize="10"/>
+                    <CheckBox Content="Interfaces" IsChecked="{Binding SelectedNode.AccessibleInterfaces}" IsHitTestVisible="False" Margin="0,0,8,4" FontSize="10"/>
                   </WrapPanel>
                 </StackPanel>
               </StackPanel>
@@ -353,13 +463,13 @@
           </TabItem>
 
           <TabItem Header="  LOCATOR JSON  ">
-            <Grid Margin="12">
+            <Grid Margin="8">
               <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
               </Grid.RowDefinitions>
-              <TextBlock Text="Generated from semantics and hierarchy, not coordinates alone." Foreground="{StaticResource MutedBrush}" FontSize="10.5" TextWrapping="Wrap" Margin="2,0,2,8"/>
+              <TextBlock Text="Generated from semantics and hierarchy, not coordinates alone." Foreground="{StaticResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap" Margin="2,0,2,5"/>
               <TextBox Grid.Row="1"
                        Text="{Binding LocatorPreview, Mode=OneWay}"
                        IsReadOnly="True"
@@ -381,7 +491,7 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
               <StackPanel Margin="14">
                 <Border Background="#FFF4E8" CornerRadius="8" Padding="10" Margin="0,0,0,10">
-                  <TextBlock Text="Actions run against the current backend. Java actions are active today; Windows actions are being wired next." Foreground="#9A5B13" FontSize="10.5" TextWrapping="Wrap"/>
+                  <TextBlock Text="Actions run against the current backend. In Java mode, these same actions can also be captured into a repository-backed recording session for later playback." Foreground="#9A5B13" FontSize="10.5" TextWrapping="Wrap"/>
                 </Border>
                 <TextBlock Style="{StaticResource SectionTitle}" Text="TARGET"/>
                 <TextBlock Text="{Binding SelectedDisplayName}" FontWeight="SemiBold" Margin="0,4,0,2" TextWrapping="Wrap"/>
@@ -402,6 +512,153 @@
                 <TextBox Text="{Binding AutomationOutput, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="88" MaxHeight="170" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="10.5" Background="#F7F8FA" BorderBrush="{StaticResource BorderBrush}" Padding="8"/>
               </StackPanel>
             </ScrollViewer>
+          </TabItem>
+
+          <TabItem x:Name="RecordingTab" Header="  RECORDING  " Visibility="Collapsed">
+            <Grid Margin="12">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="150"/>
+              </Grid.RowDefinitions>
+
+              <Border Background="#EEF5FA" CornerRadius="8" Padding="10">
+                <StackPanel>
+                  <TextBlock Text="JAVA RECORDING AND PLAYBACK" Foreground="#1F5E8C" FontSize="10" FontWeight="Bold"/>
+                  <TextBlock Margin="0,4,0,0"
+                             Text="This records Java/JAB automation intent and detailed element properties into a reusable locator repository for playback. It does not record video frames."
+                             TextWrapping="Wrap"
+                             FontSize="10.5"
+                             Foreground="#37536B"/>
+                </StackPanel>
+              </Border>
+
+              <Grid Grid.Row="1" Margin="0,10,0,10">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Text="{Binding RecordingSessionName}" FontWeight="SemiBold" FontSize="12.5"/>
+                  <TextBlock Text="{Binding RecordingStatus}" Foreground="{StaticResource MutedBrush}" FontSize="10.5" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                  <TextBlock Text="{Binding RecordingProjectPath}" Foreground="#8A96A7" FontFamily="Consolas" FontSize="9.5" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+                <WrapPanel Grid.Column="1" VerticalAlignment="Top">
+                  <Button Click="StartRecordingSession_Click" Style="{StaticResource PrimaryButton}" Content="New session"/>
+                  <Button Click="ToggleRecordingPause_Click" Content="Pause/Resume"/>
+                  <Button Click="AddSelectedObject_Click" Content="Add selected object"/>
+                  <Button Click="SaveRecording_Click" Content="Save project"/>
+                  <Button Click="LoadRecording_Click" Content="Load project"/>
+                  <Button Click="PlayRecording_Click" Content="Playback" Margin="0"/>
+                </WrapPanel>
+              </Grid>
+
+              <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="10"/>
+                  <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Style="{StaticResource PanelBorder}">
+                  <Grid>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto"/>
+                      <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Border Padding="12,10" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                      <TextBlock Style="{StaticResource SectionTitle}" Text="OBJECT REPOSITORY"/>
+                    </Border>
+                    <ListBox Grid.Row="1" ItemsSource="{Binding RepositoryEntries}" SelectedItem="{Binding SelectedRepositoryEntry}" BorderThickness="0" Background="Transparent" Padding="8">
+                      <ListBox.ItemTemplate>
+                        <DataTemplate>
+                          <StackPanel Margin="0,0,0,6">
+                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="11.5" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding Description, StringFormat=Desc: {0}}" Foreground="{StaticResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding VirtualAccessibleName, StringFormat=JAWS: {0}}" Foreground="{StaticResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding Path}" Foreground="{StaticResource MutedBrush}" FontFamily="Consolas" FontSize="9.5" TextWrapping="Wrap"/>
+                          </StackPanel>
+                        </DataTemplate>
+                      </ListBox.ItemTemplate>
+                    </ListBox>
+                  </Grid>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource PanelBorder}">
+                  <Grid>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto"/>
+                      <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Border Padding="12,10" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                      <TextBlock Style="{StaticResource SectionTitle}" Text="RECORDED STEPS"/>
+                    </Border>
+                    <ListBox Grid.Row="1" ItemsSource="{Binding RecordedSteps}" SelectedItem="{Binding SelectedRecordedStep}" BorderThickness="0" Background="Transparent" Padding="8">
+                      <ListBox.ItemTemplate>
+                        <DataTemplate>
+                          <StackPanel Margin="0,0,0,6">
+                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="11.5" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding ObjectDescription, StringFormat=Desc: {0}}" Foreground="{StaticResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding ObjectVirtualAccessibleName, StringFormat=JAWS: {0}}" Foreground="{StaticResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap"/>
+                            <TextBlock Foreground="{StaticResource MutedBrush}" FontFamily="Consolas" FontSize="9.5">
+                              <Run Text="{Binding CapturedAtUtc, StringFormat={}{0:HH:mm:ss}}"/>
+                              <Run Text="  ·  "/>
+                              <Run Text="{Binding StepName}"/>
+                              <Run Text="  Depth="/>
+                              <Run Text="{Binding ObjectDepth}"/>
+                            </TextBlock>
+                          </StackPanel>
+                        </DataTemplate>
+                      </ListBox.ItemTemplate>
+                    </ListBox>
+                  </Grid>
+                </Border>
+              </Grid>
+
+              <Grid Grid.Row="3" Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="10"/>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="10"/>
+                  <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Style="{StaticResource PanelBorder}">
+                  <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto"/>
+                      <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="REPOSITORY PREVIEW"/>
+                    <TextBox Grid.Row="1" Margin="0,8,0,0" Text="{Binding RecordingRepositoryPreview, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="10.5" Background="#F7F8FA" BorderBrush="{StaticResource BorderBrush}" Padding="8"/>
+                  </Grid>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource PanelBorder}">
+                  <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto"/>
+                      <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="STEP PREVIEW"/>
+                    <TextBox Grid.Row="1" Margin="0,8,0,0" Text="{Binding RecordingStepPreview, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="10.5" Background="#F7F8FA" BorderBrush="{StaticResource BorderBrush}" Padding="8"/>
+                  </Grid>
+                </Border>
+
+                <Border Grid.Column="4" Style="{StaticResource PanelBorder}">
+                  <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto"/>
+                      <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="PLAYBACK OUTPUT"/>
+                    <TextBox Grid.Row="1" Margin="0,8,0,0" Text="{Binding PlaybackOutput, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="10.5" Background="#F7F8FA" BorderBrush="{StaticResource BorderBrush}" Padding="8"/>
+                  </Grid>
+                </Border>
+              </Grid>
+            </Grid>
           </TabItem>
 
           <TabItem x:Name="SettingsTab" Header="  SETTINGS  ">
@@ -518,3 +775,4 @@
     </Border>
   </Grid>
 </Window>
+

@@ -1,0 +1,258 @@
+<Window x:Class="JabInspector.App.RecordingStudioWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Java Recorder Studio"
+        Width="920"
+        Height="610"
+        MinWidth="760"
+        MinHeight="520"
+        Background="#F4F6FA"
+        FontFamily="Segoe UI"
+        WindowStartupLocation="CenterOwner">
+  <Window.Resources>
+    <SolidColorBrush x:Key="BorderBrush" Color="#E2E8F0"/>
+    <SolidColorBrush x:Key="MutedBrush" Color="#64748B"/>
+    <SolidColorBrush x:Key="InkBrush" Color="#0F172A"/>
+    <SolidColorBrush x:Key="PanelBrush" Color="#FFFFFF"/>
+
+    <Style TargetType="Button">
+      <Setter Property="Margin" Value="0,0,6,6"/>
+      <Setter Property="Padding" Value="10,6"/>
+      <Setter Property="MinHeight" Value="30"/>
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FontSize" Value="11"/>
+    </Style>
+
+    <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Background" Value="#2563EB"/>
+      <Setter Property="BorderBrush" Value="#2563EB"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Background" Value="#DC2626"/>
+      <Setter Property="BorderBrush" Value="#DC2626"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <Style x:Key="PanelBorder" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
+      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
+    <Style x:Key="SectionTitle" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+      <Setter Property="FontSize" Value="10"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+    </Style>
+  </Window.Resources>
+
+  <Grid Margin="10">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+
+    <Border Style="{StaticResource PanelBorder}" Padding="12">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <Border Width="32" Height="32" CornerRadius="10" Background="#E0ECFF" Margin="0,0,10,0">
+              <Viewbox Width="17" Height="17">
+                <Canvas Width="24" Height="24">
+                  <Ellipse Canvas.Left="5" Canvas.Top="5" Width="14" Height="14" Fill="#2563EB"/>
+                  <Ellipse Canvas.Left="9" Canvas.Top="9" Width="6" Height="6" Fill="White"/>
+                </Canvas>
+              </Viewbox>
+            </Border>
+            <StackPanel>
+              <TextBlock Text="Java Recorder Studio" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}"/>
+              <TextBlock Text="{Binding RecordingStatus}" Foreground="{StaticResource MutedBrush}" FontSize="10.5" TextWrapping="Wrap"/>
+            </StackPanel>
+            <Border Background="#FEF2F2" BorderBrush="#FCA5A5" BorderThickness="1" CornerRadius="12" Padding="8,3" Margin="12,0,0,0">
+              <StackPanel Orientation="Horizontal">
+                <Ellipse Width="7" Height="7" Fill="#EF4444" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding RecordingBadgeText}" Foreground="#991B1B" FontWeight="SemiBold" FontSize="10"/>
+              </StackPanel>
+            </Border>
+            <Border Background="#EFF6FF" CornerRadius="12" Padding="8,3" Margin="6,0,0,0">
+              <TextBlock Text="{Binding RecordingStepCount, StringFormat={}{0} steps}" Foreground="#1D4ED8" FontWeight="SemiBold" FontSize="10"/>
+            </Border>
+            <Border Background="#ECFDF5" CornerRadius="12" Padding="8,3" Margin="6,0,0,0">
+              <TextBlock Text="{Binding RecordingObjectCount, StringFormat={}{0} objects}" Foreground="#047857" FontWeight="SemiBold" FontSize="10"/>
+            </Border>
+          </StackPanel>
+          <TextBlock Text="{Binding RecordingProjectPath}" Foreground="#94A3B8" FontFamily="Consolas" FontSize="9.5" Margin="42,5,0,0" TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
+
+        <WrapPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+          <Button Click="NewSession_Click" Style="{StaticResource PrimaryButton}" MinWidth="76" Content="New" ToolTip="Start a new Java recording session"/>
+          <Button Click="TogglePause_Click" MinWidth="70" Content="Pause" ToolTip="Pause or resume active recording"/>
+          <Button Click="StopSession_Click" Style="{StaticResource DangerButton}" MinWidth="68" Content="Stop" ToolTip="Stop recording and review the captured flow"/>
+          <Button Click="Playback_Click" MinWidth="64" Content="Play" ToolTip="Replay recorded steps"/>
+          <Button Click="SaveProject_Click" MinWidth="64" Content="Save" ToolTip="Save recording project"/>
+          <Button Click="LoadProject_Click" MinWidth="64" Content="Load" ToolTip="Load recording project"/>
+        </WrapPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1" Margin="0,10,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="10"/>
+        <ColumnDefinition Width="310"/>
+      </Grid.ColumnDefinitions>
+
+      <Border Grid.Column="0" Style="{StaticResource PanelBorder}">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+
+          <Border Padding="12,9" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid>
+              <StackPanel>
+                <TextBlock Text="RECORDED TIMELINE" Style="{StaticResource SectionTitle}"/>
+                <TextBlock Text="Captured Java Access Bridge actions and locator-backed playback steps."
+                           Foreground="{StaticResource MutedBrush}" FontSize="10.5" Margin="0,3,0,0" TextWrapping="Wrap"/>
+              </StackPanel>
+              <Button HorizontalAlignment="Right" Click="CaptureObject_Click" Content="Capture selected object" Padding="9,4" MinHeight="24"/>
+            </Grid>
+          </Border>
+
+          <ListBox Grid.Row="1"
+                   ItemsSource="{Binding RecordedSteps}"
+                   SelectedItem="{Binding SelectedRecordedStep}"
+                   BorderThickness="0"
+                   Background="Transparent"
+                   Padding="8"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Border BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="0,0,0,8" Margin="0,0,0,8">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="40"/>
+                      <ColumnDefinition Width="*"/>
+                      <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Width="28" Height="28" CornerRadius="14" Background="#EFF6FF" VerticalAlignment="Top" Margin="0,1,0,0">
+                      <TextBlock Text="{Binding Sequence}" Foreground="#2563EB" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel Grid.Column="1">
+                      <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource InkBrush}"/>
+                      <TextBlock Text="{Binding ObjectDescription, StringFormat=Desc: {0}}" Foreground="{StaticResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap"/>
+                      <TextBlock Text="{Binding ObjectVirtualAccessibleName, StringFormat=JAWS: {0}}" Foreground="{StaticResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap"/>
+                      <TextBlock Foreground="#94A3B8" FontSize="10">
+                        <Run Text="{Binding CapturedAtUtc, StringFormat={}{0:HH:mm:ss}}"/>
+                        <Run Text=" - "/>
+                        <Run Text="{Binding WindowTitle}"/>
+                        <Run Text=" - depth "/>
+                        <Run Text="{Binding ObjectDepth}"/>
+                      </TextBlock>
+                    </StackPanel>
+                    <Border Grid.Column="2" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="8,3" Margin="10,0,0,0" VerticalAlignment="Top">
+                      <TextBlock Text="{Binding ActionKind}" Foreground="#1D4ED8" FontSize="10" FontWeight="SemiBold"/>
+                    </Border>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+      </Border>
+
+      <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+          <Border Style="{StaticResource PanelBorder}" Padding="12">
+            <StackPanel>
+              <TextBlock Text="MANUAL ACTIONS" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
+              <UniformGrid Columns="2">
+                <Button Click="Click_Click" Content="Click" Style="{StaticResource PrimaryButton}"/>
+                <Button Click="DoubleClick_Click" Content="Double click"/>
+                <Button Click="Focus_Click" Content="Focus"/>
+                <Button Click="GetText_Click" Content="Get text"/>
+              </UniformGrid>
+
+              <TextBox x:Name="RecorderTextInput"
+                       Margin="0,8,0,8"
+                       MinHeight="58"
+                       MaxHeight="96"
+                       AcceptsReturn="True"
+                       TextWrapping="Wrap"
+                       VerticalScrollBarVisibility="Auto"
+                       Padding="8"
+                       BorderBrush="{StaticResource BorderBrush}"
+                       Background="#F8FAFC"/>
+              <UniformGrid Columns="2">
+                <Button Click="SetText_Click" Content="Set text"/>
+                <Button Click="TypeText_Click" Content="Type"/>
+              </UniformGrid>
+            </StackPanel>
+          </Border>
+
+          <Expander Header="Object repository" Margin="0,10,0,0" IsExpanded="True">
+            <Border Style="{StaticResource PanelBorder}" Padding="10" Margin="0,6,0,0">
+              <Grid Height="178">
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid>
+                  <TextBlock Text="{Binding RecordingObjectCount, StringFormat={}{0} OBJECTS}" Style="{StaticResource SectionTitle}"/>
+                  <Button HorizontalAlignment="Right" Click="CaptureObject_Click" Content="Capture" Padding="8,4" MinHeight="24"/>
+                </Grid>
+                <ListBox Grid.Row="1" ItemsSource="{Binding RepositoryEntries}" SelectedItem="{Binding SelectedRepositoryEntry}" BorderThickness="0" Background="Transparent" Margin="0,8,0,0">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Margin="0,0,0,8">
+                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding Description, StringFormat=Desc: {0}}" Foreground="{StaticResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding VirtualAccessibleName, StringFormat=JAWS: {0}}" Foreground="{StaticResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding Path}" Foreground="#94A3B8" FontFamily="Consolas" FontSize="9" TextWrapping="Wrap"/>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </Grid>
+            </Border>
+          </Expander>
+
+          <Expander Header="Selected step locator JSON" Margin="0,8,0,0" IsExpanded="False">
+            <TextBox Margin="0,6,0,0" Text="{Binding RecordingStepPreview, Mode=OneWay}" IsReadOnly="True"
+                     AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="10"
+                     MinHeight="130" Background="#F8FAFC" BorderBrush="{StaticResource BorderBrush}" Padding="8"/>
+          </Expander>
+
+          <Expander Header="Repository locator JSON" Margin="0,8,0,0" IsExpanded="False">
+            <TextBox Margin="0,6,0,0" Text="{Binding RecordingRepositoryPreview, Mode=OneWay}" IsReadOnly="True"
+                     AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="10"
+                     MinHeight="130" Background="#F8FAFC" BorderBrush="{StaticResource BorderBrush}" Padding="8"/>
+          </Expander>
+
+          <Expander Header="Playback output" Margin="0,8,0,0" IsExpanded="False">
+            <TextBox Margin="0,6,0,0" Text="{Binding PlaybackOutput, Mode=OneWay}" IsReadOnly="True"
+                     AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                     FontFamily="Consolas" FontSize="10" MinHeight="116"
+                     Background="#F8FAFC" BorderBrush="{StaticResource BorderBrush}" Padding="8"/>
+          </Expander>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </Grid>
+</Window>
