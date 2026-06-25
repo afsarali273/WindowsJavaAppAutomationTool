@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using JabInspector.App.ViewModels;
 using JabInspector.Core.Models;
 using Microsoft.Win32;
@@ -100,6 +101,37 @@ public partial class RecordingStudioWindow : Window
         menu.PlacementTarget = owner;
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
         menu.IsOpen = true;
+    }
+
+    private void RepositoryDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: JavaObjectRepositoryEntry entry }) return;
+        ViewModel.SelectedRepositoryEntry = entry;
+        ShowLocatorDetails(
+            $"Repository Object: {entry.DisplayName}",
+            "Object repository locator and accessibility metadata",
+            ViewModel.RecordingRepositoryPreview);
+        e.Handled = true;
+    }
+
+    private void StepDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: JavaRecordedStep step }) return;
+        ViewModel.SelectedRecordedStep = step;
+        ShowLocatorDetails(
+            $"Step {step.Sequence}: {step.ActionKind}",
+            step.ObjectSummary,
+            ViewModel.RecordingStepPreview);
+        e.Handled = true;
+    }
+
+    private void ShowLocatorDetails(string title, string subtitle, string details)
+    {
+        var window = new LocatorDetailsWindow(title, subtitle, details)
+        {
+            Owner = this
+        };
+        window.ShowDialog();
     }
 
     private void Focus_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.Focus, "");

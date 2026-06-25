@@ -317,7 +317,7 @@
       <!-- Row 1: Left, Middle, Right workspaceColumns -->
       <RowDefinition Height="*"/>
       <!-- Row 2: Playback Output Terminal Console -->
-      <RowDefinition Height="145"/>
+      <RowDefinition Height="118"/>
     </Grid.RowDefinitions>
 
     <!-- Sleek Studio Header (Polished Deep Charcoal Navy) -->
@@ -414,8 +414,6 @@
       <!-- Panel 0: Object Repository (Left Pane) -->
       <Grid Grid.Column="0" Margin="0,0,10,0">
         <Grid.RowDefinitions>
-          <RowDefinition Height="1.3*"/>
-          <RowDefinition Height="Auto"/>
           <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -451,6 +449,7 @@
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="32"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
                       </Grid.ColumnDefinitions>
                       <!-- Repository Icon Indicator -->
                       <Border Grid.Column="0" Width="24" Height="24" CornerRadius="12" Background="#F0FDFA" BorderBrush="#5EEAD4" BorderThickness="1">
@@ -461,32 +460,21 @@
                         <TextBlock Text="{Binding Description, StringFormat=Desc: {0}}" Foreground="{StaticResource MutedBrush}" FontSize="9.5" TextTrimming="CharacterEllipsis" Visibility="{Binding Description, Converter={StaticResource NullToVisibilityConverter}, FallbackValue=Collapsed}"/>
                         <TextBlock Text="{Binding Path}" Foreground="#94A3B8" FontFamily="Consolas" FontSize="8.5" TextTrimming="CharacterEllipsis"/>
                       </StackPanel>
+                      <Button Grid.Column="2"
+                              Click="RepositoryDetails_Click"
+                              Style="{StaticResource ToolboxButton}"
+                              Width="28"
+                              Height="28"
+                              Padding="0"
+                              Margin="8,0,0,0"
+                              ToolTip="Show repository locator details">
+                        <Path Width="12" Height="12" Fill="#2563EB" Stretch="Uniform" Data="M11,17h2v-6h-2v6z M12,2a10,10 0,1 0,0,20a10,10 0,0 0,0,-20z M12,20a8,8 0,1 1,0,-16a8,8 0,0 1,0,16z M11,9h2V7h-2v2z"/>
+                      </Button>
                     </Grid>
                   </Border>
                 </DataTemplate>
               </ListBox.ItemTemplate>
             </ListBox>
-          </Grid>
-        </Border>
-
-        <!-- Divider line -->
-        <GridSplitter Grid.Row="1" Height="8" HorizontalAlignment="Stretch" Background="Transparent" ResizeBehavior="PreviousAndNext"/>
-
-        <!-- Repository item specifications/locator card -->
-        <Border Grid.Row="2" Style="{StaticResource PanelBorder}">
-          <Grid>
-            <Grid.RowDefinitions>
-              <RowDefinition Height="Auto"/>
-              <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <StackPanel Margin="0,0,0,8">
-              <TextBlock Text="REPOSITORY LOCATOR PREVIEW" Style="{StaticResource SectionTitle}"/>
-              <TextBlock Text="JSON properties used to locate mapped objects." Foreground="{StaticResource MutedBrush}" FontSize="10"/>
-            </StackPanel>
-            <TextBox Grid.Row="1" Text="{Binding RecordingRepositoryPreview, Mode=OneWay}" IsReadOnly="True"
-                     AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto"
-                     HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="10"
-                     Background="#1E293B" Foreground="#38BDF8" BorderBrush="#334155" Padding="8"/>
           </Grid>
         </Border>
       </Grid>
@@ -549,6 +537,7 @@
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                       </Grid.ColumnDefinitions>
                       <StackPanel>
                         <TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="12.5" Foreground="{StaticResource InkBrush}" TextWrapping="Wrap"/>
@@ -567,6 +556,17 @@
                       <Border Grid.Column="1" Background="#EFF6FF" BorderBrush="#DBEAFE" BorderThickness="1" CornerRadius="12" Padding="10,4" Margin="8,0,0,0" VerticalAlignment="Top">
                         <TextBlock Text="{Binding ActionKind}" Foreground="#2563EB" FontSize="10" FontWeight="Bold"/>
                       </Border>
+                      <Button Grid.Column="2"
+                              Click="StepDetails_Click"
+                              Style="{StaticResource ToolboxButton}"
+                              Width="30"
+                              Height="28"
+                              Padding="0"
+                              Margin="8,0,0,0"
+                              VerticalAlignment="Top"
+                              ToolTip="Show step locator details">
+                        <Path Width="12" Height="12" Fill="#2563EB" Stretch="Uniform" Data="M11,17h2v-6h-2v6z M12,2a10,10 0,1 0,0,20a10,10 0,0 0,0,-20z M12,20a8,8 0,1 1,0,-16a8,8 0,0 1,0,16z M11,9h2V7h-2v2z"/>
+                      </Button>
                     </Grid>
                   </Border>
                 </Grid>
@@ -579,8 +579,6 @@
       <!-- Panel 2: Code Automation Toolbox (Right Pane) -->
       <Grid Grid.Column="2">
         <Grid.RowDefinitions>
-          <RowDefinition Height="1.35*"/>
-          <RowDefinition Height="Auto"/>
           <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -670,26 +668,6 @@
           </Grid>
         </Border>
 
-        <!-- Divider line -->
-        <GridSplitter Grid.Row="1" Height="8" HorizontalAlignment="Stretch" Background="Transparent" ResizeBehavior="PreviousAndNext"/>
-
-        <!-- Selected step specifications card -->
-        <Border Grid.Row="2" Style="{StaticResource PanelBorder}">
-          <Grid>
-            <Grid.RowDefinitions>
-              <RowDefinition Height="Auto"/>
-              <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <StackPanel Margin="0,0,0,8">
-              <TextBlock Text="SELECTED TIMELINE STEP LOCATOR" Style="{StaticResource SectionTitle}"/>
-              <TextBlock Text="Properties mapping for the selected playback step." Foreground="{StaticResource MutedBrush}" FontSize="10"/>
-            </StackPanel>
-            <TextBox Grid.Row="1" Text="{Binding RecordingStepPreview, Mode=OneWay}" IsReadOnly="True"
-                     AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto"
-                     HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="10"
-                     Background="#1E293B" Foreground="#38BDF8" BorderBrush="#334155" Padding="8"/>
-          </Grid>
-        </Border>
       </Grid>
     </Grid>
 
@@ -709,14 +687,14 @@
               <Path Width="11" Height="11" Fill="#00E6FF" Stretch="Uniform" Data="M8.59,16.59L13.17,12L8.59,7.41L10,6l6,6l-6,6L8.59,16.59z M18,17v-2h-6v2H18z" VerticalAlignment="Center"/>
               <TextBlock Text="LIVE PLAYBACK CONSOLE" Foreground="White" FontWeight="Bold" FontSize="10.5" Margin="8,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
-            <TextBlock Text="Streaming log of JAB lookups, transitions, and locator evaluations." Foreground="#94A3B8" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            <TextBlock Text="Playback output" Foreground="#94A3B8" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center"/>
           </Grid>
         </Border>
 
         <!-- Terminal console text box -->
         <TextBox Grid.Row="1" Text="{Binding PlaybackOutput, Mode=OneWay}" IsReadOnly="True"
                  AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                 FontFamily="Consolas" FontSize="11" Background="{StaticResource TerminalBg}"
+                 FontFamily="Consolas" FontSize="10.5" Background="{StaticResource TerminalBg}"
                  Foreground="{StaticResource TerminalFg}" BorderThickness="0" Padding="12,8,12,8"
                  ScrollViewer.CanContentScroll="True" SelectionBrush="#22D3EE"/>
       </Grid>
