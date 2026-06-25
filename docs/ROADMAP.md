@@ -28,7 +28,7 @@ Windows/UIA/Win32/FlaUI support exists as an isolated foundation, but Java inspe
   - hover inspection;
   - drag/pick element;
   - passive recorder click capture.
-- [ ] Extend the same resolver contract to:
+- [x] Extend the same resolver contract to:
   - manual recorder capture;
   - hierarchy-driven highlight.
 - [x] Return a structured result:
@@ -40,6 +40,8 @@ Windows/UIA/Win32/FlaUI support exists as an isolated foundation, but Java inspe
 - [x] Remove duplicated physical/logical hit-test logic from hover, picker, and passive recorder paths.
 
 **Completed:** Created `JavaElementInspectionService` and `JavaInspectionResult` in `JabInspector.Core`. Hover inspection, drag picker, and passive recorder capture now share the same physical/logical JAB screen-point resolution pipeline. The service intentionally delegates actual JAB hit testing to the existing ViewModel path so native handle lifetime stays centralized.
+
+**Completed:** Added selected-node visible-bounds resolution to `JavaElementInspectionService` and routed hierarchy highlighting/manual recorder action highlighting through the same visible-ancestor fallback contract.
 
 Why: inspector and recorder should never disagree about which element is under the cursor.
 

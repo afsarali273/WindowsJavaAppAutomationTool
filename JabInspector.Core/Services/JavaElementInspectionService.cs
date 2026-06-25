@@ -102,5 +102,31 @@ public sealed class JavaElementInspectionService
             : null;
     }
 
+    public JavaInspectionResult? ResolveVisibleBounds(
+        AccessibleNode node,
+        Func<AccessibleNode, ElementBounds> getPhysicalBounds,
+        Action<AccessibleNode> refreshBounds,
+        string logPrefix = "[BOUNDS]")
+    {
+        var visualNode = node;
+        var bounds = new ElementBounds(0, 0, 0, 0);
+        var usedAncestor = false;
+
+        while (visualNode is not null)
+        {
+            refreshBounds(visualNode);
+            bounds = getPhysicalBounds(visualNode);
+            _logger.Debug($"{logPrefix} Candidate '{visualNode.DisplayName}' bounds=({bounds.X},{bounds.Y},{bounds.Width},{bounds.Height}).");
+            if (HasUsableBounds(bounds)) break;
+            if (visualNode.Parent is null) break;
+            visualNode = visualNode.Parent;
+            usedAncestor = true;
+        }
+
+        return visualNode is not null && HasUsableBounds(bounds)
+            ? new JavaInspectionResult(node, visualNode, bounds, usedLogicalHitTesting: false, usedAncestorFallback: usedAncestor)
+            : null;
+    }
+
     private static bool HasUsableBounds(ElementBounds bounds) => bounds.Width > 0 && bounds.Height > 0;
 }

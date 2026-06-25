@@ -208,15 +208,17 @@ public partial class MainWindow : Window
 
     private bool TryGetHighlightBounds(AccessibleNode node, out AccessibleNode visualNode, out ElementBounds bounds)
     {
-        visualNode = node;
-        while (true)
+        var result = _viewModel.ResolveJavaNodeBounds(node, GetPhysicalBounds, "[HIGHLIGHT]");
+        if (result is not null && HasOnScreenBounds(result.PhysicalBounds))
         {
-            _viewModel.RefreshBounds(visualNode);
-            bounds = GetPhysicalBounds(visualNode);
-            if (HasOnScreenBounds(bounds) || visualNode.Parent is null) break;
-            visualNode = visualNode.Parent;
+            visualNode = result.VisibleAncestor;
+            bounds = result.PhysicalBounds;
+            return true;
         }
-        return HasOnScreenBounds(bounds);
+
+        visualNode = node;
+        bounds = new ElementBounds(0, 0, 0, 0);
+        return false;
     }
 
     private bool TryGetHighlightBounds(WindowsAutomationNode node, out WindowsAutomationNode visualNode, out ElementBounds bounds)

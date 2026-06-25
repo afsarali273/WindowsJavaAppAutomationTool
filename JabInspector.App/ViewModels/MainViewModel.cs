@@ -596,6 +596,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             : null;
     }
 
+    public JavaInspectionResult? ResolveJavaNodeBounds(
+        AccessibleNode node,
+        Func<AccessibleNode, ElementBounds> getPhysicalBounds,
+        string logPrefix = "[BOUNDS]") =>
+        _javaInspection.ResolveVisibleBounds(
+            node,
+            getPhysicalBounds,
+            candidate => RefreshBounds(candidate),
+            logPrefix);
+
     public void RefreshSupportedActions()
     {
         SupportedActions = IsJavaMode
