@@ -18,7 +18,7 @@ public partial class RecordingStudioWindow : Window
         Owner = owner;
     }
 
-    private async void NewSession_Click(object sender, RoutedEventArgs e)
+    private void NewSession_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel.CurrentWindow is null || ViewModel.Root is null)
         {
@@ -31,8 +31,8 @@ public partial class RecordingStudioWindow : Window
         if (dialog.ShowDialog() != true) return;
         if (ViewModel.StartJavaRecordingSession(dialog.SessionName, dialog.ApplicationAlias))
         {
-            Close();
-            await OwnerWindow.ShowFloatingRecorderForCurrentJavaWindowAsync();
+            OwnerWindow.UpdateRecordingBadge();
+            Activate();
         }
     }
 
@@ -40,7 +40,6 @@ public partial class RecordingStudioWindow : Window
     {
         ViewModel.StopJavaRecordingSession();
         OwnerWindow.UpdateRecordingBadge();
-        OwnerWindow.ClearHighlights();
         OwnerWindow.Show();
         OwnerWindow.Activate();
         Activate();
@@ -93,6 +92,14 @@ public partial class RecordingStudioWindow : Window
     private async void Playback_Click(object sender, RoutedEventArgs e)
     {
         await OwnerWindow.PlayRecordingAsync();
+    }
+
+    private void MoreActions_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { ContextMenu: { } menu } owner) return;
+        menu.PlacementTarget = owner;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
     }
 
     private void Focus_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.Focus, "");
