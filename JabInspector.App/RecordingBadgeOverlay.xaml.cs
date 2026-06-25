@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using JabInspector.Core.Diagnostics;
 
@@ -14,6 +16,9 @@ public partial class RecordingBadgeOverlay : Window
     private NativeRect? _lastKnownTargetRect;
     private int _targetRectMissCount;
     private bool _isPaused;
+    private bool _hasManualPosition;
+    private int _manualX;
+    private int _manualY;
 
     public event EventHandler? PauseResumeRequested;
     public event EventHandler? StopRequested;
@@ -96,11 +101,54 @@ public partial class RecordingBadgeOverlay : Window
 
         var width = (int)Math.Round(Width);
         var height = (int)Math.Round(Height);
-        var x = rect.Left + Math.Max(10, ((rect.Right - rect.Left) - width) / 2);
-        var y = rect.Top + 14;
+        var x = _hasManualPosition ? _manualX : rect.Left + Math.Max(10, ((rect.Right - rect.Left) - width) / 2);
+        var y = _hasManualPosition ? _manualY : rect.Top + 14;
         ClampToVirtualScreen(ref x, ref y, width, height);
+        if (_hasManualPosition)
+        {
+            _manualX = x;
+            _manualY = y;
+        }
         SetWindowPos(hwnd, HwndTopmost, x, y, width, height, SwpNoActivate | SwpShowWindow);
         _logger.Debug($"[RECORDER-OVERLAY] Positioned overlay. OverlayHwnd=0x{hwnd.ToInt64():X}, TargetRect=({rect.Left},{rect.Top},{rect.Right},{rect.Bottom}), OverlayRect=({x},{y},{(int)Math.Round(Width)},{(int)Math.Round(Height)}).");
+    }
+
+    private void BadgeSurface_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject source && FindAncestor<System.Windows.Controls.Button>(source) is not null)
+        {
+            return;
+        }
+
+        try
+        {
+            DragMove();
+            _hasManualPosition = true;
+            _manualX = (int)Math.Round(Left);
+            _manualY = (int)Math.Round(Top);
+            _logger.Debug($"[RECORDER-OVERLAY] Manual drag applied. OverlayRect=({_manualX},{_manualY},{(int)Math.Round(Width)},{(int)Math.Round(Height)}).");
+            e.Handled = true;
+        }
+        catch
+        {
+            // DragMove can throw if the mouse capture changes mid-drag.
+        }
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? source) where T : DependencyObject
+    {
+        for (var current = source; current is not null;)
+        {
+            if (current is T match) return match;
+            current = current switch
+            {
+                Visual or System.Windows.Media.Media3D.Visual3D => VisualTreeHelper.GetParent(current),
+                FrameworkContentElement content => content.Parent,
+                _ => LogicalTreeHelper.GetParent(current)
+            };
+        }
+
+        return null;
     }
 
     private void ApplyToolWindowStyle()

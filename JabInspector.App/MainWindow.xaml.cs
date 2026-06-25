@@ -16,7 +16,6 @@ namespace JabInspector.App;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel = new();
-    private readonly HighlightManager _highlightManager = new();
     private readonly System.Windows.Threading.DispatcherTimer _hoverTimer;
     private readonly System.Windows.Threading.DispatcherTimer _recordingMonitorTimer;
     private RecordingStudioWindow? _recordingStudioWindow;
@@ -32,9 +31,7 @@ public partial class MainWindow : Window
     private bool _playbackInProgress;
     private IntPtr _lastAutoAttachProbeHwnd;
     private DateTime _lastAutoAttachProbeAtUtc;
-    private bool _autoAttachInProgress;
-    private IntPtr _autoAttachInProgressHwnd;
-    private DateTime _lastAutoAttachLogAtUtc;
+    private IntPtr _recordingBadgeTargetHwnd;
     private NativePoint? _lastHoverPoint;
     private AccessibleNode? _lastHierarchyNode;
     private AccessibleNode? _hoverSelectingNode;
@@ -58,7 +55,7 @@ public partial class MainWindow : Window
             _hoverTimer.Stop();
             _pickerTimer.Stop();
             _recordingMonitorTimer.Stop();
-            _highlightManager.ClearAll();
+            HighlightOverlay.HidePersistent();
             _recordingBadgeOverlay?.Detach();
             _recordingStudioWindow?.Close();
             _viewModel.Dispose();
@@ -129,7 +126,7 @@ public partial class MainWindow : Window
             if (node is null) { _viewModel.Log("Select an element before highlighting."); return; }
             if (!TryGetHighlightBounds(node, out var visualNode, out var physicalBounds))
             { _viewModel.Log("The selected Windows element and its ancestors have no on-screen bounds and cannot be highlighted."); return; }
-            _highlightManager.Flash(physicalBounds, HighlightMode.HierarchySelectionFlash);
+            HighlightOverlay.Show(physicalBounds);
             var fallback = ReferenceEquals(node, visualNode) ? "" : $" using nearest on-screen ancestor {visualNode.DisplayName}";
             _viewModel.Log($"Highlighted {node.DisplayName}{fallback} at physical bounds ({physicalBounds.X}, {physicalBounds.Y}, {physicalBounds.Width}, {physicalBounds.Height}).");
             return;
@@ -139,7 +136,7 @@ public partial class MainWindow : Window
         if (javaNode is null) { _viewModel.Log("Select an element before highlighting."); return; }
         if (!TryGetHighlightBounds(javaNode, out var visualNodeJava, out var physicalBoundsJava))
         { _viewModel.Log("The selected element and its ancestors have no on-screen bounds and cannot be highlighted."); return; }
-        _highlightManager.Flash(physicalBoundsJava, HighlightMode.HierarchySelectionFlash);
+        HighlightOverlay.Show(physicalBoundsJava);
         var fallbackJava = ReferenceEquals(javaNode, visualNodeJava) ? "" : $" using nearest on-screen ancestor {visualNodeJava.DisplayName}";
         _viewModel.Log($"Highlighted {javaNode.DisplayName}{fallbackJava} at physical bounds ({physicalBoundsJava.X}, {physicalBoundsJava.Y}, {physicalBoundsJava.Width}, {physicalBoundsJava.Height}); JAB bounds were ({visualNodeJava.X}, {visualNodeJava.Y}, {visualNodeJava.Width}, {visualNodeJava.Height}).");
     }
@@ -173,9 +170,9 @@ public partial class MainWindow : Window
         _lastActivatedNode = node; _lastActivationAt = DateTime.UtcNow;
         if (TryGetHighlightBounds(node, out var visualNode, out var bounds))
         {
-            _highlightManager.Flash(bounds, HighlightMode.HierarchySelectionFlash);
+            HighlightOverlay.Show(bounds);
             var fallback = ReferenceEquals(node, visualNode) ? "" : $" using nearest on-screen ancestor {visualNode.DisplayName}";
-            _viewModel.Log($"Highlighted {node.DisplayName}{fallback}.");
+            _viewModel.Log($"Hierarchy click selected and highlighted {node.DisplayName}{fallback}. Target application was not focused.");
         }
         else _viewModel.Log($"Hierarchy click selected {node.DisplayName}, but no on-screen bounds were available.");
     }
@@ -184,9 +181,9 @@ public partial class MainWindow : Window
     {
         if (TryGetHighlightBounds(node, out var visualNode, out var bounds))
         {
-            _highlightManager.Flash(bounds, HighlightMode.HierarchySelectionFlash);
+            HighlightOverlay.Show(bounds);
             var fallback = ReferenceEquals(node, visualNode) ? "" : $" using nearest on-screen ancestor {visualNode.DisplayName}";
-            _viewModel.Log($"Highlighted {node.DisplayName}{fallback}.");
+            _viewModel.Log($"Hierarchy click selected and highlighted {node.DisplayName}{fallback} through {node.BackendKind}. Target application was not focused.");
         }
         else _viewModel.Log($"Hierarchy click selected {node.DisplayName}, but no on-screen bounds were available.");
     }
@@ -208,17 +205,15 @@ public partial class MainWindow : Window
 
     private bool TryGetHighlightBounds(AccessibleNode node, out AccessibleNode visualNode, out ElementBounds bounds)
     {
-        var result = _viewModel.ResolveJavaNodeBounds(node, GetPhysicalBounds, "[HIGHLIGHT]");
-        if (result is not null && HasOnScreenBounds(result.PhysicalBounds))
-        {
-            visualNode = result.VisibleAncestor;
-            bounds = result.PhysicalBounds;
-            return true;
-        }
-
         visualNode = node;
-        bounds = new ElementBounds(0, 0, 0, 0);
-        return false;
+        while (true)
+        {
+            _viewModel.RefreshBounds(visualNode);
+            bounds = GetPhysicalBounds(visualNode);
+            if (HasOnScreenBounds(bounds) || visualNode.Parent is null) break;
+            visualNode = visualNode.Parent;
+        }
+        return HasOnScreenBounds(bounds);
     }
 
     private bool TryGetHighlightBounds(WindowsAutomationNode node, out WindowsAutomationNode visualNode, out ElementBounds bounds)
@@ -250,7 +245,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            _hoverTimer.Stop(); _highlightManager.ClearPersistent();
+            _hoverTimer.Stop(); HighlightOverlay.HidePersistent();
             _viewModel.Log("Hover inspection disabled.");
         }
     }
@@ -263,21 +258,39 @@ public partial class MainWindow : Window
         if (_viewModel.Root is null || _viewModel.CurrentWindow is null) return;
         if (_lastHoverPoint is { } previous && Math.Abs(previous.X - point.X) < 2 && Math.Abs(previous.Y - point.Y) < 2) return;
         _lastHoverPoint = point;
-        if (!TryResolveJavaNodeAtScreenPoint(point, out var node, out var bounds) || node is null)
-        {
-            _highlightManager.ClearPersistent();
-            return;
-        }
+        if (!GetWindowRect(_viewModel.CurrentWindow.Hwnd, out var native) || point.X < native.Left || point.X >= native.Right || point.Y < native.Top || point.Y >= native.Bottom)
+        { HighlightOverlay.HidePersistent(); return; }
 
+        _viewModel.RefreshBounds(_viewModel.Root);
+        var root = _viewModel.Root;
+        if (!root.HasValidBounds) return;
+        var scaleX = (double)(native.Right - native.Left) / root.Width;
+        var scaleY = (double)(native.Bottom - native.Top) / root.Height;
+        var jabX = root.X + (int)Math.Round((point.X - native.Left) / scaleX);
+        var jabY = root.Y + (int)Math.Round((point.Y - native.Top) / scaleY);
+        // JAB distributions differ on whether hit-testing expects physical
+        // screen pixels or Java's logical coordinates. Probe physical first,
+        // then use the anchored inverse transform when the result misses.
+        var node = _viewModel.InspectAt(point.X, point.Y);
+        var bounds = node is null ? new ElementBounds(0, 0, 0, 0) : GetPhysicalBounds(node);
+        if (node is null || !Contains(bounds, point))
+        {
+            var logicalNode = _viewModel.InspectAt(jabX, jabY);
+            if (logicalNode is not null) { node = logicalNode; bounds = GetPhysicalBounds(logicalNode); }
+        }
+        if (node is null) { HighlightOverlay.HidePersistent(); return; }
         _viewModel.SelectedNode = node;
         if (!ReferenceEquals(_lastHierarchyNode, node))
         {
             _hoverSelectingNode = node;
-            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() => SelectNodeInHierarchy(node)));
+            SelectNodeInHierarchy(node);
             _lastHierarchyNode = node;
         }
         DetailsTabs.SelectedItem = PropertiesTab;
-        if (HasOnScreenBounds(bounds)) _highlightManager.ShowPersistent(bounds, HighlightMode.TransientHover); else _highlightManager.ClearPersistent();
+        var visualNode = node;
+        while (!HasOnScreenBounds(bounds) && visualNode.Parent is not null)
+        { visualNode = visualNode.Parent; _viewModel.RefreshBounds(visualNode); bounds = GetPhysicalBounds(visualNode); }
+        if (HasOnScreenBounds(bounds)) HighlightOverlay.ShowPersistent(bounds); else HighlightOverlay.HidePersistent();
     }
 
     private void PickerButton_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -291,7 +304,7 @@ public partial class MainWindow : Window
         _pickerActive = true;
         _pickerTimer.Start();
         Mouse.Capture(PickerButton);
-        _viewModel.Log("Picker active.");
+        _viewModel.Log("Picker active: drag over target application to inspect and select an element.");
         e.Handled = true;
     }
 
@@ -305,7 +318,7 @@ public partial class MainWindow : Window
 
         if (_viewModel.SelectedNode is not null)
         {
-            _viewModel.Log("Picker complete.");
+            _viewModel.Log("Picker complete: element selected in hierarchy.");
         }
         else
         {
@@ -323,13 +336,43 @@ public partial class MainWindow : Window
 
         if (_viewModel.Root is null || _viewModel.CurrentWindow is null)
         {
-            _highlightManager.ClearPersistent();
+            HighlightOverlay.HidePersistent();
             return;
         }
 
-        if (!TryResolveJavaNodeAtScreenPoint(point, out var node, out var bounds) || node is null)
+        if (!GetWindowRect(_viewModel.CurrentWindow.Hwnd, out var native) ||
+            point.X < native.Left || point.X >= native.Right ||
+            point.Y < native.Top || point.Y >= native.Bottom)
         {
-            _highlightManager.ClearPersistent();
+            HighlightOverlay.HidePersistent();
+            return;
+        }
+
+        _viewModel.RefreshBounds(_viewModel.Root);
+        var root = _viewModel.Root;
+        if (!root.HasValidBounds) return;
+
+        var scaleX = (double)(native.Right - native.Left) / root.Width;
+        var scaleY = (double)(native.Bottom - native.Top) / root.Height;
+        var jabX = root.X + (int)Math.Round((point.X - native.Left) / scaleX);
+        var jabY = root.Y + (int)Math.Round((point.Y - native.Top) / scaleY);
+
+        var node = _viewModel.InspectAt(point.X, point.Y);
+        var bounds = node is null ? new ElementBounds(0, 0, 0, 0) : GetPhysicalBounds(node);
+
+        if (node is null || !Contains(bounds, point))
+        {
+            var logicalNode = _viewModel.InspectAt(jabX, jabY);
+            if (logicalNode is not null)
+            {
+                node = logicalNode;
+                bounds = GetPhysicalBounds(logicalNode);
+            }
+        }
+
+        if (node is null)
+        {
+            HighlightOverlay.HidePersistent();
             return;
         }
 
@@ -337,16 +380,24 @@ public partial class MainWindow : Window
         if (!ReferenceEquals(_lastHierarchyNode, node))
         {
             _hoverSelectingNode = node;
-            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() => SelectNodeInHierarchy(node)));
+            SelectNodeInHierarchy(node);
             _lastHierarchyNode = node;
         }
 
         DetailsTabs.SelectedItem = PropertiesTab;
 
+        var visualNode = node;
+        while (!HasOnScreenBounds(bounds) && visualNode.Parent is not null)
+        {
+            visualNode = visualNode.Parent;
+            _viewModel.RefreshBounds(visualNode);
+            bounds = GetPhysicalBounds(visualNode);
+        }
+
         if (HasOnScreenBounds(bounds))
-            _highlightManager.ShowPersistent(bounds, HighlightMode.TransientHover);
+            HighlightOverlay.ShowPersistent(bounds);
         else
-            _highlightManager.ClearPersistent();
+            HighlightOverlay.HidePersistent();
     }
 
     private void RecordingMonitorTimer_Tick(object? sender, EventArgs e)
@@ -362,6 +413,7 @@ public partial class MainWindow : Window
         {
             _recordingLeftButtonDown = true;
             GetCursorPos(out _recordingMouseDownPoint);
+            _viewModel.Log($"[RECORDER] Mouse down detected at ({_recordingMouseDownPoint.X}, {_recordingMouseDownPoint.Y}). CurrentWindow={_viewModel.CurrentWindow.HwndDisplay}, Root='{_viewModel.Root.DisplayName}'.");
             return;
         }
 
@@ -370,13 +422,16 @@ public partial class MainWindow : Window
             _recordingLeftButtonDown = false;
             if (_recordingCaptureInProgress)
             {
+                _viewModel.Log("[RECORDER] Mouse up ignored because a previous capture is still in progress.");
                 return;
             }
             if (!GetCursorPos(out var releasePoint)) return;
             var deltaX = Math.Abs(releasePoint.X - _recordingMouseDownPoint.X);
             var deltaY = Math.Abs(releasePoint.Y - _recordingMouseDownPoint.Y);
+            _viewModel.Log($"[RECORDER] Mouse up detected at ({releasePoint.X}, {releasePoint.Y}). Delta=({deltaX}, {deltaY}).");
             if (deltaX > 8 || deltaY > 8)
             {
+                _viewModel.Log("[RECORDER] Mouse gesture ignored because movement exceeded click threshold.");
                 return;
             }
             _recordingCaptureInProgress = true;
@@ -386,6 +441,7 @@ public partial class MainWindow : Window
                 finally
                 {
                     _recordingCaptureInProgress = false;
+                    _viewModel.Log("[RECORDER] Capture pipeline completed.");
                 }
             }));
         }
@@ -397,16 +453,13 @@ public partial class MainWindow : Window
 
     private void TryRecordPassiveClick(NativePoint point)
     {
-        if (_recordingBadgeOverlay?.ContainsScreenPoint(point.X, point.Y) == true)
-        {
-            return;
-        }
-
         if (_viewModel.IsRecordingPaused)
         {
+            _viewModel.Log($"[RECORDER] Capture skipped because recording is paused. Point=({point.X}, {point.Y}).");
             return;
         }
 
+        _viewModel.Log($"[RECORDER] Capture pipeline started for point ({point.X}, {point.Y}).");
         TryAutoAttachJavaWindowFromPoint(point, "passive click");
         if (_viewModel.CurrentWindow is null || _viewModel.Root is null)
         {
@@ -416,6 +469,7 @@ public partial class MainWindow : Window
 
         if (!IsPointWithinCurrentJavaWindow(point))
         {
+            _viewModel.Log($"[RECORDER] Capture ignored because point ({point.X}, {point.Y}) is outside attached Java window {_viewModel.CurrentWindow.HwndDisplay}.");
             return;
         }
 
@@ -425,10 +479,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        StabilizePassiveRecordingCandidate(point, ref node, ref bounds);
+
         _viewModel.SelectedNode = node;
         _hoverSelectingNode = node;
         _lastHierarchyNode = node;
-        _highlightManager.Flash(bounds, HighlightMode.RecorderActionFlash);
+        HighlightOverlay.Show(bounds, TimeSpan.FromSeconds(1.1));
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
         {
             SelectNodeInHierarchy(node);
@@ -437,6 +493,9 @@ public partial class MainWindow : Window
         var isDoubleClick = !string.IsNullOrWhiteSpace(node.Path)
                             && string.Equals(_lastPassiveClickPath, node.Path, StringComparison.OrdinalIgnoreCase)
                             && DateTime.UtcNow - _lastPassiveClickAtUtc <= TimeSpan.FromMilliseconds(GetDoubleClickTime());
+
+        _viewModel.Log($"Passive recording captured click candidate. Node='{node.DisplayName}', Path='{node.Path}', Point=({point.X}, {point.Y}), DoubleClickCandidate={isDoubleClick}.");
+        _viewModel.Log($"[RECORDER] Candidate details: Role='{node.Role}', RoleEnUs='{node.RoleEnUs}', Name='{node.Name}', States='{node.States}', Bounds=({node.X},{node.Y},{node.Width},{node.Height}), PhysicalBounds=({bounds.X},{bounds.Y},{bounds.Width},{bounds.Height}), Path='{node.Path}'.");
 
         int? windowOffsetX = null;
         int? windowOffsetY = null;
@@ -461,6 +520,7 @@ public partial class MainWindow : Window
             _lastPassiveClickPath = node.Path;
             UpdateRecordingBadge();
             _viewModel.Log($"Passive recording stored {(isDoubleClick ? "double-click" : "click")} step for '{node.DisplayName}'.");
+            _viewModel.Log($"[RECORDER] Step stored. StepCount={_viewModel.RecordingStepCount}, ObjectCount={_viewModel.RecordingObjectCount}, LastPath='{_lastPassiveClickPath}'.");
         }
         else
         {
@@ -468,23 +528,75 @@ public partial class MainWindow : Window
         }
     }
 
+    private void StabilizePassiveRecordingCandidate(NativePoint point, ref AccessibleNode node, ref ElementBounds bounds)
+    {
+        if (!IsTabLike(node)) return;
+
+        var originalPath = node.Path;
+        var originalName = node.Name;
+        _viewModel.Log($"[RECORDER] Tab-like click candidate detected. Waiting briefly and refreshing tree before capture. Node='{node.DisplayName}', Path='{node.Path}'.");
+
+        Thread.Sleep(110);
+        if (!_viewModel.RefreshCurrentJavaTree("passive recorder tab settle"))
+        {
+            _viewModel.Log("[RECORDER] Tab settle refresh failed; using initial candidate.");
+            return;
+        }
+
+        if (!TryResolveJavaNodeAtScreenPoint(point, out var settledNode, out var settledBounds) || settledNode is null)
+        {
+            _viewModel.Log("[RECORDER] Tab settle re-hit-test failed; using initial candidate.");
+            return;
+        }
+
+        if (!IsBetterRecordingCandidate(settledNode, node)) return;
+
+        node = settledNode;
+        bounds = settledBounds;
+        _viewModel.Log($"[RECORDER] Tab click candidate stabilized. From='{originalName}' Path='{originalPath}' To='{node.Name}' Path='{node.Path}'.");
+    }
+
+    private static bool IsBetterRecordingCandidate(AccessibleNode candidate, AccessibleNode original)
+    {
+        if (IsTab(candidate)) return true;
+        if (!IsTab(original) && IsTabLike(candidate)) return true;
+        return !string.IsNullOrWhiteSpace(candidate.Name) &&
+               !string.Equals(candidate.Path, original.Path, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsTabLike(AccessibleNode node) =>
+        IsTab(node) ||
+        ContainsRole(node, "page tab list") ||
+        ContainsRole(node.Parent, "page tab list");
+
+    private static bool IsTab(AccessibleNode node) => ContainsRole(node, "page tab");
+
+    private static bool ContainsRole(AccessibleNode? node, string role) =>
+        node is not null &&
+        ((node.Role?.Contains(role, StringComparison.OrdinalIgnoreCase) ?? false) ||
+         (node.RoleEnUs?.Contains(role, StringComparison.OrdinalIgnoreCase) ?? false));
+
     private bool TryAutoAttachJavaWindowFromPoint(NativePoint point, string reason)
     {
         if (IsPointInsideCurrentJavaWindowRect(point))
         {
+            _viewModel.Log($"[RECORDER] Auto-attach probe skipped for '{reason}' because point is inside current Java window.");
             return true;
         }
 
         var candidateWindows = GetCandidateWindowHandlesFromPoint(point);
+        _viewModel.Log($"[RECORDER] Auto-attach probe for '{reason}' found {candidateWindows.Count} candidate hwnd(s): {FormatHwndList(candidateWindows)}.");
         if (candidateWindows.Count == 0) return false;
         if (_viewModel.CurrentWindow is not null && candidateWindows.Contains(_viewModel.CurrentWindow.Hwnd))
         {
+            _viewModel.Log($"[RECORDER] Auto-attach probe resolved to current Java window {_viewModel.CurrentWindow.HwndDisplay}.");
             return true;
         }
         var now = DateTime.UtcNow;
         var probeKey = candidateWindows[0];
-        if (probeKey == _lastAutoAttachProbeHwnd && now - _lastAutoAttachProbeAtUtc < TimeSpan.FromMilliseconds(850))
+        if (probeKey == _lastAutoAttachProbeHwnd && now - _lastAutoAttachProbeAtUtc < TimeSpan.FromMilliseconds(600))
         {
+            _viewModel.Log($"[RECORDER] Auto-attach probe throttled for hwnd 0x{probeKey.ToInt64():X}.");
             return false;
         }
         _lastAutoAttachProbeHwnd = probeKey;
@@ -492,45 +604,13 @@ public partial class MainWindow : Window
 
         foreach (var candidate in candidateWindows)
         {
-            QueueAutoAttachJavaWindow(candidate, reason, candidateWindows);
+            var attached = _viewModel.TryAutoAttachJavaWindow(candidate, reason);
+            if (!attached) continue;
+            UpdateRecordingBadge();
             return true;
         }
 
         return false;
-    }
-
-    private void QueueAutoAttachJavaWindow(IntPtr hwnd, string reason, IReadOnlyList<IntPtr> candidates)
-    {
-        if (hwnd == IntPtr.Zero) return;
-        if (_autoAttachInProgress)
-        {
-            return;
-        }
-
-        _autoAttachInProgress = true;
-        _autoAttachInProgressHwnd = hwnd;
-        _lastAutoAttachLogAtUtc = DateTime.UtcNow;
-        _viewModel.Log($"Auto-attaching Java modal/window for {reason}...");
-
-        _ = AttachJavaWindowFromPointAsync(hwnd, reason);
-    }
-
-    private async Task AttachJavaWindowFromPointAsync(IntPtr hwnd, string reason)
-    {
-        try
-        {
-            var attached = await _viewModel.TryAutoAttachJavaWindowAsync(hwnd, reason);
-            if (attached) UpdateRecordingBadge();
-        }
-        catch (Exception ex)
-        {
-            _viewModel.Log($"[AUTO-ATTACH] Async attach failed for hwnd 0x{hwnd.ToInt64():X}: {ex.Message}");
-        }
-        finally
-        {
-            _autoAttachInProgress = false;
-            _autoAttachInProgressHwnd = IntPtr.Zero;
-        }
     }
 
     private bool IsPointWithinCurrentJavaWindow(NativePoint point)
@@ -543,7 +623,9 @@ public partial class MainWindow : Window
     {
         if (_viewModel.CurrentWindow is null) return false;
         if (!GetWindowRect(_viewModel.CurrentWindow.Hwnd, out var rect)) return false;
-        return point.X >= rect.Left && point.X < rect.Right && point.Y >= rect.Top && point.Y < rect.Bottom;
+        var inside = point.X >= rect.Left && point.X < rect.Right && point.Y >= rect.Top && point.Y < rect.Bottom;
+        _viewModel.Log($"[RECORDER] Current Java window bounds check: Hwnd={_viewModel.CurrentWindow.HwndDisplay}, Rect=({rect.Left},{rect.Top},{rect.Right},{rect.Bottom}), Point=({point.X},{point.Y}), Inside={inside}.");
+        return inside;
     }
 
     private List<IntPtr> GetCandidateWindowHandlesFromPoint(NativePoint point)
@@ -582,18 +664,55 @@ public partial class MainWindow : Window
     {
         node = null;
         bounds = new ElementBounds(0, 0, 0, 0);
-        var corePoint = new JabInspector.Core.Models.NativePoint(point.X, point.Y);
-        var result = _viewModel.InspectJavaAtScreenPoint(
-            corePoint,
-            _viewModel.InspectAt,
-            GetPhysicalBounds,
-            (candidateBounds, candidatePoint) => Contains(candidateBounds, new NativePoint { X = candidatePoint.X, Y = candidatePoint.Y }),
-            "[INSPECT]");
+        if (_viewModel.Root is null || _viewModel.CurrentWindow is null) return false;
+        if (!GetWindowRect(_viewModel.CurrentWindow.Hwnd, out var native)) return false;
+        if (point.X < native.Left || point.X >= native.Right || point.Y < native.Top || point.Y >= native.Bottom)
+        {
+            _viewModel.Log($"[RECORDER] Resolve skipped because point is outside native window rect. Point=({point.X},{point.Y}), Rect=({native.Left},{native.Top},{native.Right},{native.Bottom}).");
+            return false;
+        }
 
-        if (result is null || !HasOnScreenBounds(result.PhysicalBounds)) return false;
-        node = result.ResolvedNode;
-        bounds = result.PhysicalBounds;
-        return true;
+        _viewModel.RefreshBounds(_viewModel.Root);
+        var root = _viewModel.Root;
+        if (!root.HasValidBounds) return false;
+
+        var scaleX = (double)(native.Right - native.Left) / root.Width;
+        var scaleY = (double)(native.Bottom - native.Top) / root.Height;
+        var jabX = root.X + (int)Math.Round((point.X - native.Left) / scaleX);
+        var jabY = root.Y + (int)Math.Round((point.Y - native.Top) / scaleY);
+        _viewModel.Log($"[RECORDER] Resolving point. Physical=({point.X},{point.Y}), NativeRect=({native.Left},{native.Top},{native.Right},{native.Bottom}), RootBounds=({root.X},{root.Y},{root.Width},{root.Height}), Scale=({scaleX:0.###},{scaleY:0.###}), LogicalProbe=({jabX},{jabY}).");
+
+        node = _viewModel.InspectAt(point.X, point.Y);
+        bounds = node is null ? new ElementBounds(0, 0, 0, 0) : GetPhysicalBounds(node);
+        _viewModel.Log(node is null
+            ? "[RECORDER] Physical JAB hit-test returned no node."
+            : $"[RECORDER] Physical JAB hit-test returned '{node.DisplayName}' with physical bounds ({bounds.X},{bounds.Y},{bounds.Width},{bounds.Height}). ContainsPoint={Contains(bounds, point)}.");
+        if (node is null || !Contains(bounds, point))
+        {
+            var logicalNode = _viewModel.InspectAt(jabX, jabY);
+            if (logicalNode is not null)
+            {
+                node = logicalNode;
+                bounds = GetPhysicalBounds(logicalNode);
+                _viewModel.Log($"[RECORDER] Logical JAB hit-test returned '{node.DisplayName}' with physical bounds ({bounds.X},{bounds.Y},{bounds.Width},{bounds.Height}). ContainsPoint={Contains(bounds, point)}.");
+            }
+            else
+            {
+                _viewModel.Log("[RECORDER] Logical JAB hit-test returned no node.");
+            }
+        }
+
+        if (node is null) return false;
+
+        var visualNode = node;
+        while (!HasOnScreenBounds(bounds) && visualNode.Parent is not null)
+        {
+            visualNode = visualNode.Parent;
+            _viewModel.RefreshBounds(visualNode);
+            bounds = GetPhysicalBounds(visualNode);
+        }
+
+        return HasOnScreenBounds(bounds);
     }
 
     private void SelectNodeInHierarchy(AccessibleNode node, int attempt = 0)
@@ -743,7 +862,7 @@ public partial class MainWindow : Window
 
     private bool ExecuteJavaRecordedAction(JavaRecordedActionKind actionKind, string inputText, bool captureStep)
     {
-        _viewModel.Log($"Java action requested: {actionKind}.");
+        _viewModel.Log($"ExecuteJavaRecordedAction invoked. Action={actionKind}, CaptureStep={captureStep}, InputLength={inputText.Length}, HasSelectedNode={_viewModel.SelectedNode is not null}, RecordingActive={_viewModel.IsRecordingActive}, Paused={_viewModel.IsRecordingPaused}.");
         if (_viewModel.SelectedNode is null)
         {
             _viewModel.ReportAutomation("Select a Java element first.");
@@ -764,14 +883,17 @@ public partial class MainWindow : Window
             _ => false
         };
 
+        _viewModel.Log($"ExecuteJavaRecordedAction completed. Action={actionKind}, Success={success}, CaptureStep={captureStep}.");
         if (captureStep && success && !_viewModel.IsRecordingPaused)
         {
             var recordedStep = _viewModel.RecordJavaAction(actionKind, inputText);
-            if (recordedStep is not null) _viewModel.Log($"Recorded step {recordedStep.Sequence}: {actionKind}.");
+            _viewModel.Log(recordedStep is null
+                ? $"ExecuteJavaRecordedAction did not create a recorded step for action {actionKind}."
+                : $"ExecuteJavaRecordedAction recorded step {recordedStep.Sequence} for action {actionKind}.");
         }
         else if (captureStep && success && _viewModel.IsRecordingPaused)
         {
-            _viewModel.Log($"Action {actionKind} succeeded; recording is paused so no step was captured.");
+            _viewModel.Log($"ExecuteJavaRecordedAction skipped step capture for action {actionKind} because recording is paused.");
         }
         if (_viewModel.IsRecordingActive) UpdateRecordingBadge();
         return success;
@@ -1059,7 +1181,6 @@ public partial class MainWindow : Window
     private const uint KeyEventUnicode = 0x0004;
     private const uint KeyEventKeyUp = 0x0002;
     private const uint GwOwner = 4;
-    private const int SwRestore = 9;
 
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
     [StructLayout(LayoutKind.Sequential)]
@@ -1074,7 +1195,6 @@ public partial class MainWindow : Window
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort VirtualKey, Scan; public uint Flags, Time; public UIntPtr ExtraInfo; }
 
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetForegroundWindow(IntPtr hwnd);
-    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool ShowWindow(IntPtr hwnd, int command);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetCursorPos(out NativePoint point);
     [DllImport("user32.dll", EntryPoint = "mouse_event")] private static extern void MouseEvent(uint flags, uint x, uint y, uint data, UIntPtr extraInfo);
@@ -1147,7 +1267,26 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void StartRecordingSession_Click(object sender, RoutedEventArgs e)
+    private void RecordingBadgeOverlay_PauseResumeRequested(object? sender, EventArgs e)
+    {
+        _viewModel.ToggleJavaRecordingPause();
+        UpdateRecordingBadge();
+    }
+
+    private void RecordingBadgeOverlay_StopRequested(object? sender, EventArgs e)
+    {
+        _viewModel.StopJavaRecordingSession();
+        UpdateRecordingBadge();
+        HighlightOverlay.HidePersistent();
+        _viewModel.Log("Recording stopped from floating badge controls.");
+    }
+
+    private void RecordingBadgeOverlay_StudioRequested(object? sender, EventArgs e)
+    {
+        OpenRecordingStudio();
+    }
+
+    private void StartRecordingSession_Click(object sender, RoutedEventArgs e)
     {
         if (!_viewModel.IsJavaMode || _viewModel.CurrentWindow is null || _viewModel.Root is null)
         {
@@ -1161,8 +1300,8 @@ public partial class MainWindow : Window
         if (_viewModel.StartJavaRecordingSession(dialog.SessionName, dialog.ApplicationAlias))
         {
             _viewModel.Log($"Started Java recording session '{dialog.SessionName}'.");
-            _recordingStudioWindow?.Close();
-            await ShowFloatingRecorderForCurrentJavaWindowAsync();
+            OpenRecordingStudio();
+            UpdateRecordingBadge();
         }
     }
 
@@ -1303,7 +1442,7 @@ public partial class MainWindow : Window
 
     public bool ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind actionKind, string inputText)
     {
-        _viewModel.Log($"Recorder action requested: {actionKind}.");
+        _viewModel.Log($"Recorder studio action requested. Action={actionKind}, InputLength={inputText.Length}.");
         return ExecuteJavaRecordedAction(actionKind, inputText, captureStep: true);
     }
 
@@ -1311,79 +1450,37 @@ public partial class MainWindow : Window
     {
         if (_viewModel.SelectedNode is null) return;
         if (!TryGetHighlightBounds(_viewModel.SelectedNode, out _, out var bounds)) return;
-        _highlightManager.Flash(bounds, HighlightMode.HierarchySelectionFlash, TimeSpan.FromSeconds(2.2));
+        HighlightOverlay.Show(bounds, TimeSpan.FromSeconds(2.2));
     }
-
-    public void ClearHighlights() => _highlightManager.ClearAll();
 
     public void UpdateRecordingBadge()
     {
         if (!_viewModel.IsRecordingActive)
         {
             _recordingBadgeOverlay?.Detach();
+            _recordingBadgeTargetHwnd = IntPtr.Zero;
+            _viewModel.Log("Recording badge hidden because recording is inactive.");
             return;
         }
 
-        if (_recordingBadgeOverlay is null)
+        var targetHwnd = _viewModel.CurrentWindow?.Hwnd ?? _recordingBadgeTargetHwnd;
+        if (targetHwnd == IntPtr.Zero)
+        {
+            _viewModel.Log("Recording badge update skipped because no Java window handle is available yet.");
+            return;
+        }
+
+        _recordingBadgeTargetHwnd = targetHwnd;
+        if (_recordingBadgeOverlay is null || !_recordingBadgeOverlay.IsLoaded)
         {
             _recordingBadgeOverlay = new RecordingBadgeOverlay();
-            _recordingBadgeOverlay.PauseResumeRequested += (_, _) =>
-            {
-                _viewModel.ToggleJavaRecordingPause();
-                UpdateRecordingBadge();
-            };
-            _recordingBadgeOverlay.StopRequested += (_, _) => StopRecordingFromFloatingPanel();
-            _recordingBadgeOverlay.StudioRequested += (_, _) => OpenRecordingStudio();
+            _recordingBadgeOverlay.PauseResumeRequested += RecordingBadgeOverlay_PauseResumeRequested;
+            _recordingBadgeOverlay.StopRequested += RecordingBadgeOverlay_StopRequested;
+            _recordingBadgeOverlay.StudioRequested += RecordingBadgeOverlay_StudioRequested;
         }
         _recordingBadgeOverlay.UpdateBadgeText(_viewModel.RecordingBadgeText);
-        _recordingBadgeOverlay.AttachToTarget(_viewModel.CurrentWindow?.Hwnd ?? IntPtr.Zero, _viewModel.RecordingBadgeText);
-    }
-
-    public async Task ShowFloatingRecorderForCurrentJavaWindowAsync()
-    {
-        if (!_viewModel.IsRecordingActive || _viewModel.CurrentWindow is null)
-        {
-            UpdateRecordingBadge();
-            return;
-        }
-
-        BringJavaTargetToForeground();
-        await Task.Delay(180);
-        UpdateRecordingBadge();
-        HighlightCurrentJavaSelectionOrRoot();
-        _viewModel.Log("Floating recorder panel opened on the selected Java application.");
-    }
-
-    private void BringJavaTargetToForeground()
-    {
-        if (_viewModel.CurrentWindow is null) return;
-        ShowWindow(_viewModel.CurrentWindow.Hwnd, SwRestore);
-        SetForegroundWindow(_viewModel.CurrentWindow.Hwnd);
-    }
-
-    private void HighlightCurrentJavaSelectionOrRoot()
-    {
-        if (_viewModel.SelectedNode is not null)
-        {
-            if (TryGetHighlightBounds(_viewModel.SelectedNode, out _, out var selectedBounds))
-            {
-            _highlightManager.ShowPersistent(selectedBounds, HighlightMode.Persistent);
-            }
-            return;
-        }
-
-        if (_viewModel.Root is null) return;
-        if (!TryGetHighlightBounds(_viewModel.Root, out _, out var bounds)) return;
-        _highlightManager.ShowPersistent(bounds);
-    }
-
-    private void StopRecordingFromFloatingPanel()
-    {
-        _viewModel.StopJavaRecordingSession();
-        _recordingBadgeOverlay?.Detach();
-        _highlightManager.ClearPersistent();
-        Show();
-        Activate();
-        OpenRecordingStudio();
+        _recordingBadgeOverlay.AttachToTarget(targetHwnd, _viewModel.RecordingBadgeText);
+        var hwndDisplay = _viewModel.CurrentWindow?.HwndDisplay ?? $"0x{targetHwnd.ToInt64():X}";
+        _viewModel.Log($"Recording badge updated. BadgeText='{_viewModel.RecordingBadgeText}', Hwnd={hwndDisplay}.");
     }
 }

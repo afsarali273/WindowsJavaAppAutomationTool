@@ -1,5 +1,4 @@
 using JabInspector.Core.Diagnostics;
-using JabInspector.Core.Models;
 using JabInspector.Native;
 using System.Text;
 
@@ -140,105 +139,6 @@ public sealed class AccessBridgeService : IDisposable
     public bool SetText(int vmId, long context, string text)
     { try { return AccessBridgeNative.setTextContents(vmId, context, text); } catch (Exception ex) { _logger.Log($"Set text failed: {ex.Message}"); return false; } }
 
-    public void EnrichTextAndValue(AccessibleNode node, int x = 0, int y = 0)
-    {
-        node.TextPreview = "";
-        node.TextPreviewSource = "";
-        node.TextCharCount = -1;
-        node.TextCaretIndex = -1;
-        node.TextIndexAtPoint = -1;
-        node.TextSelected = "";
-        node.TextWord = "";
-        node.TextSentence = "";
-        node.CurrentValue = "";
-        node.MinimumValue = "";
-        node.MaximumValue = "";
-
-        try
-        {
-            if (node.AccessibleText && AccessBridgeNative.getAccessibleTextInfo(node.VmId, node.Context, out var info, x, y))
-            {
-                node.TextCharCount = info.CharCount;
-                node.TextCaretIndex = info.CaretIndex;
-                node.TextIndexAtPoint = info.IndexAtPoint;
-
-                if (info.CharCount > 0)
-                {
-                    var length = Math.Min(info.CharCount + 1, short.MaxValue);
-                    var text = new StringBuilder(length);
-                    if (AccessBridgeNative.getAccessibleTextRange(node.VmId, node.Context, 0, Math.Min(info.CharCount - 1, short.MaxValue - 2), text, (short)length) && text.Length > 0)
-                    {
-                        node.TextPreview = text.ToString();
-                        node.TextPreviewSource = "AccessibleText range";
-                    }
-
-                    var itemIndex = Math.Clamp(info.CaretIndex >= 0 ? info.CaretIndex : 0, 0, Math.Max(0, info.CharCount - 1));
-                    if (AccessBridgeNative.getAccessibleTextItems(node.VmId, node.Context, out var items, itemIndex))
-                    {
-                        node.TextWord = items.Word ?? "";
-                        node.TextSentence = items.Sentence ?? "";
-                        if (string.IsNullOrWhiteSpace(node.TextPreview) && !string.IsNullOrWhiteSpace(node.TextSentence))
-                        {
-                            node.TextPreview = node.TextSentence;
-                            node.TextPreviewSource = "AccessibleText sentence";
-                        }
-                    }
-                }
-
-                if (AccessBridgeNative.getAccessibleTextSelectionInfo(node.VmId, node.Context, out var selection))
-                {
-                    node.TextSelected = selection.SelectedText ?? "";
-                    if (string.IsNullOrWhiteSpace(node.TextPreview) && !string.IsNullOrWhiteSpace(node.TextSelected))
-                    {
-                        node.TextPreview = node.TextSelected;
-                        node.TextPreviewSource = "AccessibleText selection";
-                    }
-                }
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            _logger.Log($"Text enrichment skipped because a JAB text API is unavailable: {ex.Message}");
-        }
-        catch (Exception ex)
-        {
-            _logger.Log($"Text enrichment failed for {node.DisplayName}: {ex.Message}");
-        }
-
-        try
-        {
-            if (node.AccessibleValue)
-            {
-                node.CurrentValue = ReadValue(node.VmId, node.Context, AccessBridgeNative.getCurrentAccessibleValueFromContext);
-                node.MinimumValue = ReadValue(node.VmId, node.Context, AccessBridgeNative.getMinimumAccessibleValueFromContext);
-                node.MaximumValue = ReadValue(node.VmId, node.Context, AccessBridgeNative.getMaximumAccessibleValueFromContext);
-                if (string.IsNullOrWhiteSpace(node.TextPreview) && !string.IsNullOrWhiteSpace(node.CurrentValue))
-                {
-                    node.TextPreview = node.CurrentValue;
-                    node.TextPreviewSource = "AccessibleValue current";
-                }
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            _logger.Log($"Value enrichment skipped because a JAB value API is unavailable: {ex.Message}");
-        }
-        catch (Exception ex)
-        {
-            _logger.Log($"Value enrichment failed for {node.DisplayName}: {ex.Message}");
-        }
-
-        if (string.IsNullOrWhiteSpace(node.TextPreview))
-        {
-            var fallback = GetSelectedOrVirtualText(node.VmId, node.Context, out var source);
-            if (!string.IsNullOrWhiteSpace(fallback))
-            {
-                node.TextPreview = fallback;
-                node.TextPreviewSource = source;
-            }
-        }
-    }
-
     public string? GetText(int vmId, long context, int x, int y)
     {
         try
@@ -254,14 +154,6 @@ public sealed class AccessBridgeService : IDisposable
             return null;
         }
         catch (Exception ex) { _logger.Log($"Get text failed: {ex.Message}"); return null; }
-    }
-
-    private delegate bool ValueReader(int vmId, long context, StringBuilder value, short length);
-
-    private static string ReadValue(int vmId, long context, ValueReader reader)
-    {
-        var value = new StringBuilder(1024);
-        return reader(vmId, context, value, 1024) && value.Length > 0 ? value.ToString() : "";
     }
 
     public string? GetSelectedOrVirtualText(int vmId, long context, out string source)

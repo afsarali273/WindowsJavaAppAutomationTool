@@ -15,6 +15,65 @@ var tests = new (string Name, Action Run)[]
         var second = new AccessibleNode { Role = "push button", RoleEnUs = "push button", Parent = panel }; panel.Children.Add(first); panel.Children.Add(second);
         Assert(LocatorGenerator.BuildPath(second) == "frame[0]/panel[0]/push button[1]", "Unexpected locator path");
     }),
+    ("Java resolver distinguishes adjacent buttons", () =>
+    {
+        var root = new AccessibleNode { Role = "frame", RoleEnUs = "frame", IndexInParent = 0, X = 100, Y = 100, Width = 500, Height = 300 };
+        var panel = new AccessibleNode { Role = "panel", RoleEnUs = "panel", Parent = root, IndexInParent = 0, X = 100, Y = 100, Width = 500, Height = 300 };
+        root.Children.Add(panel);
+
+        var left = new AccessibleNode
+        {
+            Role = "push button",
+            RoleEnUs = "push button",
+            Parent = panel,
+            IndexInParent = 0,
+            X = 120,
+            Y = 140,
+            Width = 80,
+            Height = 28
+        };
+        var right = new AccessibleNode
+        {
+            Role = "push button",
+            RoleEnUs = "push button",
+            Parent = panel,
+            IndexInParent = 1,
+            X = 220,
+            Y = 140,
+            Width = 80,
+            Height = 28
+        };
+        panel.Children.Add(left);
+        panel.Children.Add(right);
+        LocatorGenerator.AssignPaths(root);
+
+        var entry = new JavaObjectRepositoryEntry
+        {
+            Role = right.Role,
+            RoleEnUs = right.RoleEnUs,
+            Path = right.Path,
+            IndexPath = LocatorGenerator.BuildIndexPath(right),
+            ParentRole = panel.Role,
+            ParentName = panel.Name,
+            IndexInParent = right.IndexInParent,
+            X = right.X,
+            Y = right.Y,
+            Width = right.Width,
+            Height = right.Height
+        };
+
+        var step = new JavaRecordedStep
+        {
+            ObjectPath = right.Path,
+            ObjectRole = right.Role,
+            RecordedScreenX = right.X + right.Width / 2,
+            RecordedScreenY = right.Y + right.Height / 2
+        };
+
+        var resolver = new JavaNodeResolverService();
+        var resolved = resolver.Resolve(root, entry, step);
+        Assert(ReferenceEquals(resolved, right), "Resolver picked the wrong adjacent button");
+    }),
     ("JSON serialization", () =>
     {
         var json = JsonExportService.Serialize(new InspectorSnapshot(DateTime.UnixEpoch, "Demo", "0x1", 7, new AccessibleNode { Role = "frame" }));

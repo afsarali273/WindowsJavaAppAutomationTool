@@ -1,7 +1,7 @@
 namespace JabInspector.Core.Models;
 
 /// <summary>
-/// Defines highlight modes that can be used by the app-layer highlight coordinator.
+/// Defines the different highlight modes supported by the HighlightManager.
 /// </summary>
 public enum HighlightMode
 {

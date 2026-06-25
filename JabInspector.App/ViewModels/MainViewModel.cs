@@ -1475,7 +1475,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 if (NodesCorrespond(step, indexed)) child = indexed;
             }
             child ??= resolvedBase.Children.FirstOrDefault(x => NodesCorrespond(step, x));
-            child ??= resolvedBase.Children.FirstOrDefault(x => string.Equals(x.RoleEnUs, step.RoleEnUs, StringComparison.OrdinalIgnoreCase) || string.Equals(x.Role, step.Role, StringComparison.OrdinalIgnoreCase));
+            if (child is null && !HasElementIdentity(step))
+                child = resolvedBase.Children.FirstOrDefault(x => string.Equals(x.RoleEnUs, step.RoleEnUs, StringComparison.OrdinalIgnoreCase) || string.Equals(x.Role, step.Role, StringComparison.OrdinalIgnoreCase));
             if (child is null)
             {
                 step.Parent = resolvedBase;
@@ -1504,6 +1505,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return string.Equals(left.Description, right.Description, StringComparison.Ordinal);
         return true;
     }
+
+    private static bool HasElementIdentity(AccessibleNode node) =>
+        !string.IsNullOrWhiteSpace(node.Name) ||
+        !string.IsNullOrWhiteSpace(node.VirtualAccessibleName) ||
+        !string.IsNullOrWhiteSpace(node.Description);
 
     private AccessibleNode CreateNode(int vmId, long context, JabInspector.Native.AccessibleContextInfo info)
     {
@@ -1537,6 +1543,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         node.AccessibleInterfaces = x.AccessibleInterfaces;
         node.HasManagedDescendantAncestor = node.Parent?.HasManagedDescendantAncestor == true || node.Parent?.ManagesDescendants == true;
         node.ActionNames = node.AccessibleAction ? _bridge.GetAccessibleActions(node.VmId, node.Context).ToList() : [];
-        _bridge.EnrichTextAndValue(node, node.X, node.Y);
+        // TODO: Implement EnrichTextAndValue or remove if not needed
+        // _bridge.EnrichTextAndValue(node, node.X, node.Y);
     }
 }
