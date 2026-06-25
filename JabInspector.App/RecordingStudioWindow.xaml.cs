@@ -59,6 +59,12 @@ public partial class RecordingStudioWindow : Window
         else OwnerWindow.HighlightCurrentJavaSelection();
     }
 
+    private void DeleteStep_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.DeleteSelectedRecordedStep();
+        OwnerWindow.UpdateRecordingBadge();
+    }
+
     private void SaveProject_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.SaveFileDialog

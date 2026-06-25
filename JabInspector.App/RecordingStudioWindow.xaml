@@ -129,7 +129,10 @@
                 <TextBlock Text="Captured Java Access Bridge actions and locator-backed playback steps."
                            Foreground="{StaticResource MutedBrush}" FontSize="10.5" Margin="0,3,0,0" TextWrapping="Wrap"/>
               </StackPanel>
-              <Button HorizontalAlignment="Right" Click="CaptureObject_Click" Content="Capture selected object" Padding="9,4" MinHeight="24"/>
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Click="DeleteStep_Click" Content="Delete step" Padding="9,4" MinHeight="24" ToolTip="Delete the selected recorded step"/>
+                <Button Click="CaptureObject_Click" Content="Capture selected object" Padding="9,4" MinHeight="24"/>
+              </StackPanel>
             </Grid>
           </Border>
 

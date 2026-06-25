@@ -911,6 +911,36 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         return true;
     }
 
+    public bool DeleteSelectedRecordedStep()
+    {
+        if (SelectedRecordedStep is null)
+        {
+            RecordingStatus = "Select a recorded step before deleting.";
+            return false;
+        }
+
+        var deleted = SelectedRecordedStep;
+        var targetSequence = deleted.Sequence;
+        var remaining = RecordedSteps
+            .Where(step => !ReferenceEquals(step, deleted))
+            .OrderBy(step => step.Sequence)
+            .ToList();
+
+        RecordedSteps.Clear();
+        for (var i = 0; i < remaining.Count; i++)
+        {
+            remaining[i].Sequence = i + 1;
+            RecordedSteps.Add(remaining[i]);
+        }
+
+        SelectedRecordedStep = RecordedSteps.FirstOrDefault(step => step.Sequence >= Math.Min(targetSequence, RecordedSteps.Count))
+                               ?? RecordedSteps.LastOrDefault();
+        RecordingStatus = $"Deleted recorded step {targetSequence}. {RecordingStepCount} step(s) remain.";
+        RefreshRecordingSurface();
+        _logger.Log($"Deleted recorded step. PreviousSequence={targetSequence}, RemainingSteps={RecordingStepCount}.");
+        return true;
+    }
+
     public bool SaveRecordingProject(string? path = null)
     {
         _logger.Debug($"Save recording project requested. HasWindow={CurrentWindow is not null}, RepositoryCount={RepositoryEntries.Count}, StepCount={RecordedSteps.Count}, RequestedPath='{path ?? ""}'.");

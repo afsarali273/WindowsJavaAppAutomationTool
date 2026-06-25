@@ -161,7 +161,7 @@ Why: inspecting should not disturb the target app unless the user explicitly per
   - current target window/modal.
 - [x] Add Pause/Resume.
 - [x] Add "Resume" button label/state instead of a combined Pause/Resume label.
-- [ ] Add delete step.
+- [x] Add delete step.
 - [ ] Add reorder step.
 - [ ] Add edit step input text.
 - [ ] Add edit object friendly name.
