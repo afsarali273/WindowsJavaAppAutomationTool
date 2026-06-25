@@ -293,6 +293,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool CanUseJavaRecording => IsJavaMode && CurrentWindow is not null && Root is not null;
     public int RecordingStepCount => RecordedSteps.Count;
     public int RecordingObjectCount => RepositoryEntries.Count;
+    public string RecordingPauseButtonText => IsRecordingPaused ? "Resume" : "Pause";
     public string RecordingBadgeText => IsRecordingActive
         ? IsRecordingPaused ? $"PAUSED  {RecordingStepCount} STEP(S)" : $"REC  {RecordingStepCount} STEP(S)"
         : "RECORDER IDLE";
@@ -1307,6 +1308,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(RecordingStepCount));
         OnPropertyChanged(nameof(RecordingObjectCount));
         OnPropertyChanged(nameof(RecordingBadgeText));
+        OnPropertyChanged(nameof(RecordingPauseButtonText));
         OnPropertyChanged(nameof(IsRecordingPaused));
     }
 

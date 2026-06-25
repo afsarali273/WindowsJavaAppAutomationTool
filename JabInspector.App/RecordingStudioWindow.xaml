@@ -99,7 +99,7 @@
 
         <WrapPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
           <Button Click="NewSession_Click" Style="{StaticResource PrimaryButton}" MinWidth="76" Content="New" ToolTip="Start a new Java recording session"/>
-          <Button Click="TogglePause_Click" MinWidth="70" Content="Pause" ToolTip="Pause or resume active recording"/>
+          <Button Click="TogglePause_Click" MinWidth="70" Content="{Binding RecordingPauseButtonText}" ToolTip="Pause or resume active recording"/>
           <Button Click="StopSession_Click" Style="{StaticResource DangerButton}" MinWidth="68" Content="Stop" ToolTip="Stop recording and review the captured flow"/>
           <Button Click="Playback_Click" MinWidth="64" Content="Play" ToolTip="Replay recorded steps"/>
           <Button Click="SaveProject_Click" MinWidth="64" Content="Save" ToolTip="Save recording project"/>
