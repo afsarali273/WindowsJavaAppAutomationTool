@@ -73,6 +73,53 @@ public sealed class JavaDriverService : IDisposable
         lock (_sync) return RefreshSessionTree(session);
     }
 
+    public DriverResult GetSessionWindows(string sessionId)
+    {
+        if (!TryGetSession(sessionId, out var session, out var result)) return result;
+        var windows = GetRelatedWindows(session)
+            .Select(window => new
+            {
+                isActive = window.Hwnd == session.Window.Hwnd,
+                window = JavaWindowDto.From(window)
+            })
+            .ToList();
+
+        return Ok("Session windows returned.", sessionId, new
+        {
+            activeWindow = JavaWindowDto.From(session.Window),
+            count = windows.Count,
+            windows
+        });
+    }
+
+    public DriverResult SwitchSessionWindow(string sessionId, SwitchWindowRequest request)
+    {
+        if (!TryGetSession(sessionId, out var session, out var result)) return result;
+        lock (_sync)
+        {
+            var window = FindRelatedWindow(session, new JavaWindowSelector(
+                request.Hwnd,
+                request.Title,
+                request.ClassName,
+                request.ProcessId,
+                request.VmId,
+                request.ExactTitle));
+
+            if (window is null)
+                return Fail("No matching Java window/modal was found for this session.", sessionId);
+
+            session.Window = window;
+            session.Root = null;
+            session.NodeCount = 0;
+            session.LastRefreshedAtUtc = DateTime.UtcNow;
+            _logger.Log($"API session switched active Java window. SessionId={sessionId}, Window='{window.Title}', Hwnd={window.HwndDisplay}.");
+
+            return request.RefreshTree
+                ? RefreshSessionTree(session)
+                : Ok("Session active window switched.", sessionId, ToSummary(session));
+        }
+    }
+
     public DriverResult GetTree(string sessionId)
     {
         if (!TryGetSession(sessionId, out var session, out var result)) return result;
@@ -119,6 +166,9 @@ public sealed class JavaDriverService : IDisposable
     public DriverResult ResolveElement(string sessionId, ResolveElementRequest request)
     {
         if (!TryGetSession(sessionId, out var session, out var result)) return result;
+        var routed = RouteSessionWindow(session, request.ObjectKey, request.Window, request.AutoSwitchWindow);
+        if (!routed.Success) return routed;
+
         if (request.RefreshTree || session.Root is null)
         {
             var refresh = RefreshSessionTree(session);
@@ -139,6 +189,9 @@ public sealed class JavaDriverService : IDisposable
     public DriverResult ExecuteAction(string sessionId, JavaActionRequest request)
     {
         if (!TryGetSession(sessionId, out var session, out var result)) return result;
+        var routed = RouteSessionWindow(session, request.ObjectKey, request.Window, request.AutoSwitchWindow);
+        if (!routed.Success) return routed;
+
         if (request.RefreshTree || session.Root is null)
         {
             var refresh = RefreshSessionTree(session);
@@ -194,6 +247,104 @@ public sealed class JavaDriverService : IDisposable
             return windows.FirstOrDefault(x => x.Title.Contains(request.Title, StringComparison.OrdinalIgnoreCase));
 
         return windows.FirstOrDefault();
+    }
+
+    private DriverResult RouteSessionWindow(JavaDriverSession session, string? objectKey, JavaWindowSelector? selector, bool autoSwitch)
+    {
+        if (selector is not null)
+        {
+            var selected = FindRelatedWindow(session, selector);
+            if (selected is null) return Fail("Requested Java window/modal was not found for this session.", session.Id);
+            if (selected.Hwnd != session.Window.Hwnd) SwitchSessionWindow(session, selected);
+            return Ok("Session routed to requested window.", session.Id, ToSummary(session));
+        }
+
+        if (!autoSwitch || string.IsNullOrWhiteSpace(objectKey)) return Ok("Window routing not required.", session.Id);
+
+        var entry = session.Repository.FirstOrDefault(x => string.Equals(x.ObjectKey, objectKey, StringComparison.OrdinalIgnoreCase));
+        if (entry is null) return Ok("Repository object not loaded; window routing skipped.", session.Id);
+        if (EntryMatchesWindow(entry, session.Window)) return Ok("Session already uses recorded object window.", session.Id);
+
+        var recordedWindow = FindRelatedWindow(session, new JavaWindowSelector(
+            Hwnd: entry.WindowHwndDisplay,
+            Title: entry.WindowTitle,
+            ClassName: entry.WindowClassName,
+            ProcessId: entry.WindowProcessId == 0 ? null : entry.WindowProcessId,
+            VmId: entry.WindowVmId == 0 ? null : entry.WindowVmId,
+            ExactTitle: true));
+
+        if (recordedWindow is null)
+            return Fail($"Could not find recorded window/modal '{entry.WindowTitle}' for object '{entry.ObjectKey}'.", session.Id);
+
+        SwitchSessionWindow(session, recordedWindow);
+        return Ok("Session auto-switched to recorded object window.", session.Id, ToSummary(session));
+    }
+
+    private IReadOnlyList<JavaWindowInfo> GetRelatedWindows(JavaDriverSession session)
+    {
+        var windows = GetWindows();
+        return windows
+            .Where(window =>
+                window.Hwnd == session.Window.Hwnd ||
+                (session.Window.ProcessId != 0 && window.ProcessId == session.Window.ProcessId) ||
+                (session.Window.VmId != 0 && window.VmId == session.Window.VmId))
+            .OrderByDescending(window => window.Hwnd == session.Window.Hwnd)
+            .ThenBy(window => window.Title)
+            .ToList();
+    }
+
+    private JavaWindowInfo? FindRelatedWindow(JavaDriverSession session, JavaWindowSelector selector)
+    {
+        var related = GetRelatedWindows(session);
+        return FindWindow(related, selector) ?? FindWindow(GetWindows(), selector);
+    }
+
+    private static JavaWindowInfo? FindWindow(IEnumerable<JavaWindowInfo> windows, JavaWindowSelector selector)
+    {
+        var candidates = windows.ToList();
+        if (!string.IsNullOrWhiteSpace(selector.Hwnd))
+        {
+            var normalized = selector.Hwnd.Trim();
+            candidates = candidates
+                .Where(window =>
+                    string.Equals(window.HwndDisplay, normalized, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(window.Hwnd.ToInt64().ToString("X"), normalized.TrimStart('0', 'x', 'X'), StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        if (selector.ProcessId is not null)
+            candidates = candidates.Where(window => window.ProcessId == selector.ProcessId.Value).ToList();
+        if (selector.VmId is not null)
+            candidates = candidates.Where(window => window.VmId == selector.VmId.Value).ToList();
+        if (!string.IsNullOrWhiteSpace(selector.ClassName))
+            candidates = candidates.Where(window => string.Equals(window.ClassName, selector.ClassName, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (!string.IsNullOrWhiteSpace(selector.Title))
+            candidates = candidates.Where(window => selector.ExactTitle
+                ? string.Equals(window.Title, selector.Title, StringComparison.OrdinalIgnoreCase)
+                : window.Title.Contains(selector.Title, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        return candidates.FirstOrDefault();
+    }
+
+    private void SwitchSessionWindow(JavaDriverSession session, JavaWindowInfo window)
+    {
+        session.Window = window;
+        session.Root = null;
+        session.NodeCount = 0;
+        session.LastRefreshedAtUtc = DateTime.UtcNow;
+        _logger.Log($"API session active window changed. SessionId={session.Id}, Window='{window.Title}', Hwnd={window.HwndDisplay}.");
+    }
+
+    private static bool EntryMatchesWindow(JavaObjectRepositoryEntry entry, JavaWindowInfo window)
+    {
+        if (!string.IsNullOrWhiteSpace(entry.WindowHwndDisplay) &&
+            string.Equals(entry.WindowHwndDisplay, window.HwndDisplay, StringComparison.OrdinalIgnoreCase)) return true;
+        if (entry.WindowProcessId != 0 && entry.WindowProcessId != window.ProcessId) return false;
+        if (entry.WindowVmId != 0 && entry.WindowVmId != window.VmId) return false;
+        if (!string.IsNullOrWhiteSpace(entry.WindowClassName) &&
+            !string.Equals(entry.WindowClassName, window.ClassName, StringComparison.OrdinalIgnoreCase)) return false;
+        return string.IsNullOrWhiteSpace(entry.WindowTitle) ||
+               string.Equals(entry.WindowTitle, window.Title, StringComparison.OrdinalIgnoreCase);
     }
 
     private DriverResult RefreshSessionTree(JavaDriverSession session)

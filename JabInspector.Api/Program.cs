@@ -45,6 +45,8 @@ app.MapGet("/", () => Results.Ok(new
         health = "GET /api/health",
         windows = "GET /api/java/windows",
         attach = "POST /api/java/sessions",
+        sessionWindows = "GET /api/java/sessions/{sessionId}/windows",
+        switchWindow = "POST /api/java/sessions/{sessionId}/window",
         actions = "POST /api/java/sessions/{sessionId}/actions"
     }
 }));
@@ -83,6 +85,18 @@ app.MapPost("/api/java/sessions/{sessionId}/refresh", (string sessionId, JavaDri
     return result.Success ? Results.Ok(result) : Results.NotFound(result);
 });
 
+app.MapGet("/api/java/sessions/{sessionId}/windows", (string sessionId, JavaDriverService driver) =>
+{
+    var result = driver.GetSessionWindows(sessionId);
+    return result.Success ? Results.Ok(result) : Results.NotFound(result);
+});
+
+app.MapPost("/api/java/sessions/{sessionId}/window", (string sessionId, SwitchWindowRequest request, JavaDriverService driver) =>
+{
+    var result = driver.SwitchSessionWindow(sessionId, request);
+    return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+});
+
 app.MapGet("/api/java/sessions/{sessionId}/tree", (string sessionId, JavaDriverService driver) =>
 {
     var result = driver.GetTree(sessionId);
@@ -114,18 +128,3 @@ app.MapPost("/api/java/sessions/{sessionId}/actions", (string sessionId, JavaAct
 });
 
 app.Run();
-
-public sealed record JavaWindowDto(
-    string Hwnd,
-    string Title,
-    string ClassName,
-    int ProcessId,
-    int VmId)
-{
-    public static JavaWindowDto From(JavaWindowInfo window) => new(
-        window.HwndDisplay,
-        window.Title,
-        window.ClassName,
-        window.ProcessId,
-        window.VmId);
-}

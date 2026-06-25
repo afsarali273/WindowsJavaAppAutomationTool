@@ -112,6 +112,8 @@ Content-Type: application/json
 - `GET /api/java/sessions`
 - `DELETE /api/java/sessions/{sessionId}`
 - `POST /api/java/sessions/{sessionId}/refresh`
+- `GET /api/java/sessions/{sessionId}/windows`
+- `POST /api/java/sessions/{sessionId}/window`
 - `GET /api/java/sessions/{sessionId}/tree`
 - `POST /api/java/sessions/{sessionId}/repository/load`
 - `GET /api/java/sessions/{sessionId}/repository`
@@ -128,3 +130,48 @@ Content-Type: application/json
 - `getText`
 
 The resolver uses the same rich locator snapshot as the desktop inspector/recorder: path, indexPath, XPath, semantic fields, parent identity, depth, state, bounds, text/value metadata, and action names.
+
+## Modal and window handling
+
+List Java windows/modals related to a session:
+
+```http
+GET http://127.0.0.1:5055/api/java/sessions/{sessionId}/windows
+```
+
+Switch the active session window/modal:
+
+```http
+POST http://127.0.0.1:5055/api/java/sessions/{sessionId}/window
+Content-Type: application/json
+
+{
+  "title": "Open",
+  "className": "SunAwtDialog",
+  "refreshTree": true
+}
+```
+
+Actions and resolve calls also support automatic modal routing. If an `objectKey` comes from a recorder repository, the API will try to switch to the recorded window/modal before resolving the object:
+
+```json
+{
+  "objectKey": "push_button_open_0",
+  "action": "click",
+  "autoSwitchWindow": true,
+  "refreshTree": true
+}
+```
+
+You can also force routing for one call:
+
+```json
+{
+  "objectKey": "push_button_ok_0",
+  "action": "click",
+  "window": {
+    "title": "Confirm",
+    "className": "SunAwtDialog"
+  }
+}
+```

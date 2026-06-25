@@ -2,6 +2,21 @@ using JabInspector.Core.Models;
 
 namespace JabInspector.Api.Services;
 
+public sealed record JavaWindowDto(
+    string Hwnd,
+    string Title,
+    string ClassName,
+    int ProcessId,
+    int VmId)
+{
+    public static JavaWindowDto From(JavaWindowInfo window) => new(
+        window.HwndDisplay,
+        window.Title,
+        window.ClassName,
+        window.ProcessId,
+        window.VmId);
+}
+
 public sealed record CreateSessionRequest(
     string? Hwnd = null,
     string? Title = null,
@@ -10,9 +25,28 @@ public sealed record CreateSessionRequest(
 
 public sealed record LoadRepositoryRequest(string Path);
 
+public sealed record JavaWindowSelector(
+    string? Hwnd = null,
+    string? Title = null,
+    string? ClassName = null,
+    int? ProcessId = null,
+    int? VmId = null,
+    bool ExactTitle = false);
+
+public sealed record SwitchWindowRequest(
+    string? Hwnd = null,
+    string? Title = null,
+    string? ClassName = null,
+    int? ProcessId = null,
+    int? VmId = null,
+    bool ExactTitle = false,
+    bool RefreshTree = true);
+
 public sealed record ResolveElementRequest(
     string? ObjectKey = null,
     LocatorSuggestion? Locator = null,
+    JavaWindowSelector? Window = null,
+    bool AutoSwitchWindow = true,
     bool RefreshTree = false);
 
 public sealed record JavaActionRequest(
@@ -20,6 +54,8 @@ public sealed record JavaActionRequest(
     string? ObjectKey = null,
     LocatorSuggestion? Locator = null,
     string? Text = null,
+    JavaWindowSelector? Window = null,
+    bool AutoSwitchWindow = true,
     bool RefreshTree = false,
     bool PreferAccessibleAction = true);
 
