@@ -8,6 +8,16 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<InspectorLogger>();
 builder.Services.AddSingleton<AccessBridgeService>();
 builder.Services.AddSingleton<JavaDriverService>();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new()
+    {
+        Title = "Java Access Bridge Inspector API",
+        Version = "v1",
+        Description = "Headless REST API for inspecting and automating Java Swing/AWT applications through Java Access Bridge."
+    });
+});
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.WriteIndented = true;
@@ -17,11 +27,19 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 var app = builder.Build();
 
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Java Access Bridge Inspector API v1");
+    options.DocumentTitle = "JAB Inspector API";
+});
+
 app.MapGet("/", () => Results.Ok(new
 {
     name = "Java Access Bridge Inspector API",
     engine = "java-access-bridge",
     status = "running",
+    swagger = "/swagger",
     docs = new
     {
         health = "GET /api/health",

@@ -8,6 +8,12 @@
 dotnet run --project JabInspector.Api --urls http://127.0.0.1:5055
 ```
 
+Swagger UI is available at:
+
+```text
+http://127.0.0.1:5055/swagger
+```
+
 ## Basic flow
 
 1. Discover Java windows.
