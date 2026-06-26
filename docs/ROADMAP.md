@@ -248,6 +248,19 @@ Why: inspecting should not disturb the target app unless the user explicitly per
 - [ ] Add unit tests for repeated controls in different modal scopes.
 - [ ] Add object repository editor UI for window scope/title match mode.
 
+### P1 - Shared automation action services
+
+- [x] Add shared Java virtual keypad planner for layered-pane/pane keyboards.
+- [x] Use shared virtual keypad planner from desktop Automation/Recorder actions.
+- [x] Use shared virtual keypad planner from REST API `typeText`.
+- [ ] Add tests for virtual keypad matching:
+  - digits;
+  - letters;
+  - enter/space;
+  - symbol aliases;
+  - nested labels under layered panes.
+- [ ] Move more action fallback policy into Core so desktop playback and API actions stay identical.
+
 ### P1 - Locator completeness
 
 - [x] Include normal accessible name.

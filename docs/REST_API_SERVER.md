@@ -132,10 +132,12 @@ Content-Type: application/json
 - `click`
 - `doubleClick`
 - `setText`
-- `typeText` currently uses the JAB text setter path
+- `typeText`
 - `getText`
 
 The resolver uses the same rich locator snapshot as the desktop inspector/recorder: path, indexPath, XPath, semantic fields, parent identity, depth, state, bounds, text/value metadata, and action names.
+
+`typeText` shares the same Java virtual-keypad planner used by the desktop recorder. If the resolved target is a pane/layered-pane/panel that looks like an on-screen keypad, the API resolves child keys by accessible name/description/virtual name/text/value and physically clicks them in sequence. Otherwise it falls back to the JAB text setter path.
 
 ## Stability and production-readiness notes
 

@@ -83,6 +83,22 @@ var tests = new (string Name, Action Run)[]
     {
         Assert(new AccessibleNode { Width = 1, Height = 1 }.HasValidBounds, "Valid bounds rejected"); Assert(!new AccessibleNode { Width = 0, Height = 10 }.HasValidBounds, "Invalid bounds accepted");
     }),
+    ("Virtual keypad planner resolves pane keys", () =>
+    {
+        var keyboard = new AccessibleNode { Role = "layered pane", RoleEnUs = "layered pane", ChildrenCount = 4 };
+        keyboard.Children.Add(new AccessibleNode { Role = "push button", RoleEnUs = "push button", Name = "1", Parent = keyboard, X = 10, Y = 10, Width = 20, Height = 20 });
+        keyboard.Children.Add(new AccessibleNode { Role = "push button", RoleEnUs = "push button", Name = "2", Parent = keyboard, X = 40, Y = 10, Width = 20, Height = 20 });
+        keyboard.Children.Add(new AccessibleNode { Role = "push button", RoleEnUs = "push button", Name = "Space", Parent = keyboard, X = 70, Y = 10, Width = 50, Height = 20 });
+        keyboard.Children.Add(new AccessibleNode { Role = "push button", RoleEnUs = "push button", Name = "OK", Parent = keyboard, X = 130, Y = 10, Width = 40, Height = 20 });
+
+        var service = new JavaVirtualKeypadService();
+        Assert(service.ShouldUseVirtualKeypad(keyboard, "12 \n"), "Layered-pane keypad was not detected");
+        Assert(service.TryBuildPlan(keyboard, "12 \n", out var plan, out var message), message);
+        Assert(plan.Steps.Count == 4, "Unexpected virtual keypad step count");
+        Assert(plan.Steps[0].KeyNode.Name == "1", "Digit key was not resolved");
+        Assert(plan.Steps[2].KeyNode.Name == "Space", "Space key was not resolved");
+        Assert(plan.Steps[3].KeyNode.Name == "OK", "Enter/OK key was not resolved");
+    }),
     ("Diagnostics bitness", () => Assert(StartupDiagnostics.Generate().Any(x => x.Contains("64-bit process")), "Bitness diagnostic missing")),
     ("Windows classifier detects Java", () =>
     {

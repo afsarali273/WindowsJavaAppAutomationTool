@@ -16,6 +16,7 @@ namespace JabInspector.App;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel = new();
+    private readonly JavaVirtualKeypadService _virtualKeypad = new();
     private readonly System.Windows.Threading.DispatcherTimer _hoverTimer;
     private readonly System.Windows.Threading.DispatcherTimer _recordingMonitorTimer;
     private RecordingStudioWindow? _recordingStudioWindow;
@@ -924,7 +925,7 @@ public partial class MainWindow : Window
             return false;
         }
 
-        if (ShouldUseVirtualKeypad(_viewModel.SelectedNode, text))
+        if (_virtualKeypad.ShouldUseVirtualKeypad(_viewModel.SelectedNode, text))
         {
             return TryTypeViaVirtualKeypad(_viewModel.SelectedNode, text, out _);
         }
@@ -938,33 +939,15 @@ public partial class MainWindow : Window
         return sent > 0 || text.Length == 0;
     }
 
-    private bool ShouldUseVirtualKeypad(AccessibleNode node, string text)
-    {
-        if (string.IsNullOrEmpty(text)) return false;
-        if (node.AccessibleText || node.AccessibleValue) return false;
-        if (node.Children.Count == 0) return false;
-
-        var role = $"{node.Role} {node.RoleEnUs}";
-        var looksLikeContainer =
-            role.Contains("layered pane", StringComparison.OrdinalIgnoreCase) ||
-            role.Contains("root pane", StringComparison.OrdinalIgnoreCase) ||
-            role.Contains("panel", StringComparison.OrdinalIgnoreCase) ||
-            role.Contains("pane", StringComparison.OrdinalIgnoreCase) ||
-            role.Contains("keyboard", StringComparison.OrdinalIgnoreCase) ||
-            node.ChildrenCount > 4;
-        if (!looksLikeContainer) return false;
-
-        var keyLikeDescendants = EnumerateDescendants(node)
-            .Where(candidate => !ReferenceEquals(candidate, node))
-            .Count(IsLikelyVirtualKey);
-        if (keyLikeDescendants >= 3) return true;
-
-        return text.Any(ch => !char.IsControl(ch) && FindVirtualKey(node, ch) is not null);
-    }
-
     private bool TryTypeViaVirtualKeypad(AccessibleNode keyboardRoot, string text, out string message)
     {
-        message = "";
+        if (!_virtualKeypad.TryBuildPlan(keyboardRoot, text, out var plan, out message))
+        {
+            _viewModel.ReportAutomation(message);
+            _viewModel.Log(message);
+            return false;
+        }
+
         if (_viewModel.CurrentWindow is not null)
         {
             SetForegroundWindow(_viewModel.CurrentWindow.Hwnd);
@@ -972,23 +955,11 @@ public partial class MainWindow : Window
         }
 
         var clicked = 0;
-        foreach (var ch in text)
+        foreach (var step in plan.Steps)
         {
-            if (ch == '\r') continue;
-
-            var key = FindVirtualKey(keyboardRoot, ch);
-            if (key is null)
+            if (!PhysicalClickForResult(step.KeyNode, 1))
             {
-                var label = ch == '\n' ? "Enter" : ch == ' ' ? "Space" : ch.ToString();
-                message = $"Could not find virtual keypad key '{label}' under {keyboardRoot.DisplayName}. Clicked {clicked} key(s) before stopping.";
-                _viewModel.ReportAutomation(message);
-                _viewModel.Log(message);
-                return false;
-            }
-
-            if (!PhysicalClickForResult(key, 1))
-            {
-                message = $"Found virtual keypad key '{key.DisplayName}', but it had no usable bounds.";
+                message = $"Found virtual keypad key '{step.KeyNode.DisplayName}', but it had no usable bounds.";
                 _viewModel.ReportAutomation(message);
                 _viewModel.Log(message);
                 return false;
@@ -1002,146 +973,6 @@ public partial class MainWindow : Window
         _viewModel.ReportAutomation(message);
         _viewModel.Log(message);
         return clicked > 0 || text.Length == 0;
-    }
-
-    private AccessibleNode? FindVirtualKey(AccessibleNode keyboardRoot, char ch)
-    {
-        var alternatives = BuildVirtualKeyAlternatives(ch)
-            .Select(NormalizeKeyLabel)
-            .Where(x => x.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (alternatives.Count == 0) return null;
-
-        var candidates = EnumerateDescendants(keyboardRoot)
-            .Where(candidate => !ReferenceEquals(candidate, keyboardRoot))
-            .Select(candidate => new
-            {
-                Node = candidate,
-                Labels = GetVirtualKeyLabels(candidate).Select(NormalizeKeyLabel).Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
-            })
-            .Where(candidate => candidate.Labels.Count > 0)
-            .ToList();
-
-        return candidates.FirstOrDefault(candidate => candidate.Labels.Any(label => alternatives.Contains(label, StringComparer.OrdinalIgnoreCase)))?.Node
-               ?? candidates.FirstOrDefault(candidate => candidate.Labels.Any(label => alternatives.Any(alt => IsLooseKeyMatch(label, alt))))?.Node;
-    }
-
-    private static IEnumerable<AccessibleNode> EnumerateDescendants(AccessibleNode node)
-    {
-        yield return node;
-        foreach (var child in node.Children)
-        {
-            foreach (var nested in EnumerateDescendants(child))
-                yield return nested;
-        }
-    }
-
-    private static bool IsLikelyVirtualKey(AccessibleNode node)
-    {
-        var labels = GetVirtualKeyLabels(node).Select(NormalizeKeyLabel).Where(x => x.Length > 0).ToList();
-        if (labels.Count == 0) return false;
-        if (labels.Any(label => label.Length == 1 || IsSpecialKeyLabel(label))) return true;
-
-        var role = $"{node.Role} {node.RoleEnUs}";
-        return labels.Any(label => label.Length <= 8)
-               && (role.Contains("button", StringComparison.OrdinalIgnoreCase)
-                   || role.Contains("label", StringComparison.OrdinalIgnoreCase)
-                   || role.Contains("text", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static IEnumerable<string> GetVirtualKeyLabels(AccessibleNode node)
-    {
-        if (!string.IsNullOrWhiteSpace(node.Name)) yield return node.Name;
-        if (!string.IsNullOrWhiteSpace(node.VirtualAccessibleName)) yield return node.VirtualAccessibleName;
-        if (!string.IsNullOrWhiteSpace(node.Description)) yield return node.Description;
-        if (!string.IsNullOrWhiteSpace(node.TextPreview)) yield return node.TextPreview;
-        if (!string.IsNullOrWhiteSpace(node.CurrentValue)) yield return node.CurrentValue;
-    }
-
-    private static IEnumerable<string> BuildVirtualKeyAlternatives(char ch)
-    {
-        if (ch == '\n')
-        {
-            yield return "enter";
-            yield return "return";
-            yield return "ok";
-            yield return "done";
-            yield break;
-        }
-
-        if (ch == ' ')
-        {
-            yield return "space";
-            yield return "spacebar";
-            yield return "blank";
-            yield break;
-        }
-
-        yield return ch.ToString();
-        yield return char.ToLowerInvariant(ch).ToString();
-        yield return char.ToUpperInvariant(ch).ToString();
-
-        if (char.IsDigit(ch))
-        {
-            yield return $"digit {ch}";
-            yield return $"digit{ch}";
-            yield return $"number {ch}";
-            yield return $"number{ch}";
-            yield return $"num {ch}";
-            yield return $"num{ch}";
-            yield return $"key {ch}";
-            yield return $"key{ch}";
-            yield break;
-        }
-
-        if (char.IsLetter(ch))
-        {
-            var lower = char.ToLowerInvariant(ch);
-            yield return $"letter {lower}";
-            yield return $"letter{lower}";
-            yield return $"key {lower}";
-            yield return $"key{lower}";
-            yield break;
-        }
-
-        foreach (var label in ch switch
-        {
-            '.' => new[] { "dot", "period", "decimal", "point" },
-            ',' => new[] { "comma" },
-            '-' => new[] { "minus", "dash", "hyphen", "negative" },
-            '+' => new[] { "plus", "add" },
-            '/' => new[] { "slash", "divide" },
-            '*' => new[] { "star", "asterisk", "multiply" },
-            '#' => new[] { "hash", "pound" },
-            '@' => new[] { "at" },
-            ':' => new[] { "colon" },
-            ';' => new[] { "semicolon" },
-            _ => Array.Empty<string>()
-        })
-        {
-            yield return label;
-        }
-    }
-
-    private static string NormalizeKeyLabel(string value)
-    {
-        var normalized = new string(value
-            .Trim()
-            .ToLowerInvariant()
-            .Where(ch => char.IsLetterOrDigit(ch) || ch is '.' or ',' or '-' or '+' or '/' or '*' or '#' or '@' or ':' or ';')
-            .ToArray());
-        return normalized;
-    }
-
-    private static bool IsSpecialKeyLabel(string label) =>
-        label is "enter" or "return" or "ok" or "done" or "space" or "spacebar" or "clear" or "delete" or "backspace" or "bksp";
-
-    private static bool IsLooseKeyMatch(string label, string expected)
-    {
-        if (label.Length > expected.Length + 8) return false;
-        return label.EndsWith(expected, StringComparison.OrdinalIgnoreCase)
-               || label.StartsWith(expected, StringComparison.OrdinalIgnoreCase);
     }
 
     private bool PhysicalClick(AccessibleNode node, int count)

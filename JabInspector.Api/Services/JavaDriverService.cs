@@ -13,6 +13,7 @@ public sealed class JavaDriverService : IDisposable
     private readonly InspectorLogger _logger;
     private readonly JavaObjectRepositoryService _repositoryService = new();
     private readonly JavaNodeResolverService _resolver = new();
+    private readonly JavaVirtualKeypadService _virtualKeypad = new();
     private readonly AutomationService _automation;
     private readonly ConcurrentDictionary<string, JavaDriverSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _sync = new();
@@ -247,7 +248,7 @@ public sealed class JavaDriverService : IDisposable
                 JavaRecordedActionKind.Click => ExecuteClick(node, request.PreferAccessibleAction),
                 JavaRecordedActionKind.DoubleClick => PhysicalClick(node, 2),
                 JavaRecordedActionKind.SetText => _automation.SetText(node, request.Text ?? ""),
-                JavaRecordedActionKind.TypeText => _automation.SetText(node, request.Text ?? ""),
+                JavaRecordedActionKind.TypeText => ExecuteTypeText(node, request.Text ?? ""),
                 JavaRecordedActionKind.GetText => true,
                 _ => false
             };
@@ -587,6 +588,39 @@ public sealed class JavaDriverService : IDisposable
     {
         if (preferAccessibleAction && _automation.InvokeDefaultAction(node, out _)) return true;
         return PhysicalClick(node, 1);
+    }
+
+    private bool ExecuteTypeText(AccessibleNode node, string text)
+    {
+        if (_virtualKeypad.ShouldUseVirtualKeypad(node, text))
+            return ExecuteVirtualKeypadTyping(node, text);
+
+        return _automation.SetText(node, text);
+    }
+
+    private bool ExecuteVirtualKeypadTyping(AccessibleNode keyboardRoot, string text)
+    {
+        if (!_virtualKeypad.TryBuildPlan(keyboardRoot, text, out var plan, out var message))
+        {
+            _logger.Log($"API virtual keypad typing failed: {message}");
+            return false;
+        }
+
+        var clicked = 0;
+        foreach (var step in plan.Steps)
+        {
+            if (!PhysicalClick(step.KeyNode, 1))
+            {
+                _logger.Log($"API virtual keypad typing failed. Key='{step.Label}', Node='{step.KeyNode.DisplayName}' had no usable bounds.");
+                return false;
+            }
+
+            clicked++;
+            Thread.Sleep(80);
+        }
+
+        _logger.Log($"API virtual keypad typing clicked {clicked} key(s) under {keyboardRoot.DisplayName}.");
+        return clicked > 0 || text.Length == 0;
     }
 
     private bool PhysicalClick(AccessibleNode node, int count)
