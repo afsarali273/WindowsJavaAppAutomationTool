@@ -171,6 +171,7 @@ public sealed class JavaNodeResolverService
         if (node.AccessibleSelection == entry.AccessibleSelection) score += 2;
         if (node.AccessibleComponent == entry.AccessibleComponent) score += 2;
         if (node.HasManagedDescendantAncestor == entry.HasManagedDescendantAncestor) score += 2;
+        score += TextValueScore(node, step?.ObjectLocator ?? entry.Locator);
         if (entry.ActionNames.Count > 0 && node.ActionNames.Count > 0)
         {
             var overlap = node.ActionNames.Count(action => entry.ActionNames.Any(recorded => EqualsNormalized(action, recorded)));
@@ -330,17 +331,13 @@ public sealed class JavaNodeResolverService
         CountMatch(node.IndexInParent == (locator?.IndexInParent ?? entry.IndexInParent), (locator?.IndexInParent ?? entry.IndexInParent) >= 0, ref required, ref matched);
         CountMatch(node.ObjectDepth == (locator?.ObjectDepth ?? entry.ObjectDepth), (locator?.ObjectDepth ?? entry.ObjectDepth) >= 0, ref required, ref matched);
 
-        if (HasAny(locator?.TextPreview))
-        {
-            required++;
-            if (EqualsNormalized(node.TextPreview, locator!.TextPreview)) matched++;
-        }
-
-        if (HasAny(locator?.CurrentValue))
-        {
-            required++;
-            if (EqualsNormalized(node.CurrentValue, locator!.CurrentValue)) matched++;
-        }
+        CountMatch(EqualsNormalized(node.TextPreview, locator?.TextPreview), HasAny(locator?.TextPreview), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.TextSelected, locator?.TextSelected), HasAny(locator?.TextSelected), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.TextWord, locator?.TextWord), HasAny(locator?.TextWord), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.TextSentence, locator?.TextSentence), HasAny(locator?.TextSentence), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.CurrentValue, locator?.CurrentValue), HasAny(locator?.CurrentValue), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.MinimumValue, locator?.MinimumValue), HasAny(locator?.MinimumValue), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.MaximumValue, locator?.MaximumValue), HasAny(locator?.MaximumValue), ref required, ref matched);
 
         return required == 0
             ? MatchesExactPath(node, entry, locator) || MatchesExactIndexPath(node, entry, locator) || MatchesExactXPath(node, locator)
@@ -354,7 +351,11 @@ public sealed class JavaNodeResolverService
         var hasStrongName = EqualsNormalized(node.Name, locator?.Name ?? entry.Name) ||
                             EqualsNormalized(node.VirtualAccessibleName, locator?.VirtualAccessibleName ?? entry.VirtualAccessibleName) ||
                             EqualsNormalized(node.Description, locator?.Description ?? entry.Description) ||
-                            EqualsNormalized(node.TextPreview, locator?.TextPreview);
+                            EqualsNormalized(node.TextPreview, locator?.TextPreview) ||
+                            EqualsNormalized(node.TextSelected, locator?.TextSelected) ||
+                            EqualsNormalized(node.TextWord, locator?.TextWord) ||
+                            EqualsNormalized(node.TextSentence, locator?.TextSentence) ||
+                            EqualsNormalized(node.CurrentValue, locator?.CurrentValue);
         var hasStructure = node.IndexInParent == (locator?.IndexInParent ?? entry.IndexInParent) &&
                            node.ObjectDepth == (locator?.ObjectDepth ?? entry.ObjectDepth);
         var hasParent = EqualsNormalized(node.Parent?.Role, locator?.ParentRole ?? entry.ParentRole) ||
@@ -373,6 +374,7 @@ public sealed class JavaNodeResolverService
         if (EqualsNormalized(node.Name, locator?.Name ?? entry.Name)) score += 30;
         if (EqualsNormalized(node.VirtualAccessibleName, locator?.VirtualAccessibleName ?? entry.VirtualAccessibleName)) score += 28;
         if (EqualsNormalized(node.Description, locator?.Description ?? entry.Description)) score += 18;
+        score += TextValueScore(node, locator);
         if (EqualsNormalized(node.Parent?.Role, locator?.ParentRole ?? entry.ParentRole)) score += 18;
         if (EqualsNormalized(node.Parent?.Name, locator?.ParentName ?? entry.ParentName)) score += 18;
         if (node.IndexInParent == (locator?.IndexInParent ?? entry.IndexInParent)) score += 18;
@@ -432,6 +434,7 @@ public sealed class JavaNodeResolverService
             if (node.ChildrenCount == locator.ChildrenCount) score += 3;
             if (EqualsNormalized(node.StatesEnUs, locator.StatesEnUs)) score += 4;
             else if (EqualsNormalized(node.States, locator.States)) score += 3;
+            score += TextValueScore(node, locator);
 
             var locatorBoundsDistance = BoundsDistance(node, locator.Bounds);
             if (locatorBoundsDistance == 0 && locator.Bounds.Width > 0 && locator.Bounds.Height > 0) score += 8;
@@ -477,6 +480,7 @@ public sealed class JavaNodeResolverService
             if (!string.IsNullOrWhiteSpace(locator.IndexPath) && EqualsNormalized(LocatorGenerator.BuildIndexPath(node), locator.IndexPath)) return true;
             if (!string.IsNullOrWhiteSpace(locator.XPath) && EqualsNormalized(LocatorGenerator.BuildXPath(node), locator.XPath)) return true;
             if (!string.IsNullOrWhiteSpace(locator.IndexXPath) && EqualsNormalized(LocatorGenerator.BuildIndexXPath(node), locator.IndexXPath)) return true;
+            if (HasTextValueMatch(node, locator)) return true;
         }
 
         var hasIdentity = EqualsNormalized(node.Name, entry.Name) || EqualsNormalized(node.VirtualAccessibleName, entry.VirtualAccessibleName);
@@ -542,6 +546,13 @@ public sealed class JavaNodeResolverService
         AddMismatch(result, "name", locator?.Name ?? entry.Name, node.Name);
         AddMismatch(result, "virtualAccessibleName", locator?.VirtualAccessibleName ?? entry.VirtualAccessibleName, node.VirtualAccessibleName);
         AddMismatch(result, "description", locator?.Description ?? entry.Description, node.Description);
+        AddMismatch(result, "textPreview", locator?.TextPreview, node.TextPreview);
+        AddMismatch(result, "textSelected", locator?.TextSelected, node.TextSelected);
+        AddMismatch(result, "textWord", locator?.TextWord, node.TextWord);
+        AddMismatch(result, "textSentence", locator?.TextSentence, node.TextSentence);
+        AddMismatch(result, "currentValue", locator?.CurrentValue, node.CurrentValue);
+        AddMismatch(result, "minimumValue", locator?.MinimumValue, node.MinimumValue);
+        AddMismatch(result, "maximumValue", locator?.MaximumValue, node.MaximumValue);
         AddMismatch(result, "parentRole", locator?.ParentRole ?? entry.ParentRole, node.Parent?.Role ?? "");
         AddMismatch(result, "parentName", locator?.ParentName ?? entry.ParentName, node.Parent?.Name ?? "");
         AddMismatch(result, "path", locator?.Path ?? entry.Path, node.Path);
@@ -564,6 +575,29 @@ public sealed class JavaNodeResolverService
         if (EqualsNormalized(expected, actual)) return;
         mismatches.Add($"{property} expected '{expected}' but was '{actual ?? ""}'");
     }
+
+    private static int TextValueScore(AccessibleNode node, LocatorSuggestion? locator)
+    {
+        if (locator is null) return 0;
+        var score = 0;
+        if (EqualsNormalized(node.TextPreview, locator.TextPreview)) score += 12;
+        else if (!string.IsNullOrWhiteSpace(locator.TextPreview)) score -= 4;
+        if (EqualsNormalized(node.TextSelected, locator.TextSelected)) score += 10;
+        if (EqualsNormalized(node.TextWord, locator.TextWord)) score += 6;
+        if (EqualsNormalized(node.TextSentence, locator.TextSentence)) score += 8;
+        if (EqualsNormalized(node.CurrentValue, locator.CurrentValue)) score += 14;
+        else if (!string.IsNullOrWhiteSpace(locator.CurrentValue)) score -= 5;
+        if (EqualsNormalized(node.MinimumValue, locator.MinimumValue)) score += 3;
+        if (EqualsNormalized(node.MaximumValue, locator.MaximumValue)) score += 3;
+        return score;
+    }
+
+    private static bool HasTextValueMatch(AccessibleNode node, LocatorSuggestion locator) =>
+        EqualsNormalized(node.TextPreview, locator.TextPreview) ||
+        EqualsNormalized(node.TextSelected, locator.TextSelected) ||
+        EqualsNormalized(node.TextWord, locator.TextWord) ||
+        EqualsNormalized(node.TextSentence, locator.TextSentence) ||
+        EqualsNormalized(node.CurrentValue, locator.CurrentValue);
 
     private static bool EqualsNormalized(string? left, string? right)
     {

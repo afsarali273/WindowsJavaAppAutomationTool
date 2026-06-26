@@ -115,6 +115,52 @@ var tests = new (string Name, Action Run)[]
         Assert(host.ClickedNodes.SequenceEqual([one, two]), "Virtual keypad clicks were not executed through shared action policy");
         Assert(host.TypedTexts.Count == 0, "Unicode typing should not be used for virtual keypad containers");
     }),
+    ("Java resolver uses enriched text and value metadata", () =>
+    {
+        var root = new AccessibleNode { Role = "frame", RoleEnUs = "frame", IndexInParent = 0 };
+        var first = new AccessibleNode
+        {
+            Role = "layered pane",
+            RoleEnUs = "layered pane",
+            Parent = root,
+            IndexInParent = 0,
+            TextPreview = "Amount 12",
+            TextPreviewSource = "descendant accessible labels",
+            CurrentValue = "12"
+        };
+        var second = new AccessibleNode
+        {
+            Role = "layered pane",
+            RoleEnUs = "layered pane",
+            Parent = root,
+            IndexInParent = 1,
+            TextPreview = "Amount 99",
+            TextPreviewSource = "descendant accessible labels",
+            CurrentValue = "99"
+        };
+        root.Children.Add(first);
+        root.Children.Add(second);
+        LocatorGenerator.AssignPaths(root);
+
+        var locator = LocatorGenerator.GenerateLocator(second);
+        var entry = new JavaObjectRepositoryEntry
+        {
+            ObjectKey = "amount_pane",
+            Role = "layered pane",
+            RoleEnUs = "layered pane",
+            Locator = locator,
+            Path = first.Path,
+            IndexPath = LocatorGenerator.BuildIndexPath(first),
+            IndexInParent = 0
+        };
+        var step = new JavaRecordedStep { ObjectKey = "amount_pane", ObjectLocator = locator };
+
+        var resolver = new JavaNodeResolverService();
+        var resolved = resolver.ResolveDetailed(root, entry, step);
+
+        Assert(resolved.Success, resolved.Message);
+        Assert(ReferenceEquals(resolved.Node, second), "Resolver did not use enriched text/value metadata to select the intended pane");
+    }),
     ("Layered pane child labels can be aggregated", () =>
     {
         var pane = new AccessibleNode { Role = "layered pane", RoleEnUs = "layered pane" };
