@@ -279,8 +279,12 @@ Why: inspecting should not disturb the target app unless the user explicitly per
 - [ ] Include parent path.
 - [ ] Include accessible interfaces bitset as parsed flags.
 - [ ] Include available actions.
-- [ ] Include text/value preview lazily.
+- [x] Include text/value preview enrichment from JAB text/value/selection APIs.
+- [x] Aggregate descendant labels for stubborn pane/layered-pane containers.
+- [ ] Add optional lazy "deep enrich selected subtree" command for very large trees.
 - [ ] Include table/list/tree-specific metadata.
+
+**Note:** For custom owner-drawn Swing/AWT panes that expose no `AccessibleText`, no `AccessibleValue`, no selected/active descendant, and no labeled child nodes, Java Access Bridge cannot reliably recover the painted text. Future fallbacks should be explicit and pluggable, for example OCR/image matching or app-specific JVM instrumentation, rather than hidden inside normal locator resolution.
 
 ### P2 - Locator scoring
 

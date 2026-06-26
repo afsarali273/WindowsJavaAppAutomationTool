@@ -1503,7 +1503,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (node is null) return "";
         if (!string.IsNullOrWhiteSpace(node.TextPreview))
             return $"{node.TextPreview}  [{node.TextPreviewSource}]";
-        return node.AccessibleText || node.AccessibleValue || node.AccessibleSelection
+        return node.AccessibleText || node.AccessibleValue || node.AccessibleSelection || node.ChildrenCount > 0
             ? "(no text/value exposed by JAB for this node)"
             : "(node does not expose AccessibleText/AccessibleValue)";
     }
@@ -1658,7 +1658,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         node.AccessibleInterfaces = x.AccessibleInterfaces;
         node.HasManagedDescendantAncestor = node.Parent?.HasManagedDescendantAncestor == true || node.Parent?.ManagesDescendants == true;
         node.ActionNames = node.AccessibleAction ? _bridge.GetAccessibleActions(node.VmId, node.Context).ToList() : [];
-        // TODO: Implement EnrichTextAndValue or remove if not needed
-        // _bridge.EnrichTextAndValue(node, node.X, node.Y);
+        _bridge.EnrichTextAndValue(node, node.X, node.Y);
+        _bridge.EnrichContainerTextFromChildren(node);
     }
 }

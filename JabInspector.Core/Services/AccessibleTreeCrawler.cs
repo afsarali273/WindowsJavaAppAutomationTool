@@ -34,10 +34,12 @@ public sealed class AccessibleTreeCrawler(AccessBridgeService bridge, InspectorL
         node.ObjectDepth = bridge.GetObjectDepth(vmId, context);
         node.HasManagedDescendantAncestor = parent?.HasManagedDescendantAncestor == true || parent?.ManagesDescendants == true;
         if (node.AccessibleAction) node.ActionNames = bridge.GetAccessibleActions(vmId, context).ToList();
+        bridge.EnrichTextAndValue(node);
         if (depth >= MaxDepth) return node;
         var limit = Math.Min(Math.Max(info.ChildrenCount, 0), MaxChildrenPerNode);
         for (var index = 0; index < limit; index++)
             if (bridge.TryGetChildContext(vmId, context, index, out var child)) node.Children.Add(ReadNode(vmId, child, node, depth + 1));
+        bridge.EnrichContainerTextFromChildren(node);
         return node;
     }
 

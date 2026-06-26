@@ -156,6 +156,53 @@ public sealed class AccessBridgeService : IDisposable
         catch (Exception ex) { _logger.Log($"Get text failed: {ex.Message}"); return null; }
     }
 
+    public void EnrichTextAndValue(Models.AccessibleNode node, int x = 0, int y = 0)
+    {
+        if (node.Context == 0) return;
+        EnrichAccessibleText(node, x == 0 ? node.X : x, y == 0 ? node.Y : y);
+        EnrichAccessibleValue(node);
+
+        if (string.IsNullOrWhiteSpace(node.TextPreview))
+        {
+            var fallback = GetSelectedOrVirtualText(node.VmId, node.Context, out var source);
+            if (!string.IsNullOrWhiteSpace(fallback))
+            {
+                node.TextPreview = TrimPreview(fallback);
+                node.TextPreviewSource = source;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(node.TextPreview))
+        {
+            var ownLabel = FirstNonEmpty(node.Name, node.VirtualAccessibleName, node.Description, node.CurrentValue);
+            if (!string.IsNullOrWhiteSpace(ownLabel))
+            {
+                node.TextPreview = TrimPreview(ownLabel);
+                node.TextPreviewSource = "accessible label/value fallback";
+            }
+        }
+    }
+
+    public void EnrichContainerTextFromChildren(Models.AccessibleNode node, int maxDescendants = 80)
+    {
+        if (!ShouldAggregateChildLabels(node)) return;
+        if (!string.IsNullOrWhiteSpace(node.TextPreview) && node.TextPreviewSource != "accessible label/value fallback") return;
+
+        var labels = new List<string>();
+        foreach (var descendant in EnumerateDescendants(node).Skip(1).Take(maxDescendants))
+        {
+            var label = FirstNonEmpty(descendant.Name, descendant.VirtualAccessibleName, descendant.Description, descendant.TextPreview, descendant.CurrentValue);
+            if (string.IsNullOrWhiteSpace(label)) continue;
+            if (labels.Any(existing => string.Equals(existing, label, StringComparison.OrdinalIgnoreCase))) continue;
+            labels.Add(label.Trim());
+            if (labels.Count >= 20) break;
+        }
+
+        if (labels.Count == 0) return;
+        node.TextPreview = TrimPreview(string.Join(" ", labels));
+        node.TextPreviewSource = "descendant accessible labels";
+    }
+
     public string? GetSelectedOrVirtualText(int vmId, long context, out string source)
     {
         source = "";
@@ -194,6 +241,116 @@ public sealed class AccessBridgeService : IDisposable
         }
         catch (Exception ex) { _logger.Log($"Combo/selection text lookup failed: {ex.Message}"); }
         return null;
+    }
+
+    private void EnrichAccessibleText(Models.AccessibleNode node, int x, int y)
+    {
+        try
+        {
+            if (!AccessBridgeNative.getAccessibleTextInfo(node.VmId, node.Context, out var info, x, y)) return;
+
+            node.TextCharCount = info.CharCount;
+            node.TextCaretIndex = info.CaretIndex;
+            node.TextIndexAtPoint = info.IndexAtPoint;
+
+            if (info.CharCount > 0)
+            {
+                var length = Math.Min(info.CharCount + 1, short.MaxValue);
+                var end = Math.Min(info.CharCount - 1, short.MaxValue - 2);
+                var text = new StringBuilder(length);
+                if (AccessBridgeNative.getAccessibleTextRange(node.VmId, node.Context, 0, end, text, (short)length) && text.Length > 0)
+                {
+                    node.TextPreview = TrimPreview(text.ToString());
+                    node.TextPreviewSource = "AccessibleText range";
+                }
+            }
+
+            var itemIndex = Math.Clamp(info.CaretIndex >= 0 ? info.CaretIndex : info.IndexAtPoint, 0, Math.Max(info.CharCount - 1, 0));
+            if (AccessBridgeNative.getAccessibleTextItems(node.VmId, node.Context, out var items, itemIndex))
+            {
+                node.TextWord = items.Word ?? "";
+                node.TextSentence = items.Sentence ?? "";
+                if (string.IsNullOrWhiteSpace(node.TextPreview))
+                {
+                    node.TextPreview = TrimPreview(FirstNonEmpty(items.Word, items.Sentence, items.Letter == '\0' ? "" : items.Letter.ToString()));
+                    node.TextPreviewSource = "AccessibleText items";
+                }
+            }
+
+            if (AccessBridgeNative.getAccessibleTextSelectionInfo(node.VmId, node.Context, out var selection)
+                && !string.IsNullOrWhiteSpace(selection.SelectedText))
+            {
+                node.TextSelected = selection.SelectedText;
+                if (string.IsNullOrWhiteSpace(node.TextPreview))
+                {
+                    node.TextPreview = TrimPreview(selection.SelectedText);
+                    node.TextPreviewSource = "AccessibleText selection";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug($"Text enrichment failed for {node.DisplayName}: {ex.Message}");
+        }
+    }
+
+    private void EnrichAccessibleValue(Models.AccessibleNode node)
+    {
+        try
+        {
+            var current = new StringBuilder(2048);
+            if (AccessBridgeNative.getCurrentAccessibleValueFromContext(node.VmId, node.Context, current, (short)current.Capacity) && current.Length > 0)
+                node.CurrentValue = current.ToString();
+
+            var minimum = new StringBuilder(1024);
+            if (AccessBridgeNative.getMinimumAccessibleValueFromContext(node.VmId, node.Context, minimum, (short)minimum.Capacity) && minimum.Length > 0)
+                node.MinimumValue = minimum.ToString();
+
+            var maximum = new StringBuilder(1024);
+            if (AccessBridgeNative.getMaximumAccessibleValueFromContext(node.VmId, node.Context, maximum, (short)maximum.Capacity) && maximum.Length > 0)
+                node.MaximumValue = maximum.ToString();
+
+            if (string.IsNullOrWhiteSpace(node.TextPreview) && !string.IsNullOrWhiteSpace(node.CurrentValue))
+            {
+                node.TextPreview = TrimPreview(node.CurrentValue);
+                node.TextPreviewSource = "AccessibleValue current";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug($"Value enrichment failed for {node.DisplayName}: {ex.Message}");
+        }
+    }
+
+    private static bool ShouldAggregateChildLabels(Models.AccessibleNode node)
+    {
+        if (node.Children.Count == 0) return false;
+        var role = $"{node.Role} {node.RoleEnUs}";
+        return string.IsNullOrWhiteSpace(node.Name + node.VirtualAccessibleName + node.Description + node.TextPreview + node.CurrentValue)
+               || role.Contains("layered pane", StringComparison.OrdinalIgnoreCase)
+               || role.Contains("root pane", StringComparison.OrdinalIgnoreCase)
+               || role.Contains("panel", StringComparison.OrdinalIgnoreCase)
+               || role.Contains("pane", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<Models.AccessibleNode> EnumerateDescendants(Models.AccessibleNode node)
+    {
+        yield return node;
+        foreach (var child in node.Children)
+        {
+            foreach (var nested in EnumerateDescendants(child))
+                yield return nested;
+        }
+    }
+
+    private static string FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";
+
+    private static string TrimPreview(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "";
+        var normalized = value.Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal).Trim();
+        return normalized.Length <= 240 ? normalized : normalized[..240];
     }
 
     private string? ReadContextLabel(int vmId, long context)

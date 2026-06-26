@@ -115,6 +115,21 @@ var tests = new (string Name, Action Run)[]
         Assert(host.ClickedNodes.SequenceEqual([one, two]), "Virtual keypad clicks were not executed through shared action policy");
         Assert(host.TypedTexts.Count == 0, "Unicode typing should not be used for virtual keypad containers");
     }),
+    ("Layered pane child labels can be aggregated", () =>
+    {
+        var pane = new AccessibleNode { Role = "layered pane", RoleEnUs = "layered pane" };
+        pane.Children.Add(new AccessibleNode { Role = "label", Name = "Amount", Parent = pane });
+        pane.Children.Add(new AccessibleNode { Role = "push button", Name = "1", Parent = pane });
+        pane.Children.Add(new AccessibleNode { Role = "push button", Name = "2", Parent = pane });
+
+        var labels = JavaVirtualKeypadService.EnumerateDescendants(pane)
+            .Skip(1)
+            .Select(x => x.Name)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
+
+        Assert(labels.SequenceEqual(["Amount", "1", "2"]), "Layered pane descendant labels were not enumerable for enrichment");
+    }),
     ("Diagnostics bitness", () => Assert(StartupDiagnostics.Generate().Any(x => x.Contains("64-bit process")), "Bitness diagnostic missing")),
     ("Windows classifier detects Java", () =>
     {
