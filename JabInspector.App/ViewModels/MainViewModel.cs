@@ -693,9 +693,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public void ReportPlayback(string result) => PlaybackOutput = result;
     public void Log(string message) => _logger.Log(message);
 
-    public bool StartJavaRecordingSession(string sessionName, string applicationAlias)
+    public bool StartJavaRecordingSession(string sessionName, string applicationAlias, bool appendExisting = false)
     {
-        _logger.Debug($"Recording session start requested. JavaMode={IsJavaMode}, HasWindow={CurrentWindow is not null}, HasRoot={Root is not null}, Session='{sessionName}', Alias='{applicationAlias}'.");
+        _logger.Debug($"Recording session start requested. JavaMode={IsJavaMode}, HasWindow={CurrentWindow is not null}, HasRoot={Root is not null}, Session='{sessionName}', Alias='{applicationAlias}', AppendExisting={appendExisting}.");
         if (!IsJavaMode || CurrentWindow is null || Root is null)
         {
             RecordingStatus = "Attach to a Java window before starting a recording session.";
@@ -703,29 +703,48 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return false;
         }
 
-        var normalizedSessionName = string.IsNullOrWhiteSpace(sessionName) ? $"JavaSession_{DateTime.Now:yyyyMMdd_HHmmss}" : sessionName.Trim();
-        var normalizedAlias = string.IsNullOrWhiteSpace(applicationAlias) ? CurrentWindow.Title : applicationAlias.Trim();
-        var safeSessionName = string.Concat(normalizedSessionName.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
-        RepositoryEntries.Clear();
-        RecordedSteps.Clear();
-        RecordingWindowScopes.Clear();
-        RecordingWindowScopes.Add(_javaRepository.CreateWindowLocator(CurrentWindow, Root));
-        SelectedRepositoryEntry = null;
-        SelectedRecordedStep = null;
+        var hasExistingSession = !string.IsNullOrWhiteSpace(RecordingSessionName)
+                                 && !string.Equals(RecordingSessionName, "No active recording session", StringComparison.OrdinalIgnoreCase);
+        var normalizedSessionName = string.IsNullOrWhiteSpace(sessionName)
+            ? appendExisting && hasExistingSession ? RecordingSessionName : $"JavaSession_{DateTime.Now:yyyyMMdd_HHmmss}"
+            : sessionName.Trim();
+        var normalizedAlias = string.IsNullOrWhiteSpace(applicationAlias)
+            ? appendExisting && !string.IsNullOrWhiteSpace(RecordingApplicationAlias) ? RecordingApplicationAlias : CurrentWindow.Title
+            : applicationAlias.Trim();
+        if (!appendExisting)
+        {
+            RepositoryEntries.Clear();
+            RecordedSteps.Clear();
+            RecordingWindowScopes.Clear();
+            SelectedRepositoryEntry = null;
+            SelectedRecordedStep = null;
+        }
+
+        RememberRecordingWindowScope(CurrentWindow);
         RecordingSessionName = normalizedSessionName;
         RecordingApplicationAlias = normalizedAlias;
-        RecordingProjectPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "JabInspectorRecordings", $"{safeSessionName}.jrecording.json");
+        if (!appendExisting || string.IsNullOrWhiteSpace(RecordingProjectPath))
+        {
+            RecordingProjectPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "JabInspectorRecordings",
+                GetDefaultRecordingProjectFileName());
+        }
+
         IsRecordingActive = true;
         IsRecordingPaused = false;
-        RecordingStatus = $"Preparing recorder for {normalizedAlias}...";
+        RecordingStatus = appendExisting
+            ? $"Resuming recorder for {normalizedAlias}. Next step will be {RecordedSteps.Count + 1}."
+            : $"Preparing recorder for {normalizedAlias}...";
         PlaybackOutput = "Playback output will appear here.";
         RefreshRecordingSurface();
         var preScanSucceeded = RefreshCurrentJavaTree("recording pre-scan");
+        var modeText = appendExisting ? "resumed" : "active";
         RecordingStatus = preScanSucceeded
-            ? $"Recording session '{normalizedSessionName}' is active for {normalizedAlias}. Pre-scanned {CountNodes(Root):N0} node(s)."
-            : $"Recording session '{normalizedSessionName}' is active for {normalizedAlias}. Pre-scan could not refresh the tree.";
+            ? $"Recording session '{normalizedSessionName}' is {modeText} for {normalizedAlias}. Pre-scanned {CountNodes(Root):N0} node(s). Next step: {RecordedSteps.Count + 1}."
+            : $"Recording session '{normalizedSessionName}' is {modeText} for {normalizedAlias}. Pre-scan could not refresh the tree. Next step: {RecordedSteps.Count + 1}.";
         RefreshRecordingSurface();
-        _logger.Log($"Recording session started. Session='{RecordingSessionName}', Alias='{RecordingApplicationAlias}', ProjectPath='{RecordingProjectPath}', RootNode='{Root?.DisplayName ?? "(none)"}', ExistingSteps={RecordedSteps.Count}, ExistingObjects={RepositoryEntries.Count}, PreScanSucceeded={preScanSucceeded}.");
+        _logger.Log($"Recording session {(appendExisting ? "resumed/appended" : "started")}. Session='{RecordingSessionName}', Alias='{RecordingApplicationAlias}', ProjectPath='{RecordingProjectPath}', RootNode='{Root?.DisplayName ?? "(none)"}', ExistingSteps={RecordedSteps.Count}, ExistingObjects={RepositoryEntries.Count}, PreScanSucceeded={preScanSucceeded}.");
         return true;
     }
 
@@ -912,6 +931,75 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         RefreshRecordingSurface();
         _logger.Log($"Deleted recorded step. PreviousSequence={targetSequence}, RemainingSteps={RecordingStepCount}.");
         return true;
+    }
+
+    public int CountRecordedStepsUsingSelectedRepositoryEntry()
+    {
+        if (SelectedRepositoryEntry is null) return 0;
+        return RecordedSteps.Count(step => string.Equals(step.ObjectKey, SelectedRepositoryEntry.ObjectKey, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public bool DeleteSelectedRepositoryEntry(bool deleteReferencingSteps = false)
+    {
+        if (SelectedRepositoryEntry is null)
+        {
+            RecordingStatus = "Select a repository object before deleting.";
+            return false;
+        }
+
+        var deleted = SelectedRepositoryEntry;
+        var referencingSteps = RecordedSteps
+            .Where(step => string.Equals(step.ObjectKey, deleted.ObjectKey, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(step => step.Sequence)
+            .ToList();
+
+        if (referencingSteps.Count > 0 && !deleteReferencingSteps)
+        {
+            RecordingStatus = $"Repository object '{deleted.ObjectKey}' is used by {referencingSteps.Count} recorded step(s). Confirm deletion from Recorder Studio to remove those steps too.";
+            _logger.Log($"Repository delete blocked pending confirmation. ObjectKey='{deleted.ObjectKey}', ReferencingSteps={referencingSteps.Count}.");
+            return false;
+        }
+
+        RepositoryEntries.Remove(deleted);
+        if (referencingSteps.Count > 0)
+        {
+            var remaining = RecordedSteps
+                .Where(step => !string.Equals(step.ObjectKey, deleted.ObjectKey, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(step => step.Sequence)
+                .ToList();
+            RecordedSteps.Clear();
+            for (var i = 0; i < remaining.Count; i++)
+            {
+                remaining[i].Sequence = i + 1;
+                RecordedSteps.Add(remaining[i]);
+            }
+        }
+
+        SelectedRepositoryEntry = RepositoryEntries.FirstOrDefault();
+        SelectedRecordedStep = RecordedSteps.FirstOrDefault();
+        RecordingStatus = referencingSteps.Count == 0
+            ? $"Deleted repository object {deleted.ObjectKey}."
+            : $"Deleted repository object {deleted.ObjectKey} and {referencingSteps.Count} dependent step(s).";
+        RefreshRecordingSurface();
+        _logger.Log($"Repository object deleted. ObjectKey='{deleted.ObjectKey}', DeletedReferencingSteps={referencingSteps.Count}, RemainingObjects={RecordingObjectCount}, RemainingSteps={RecordingStepCount}.");
+        return true;
+    }
+
+    public string GetDefaultRecordingProjectFileName()
+    {
+        if (!string.IsNullOrWhiteSpace(RecordingProjectPath))
+        {
+            var currentFileName = Path.GetFileName(RecordingProjectPath);
+            if (!string.IsNullOrWhiteSpace(currentFileName)) return currentFileName;
+        }
+
+        var logicalName = !string.IsNullOrWhiteSpace(RecordingSessionName)
+                          && !string.Equals(RecordingSessionName, "No active recording session", StringComparison.OrdinalIgnoreCase)
+            ? RecordingSessionName
+            : !string.IsNullOrWhiteSpace(RecordingApplicationAlias)
+                ? $"{RecordingApplicationAlias}_{DateTime.Now:yyyyMMdd_HHmmss}"
+                : $"JavaRecording_{DateTime.Now:yyyyMMdd_HHmmss}";
+        return $"{SanitizeFileName(logicalName)}.jrecording.json";
     }
 
     public bool SaveRecordingProject(string? path = null)
@@ -1437,6 +1525,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             for (var i = 0; i < node.Children.Count; i++) stack.Push(node.Children[i]);
         }
         return count;
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        var sanitized = string.Concat(value.Trim().Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+        return string.IsNullOrWhiteSpace(sanitized) ? $"JavaRecording_{DateTime.Now:yyyyMMdd_HHmmss}" : sanitized;
     }
 
     private void RefreshPropertySurface()

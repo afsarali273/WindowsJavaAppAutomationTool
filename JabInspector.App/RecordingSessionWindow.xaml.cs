@@ -14,6 +14,15 @@ public partial class RecordingSessionWindow : Window
         }
     }
 
+    public RecordingSessionWindow(string? suggestedAlias, string? suggestedSessionName)
+        : this(suggestedAlias)
+    {
+        if (!string.IsNullOrWhiteSpace(suggestedSessionName))
+        {
+            SessionNameBox.Text = suggestedSessionName;
+        }
+    }
+
     public string SessionName => SessionNameBox.Text.Trim();
     public string ApplicationAlias => ApplicationAliasBox.Text.Trim();
 
