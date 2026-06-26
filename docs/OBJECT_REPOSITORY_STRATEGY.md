@@ -270,10 +270,10 @@ This should be shared between desktop playback and API runner.
 ## Implementation milestones
 
 1. Add `schemaVersion` to recording project JSON.
-2. Add `LocatorStrategy` model.
+2. Add `LocatorStrategy` model. **Done: foundational model added in Core.**
 3. Wrap existing locator JSON into `locatorStrategies`.
-4. Add `ResolutionPolicy`.
-5. Add `ResolutionResult` with:
+4. Add `ResolutionPolicy`. **Done: foundational policy added in Core.**
+5. Add `ResolutionResult` with: **Done: resolver now returns detailed status/candidates through `ResolveDetailed`.**
    - status: found, notFound, ambiguous, staleWindow, staleTree;
    - selected node;
    - candidates;

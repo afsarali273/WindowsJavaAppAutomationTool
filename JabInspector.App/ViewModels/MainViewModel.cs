@@ -980,17 +980,21 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return null;
         }
 
-        var resolved = _javaResolver.Resolve(Root, entry, step);
-        if (resolved is null)
+        var resolution = _javaResolver.ResolveDetailed(Root, entry, step);
+        if (!resolution.Success || resolution.Node is null)
         {
-            message = $"Could not resolve '{step.ObjectKey}' against the current Java hierarchy.";
-            _logger.Log($"Resolve recorded step failed. Reason='{message}'.");
+            var closest = resolution.Candidates.Count == 0
+                ? "No close candidates."
+                : string.Join(" | ", resolution.Candidates.Take(3).Select(candidate =>
+                    $"{candidate.DisplayName} score={candidate.Score} mismatches={string.Join("; ", candidate.Mismatches.Take(3))}"));
+            message = $"{resolution.Message} Closest candidates: {closest}";
+            _logger.Log($"Resolve recorded step failed. Status={resolution.Status}, Reason='{message}'.");
             return null;
         }
 
-        message = $"Resolved {step.ObjectKey} to {resolved.DisplayName}.";
-        _logger.Debug($"Resolve recorded step succeeded. Sequence={step.Sequence}, ObjectKey='{step.ObjectKey}', ResolvedNode='{resolved.DisplayName}', Path='{resolved.Path}'.");
-        return resolved;
+        message = $"Resolved {step.ObjectKey} to {resolution.Node.DisplayName} using {resolution.StrategyName}.";
+        _logger.Debug($"Resolve recorded step succeeded. Sequence={step.Sequence}, ObjectKey='{step.ObjectKey}', Strategy='{resolution.StrategyName}', ResolvedNode='{resolution.Node.DisplayName}', Path='{resolution.Node.Path}'.");
+        return resolution.Node;
     }
 
     public bool RefreshCurrentJavaTree(string reason)

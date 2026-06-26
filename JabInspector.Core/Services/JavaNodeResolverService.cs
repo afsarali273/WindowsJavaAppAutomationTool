@@ -6,18 +6,32 @@ public sealed class JavaNodeResolverService
 {
     public AccessibleNode? Resolve(AccessibleNode root, JavaObjectRepositoryEntry entry, JavaRecordedStep? step = null)
     {
+        return ResolveDetailed(root, entry, step).Node;
+    }
+
+    public ResolutionResult ResolveDetailed(
+        AccessibleNode root,
+        JavaObjectRepositoryEntry entry,
+        JavaRecordedStep? step = null,
+        ResolutionPolicy? policy = null)
+    {
         var nodes = Enumerate(root).ToList();
         var locator = step?.ObjectLocator ?? entry.Locator;
+        policy ??= new ResolutionPolicy();
 
-        var uniqueLocatorMatch = TryResolveByUniqueLocator(nodes, entry, locator);
-        if (uniqueLocatorMatch is not null) return uniqueLocatorMatch;
+        var uniqueLocatorMatch = TryResolveByUniqueLocator(nodes, entry, locator, out var uniqueStrategy, out var uniqueMatches);
+        if (uniqueLocatorMatch is not null)
+            return ResolutionResult.Found(uniqueLocatorMatch, uniqueStrategy, BuildCandidates(uniqueMatches, entry, step, locator, policy));
 
         var exactIndexPath = TryResolveByAbsoluteIndexPath(root, entry);
         if (exactIndexPath is not null &&
             Score(exactIndexPath, entry, step) >= 70 &&
             HasStableIdentityMatch(exactIndexPath, entry, locator))
         {
-            return exactIndexPath;
+            return ResolutionResult.Found(
+                exactIndexPath,
+                "absolute-index-path",
+                BuildCandidates([exactIndexPath], entry, step, locator, policy));
         }
 
         var exactPath = nodes
@@ -28,7 +42,10 @@ public sealed class JavaNodeResolverService
             Score(exactPath, entry, step) >= 70 &&
             HasStableIdentityMatch(exactPath, entry, locator))
         {
-            return exactPath;
+            return ResolutionResult.Found(
+                exactPath,
+                "exact-path",
+                BuildCandidates([exactPath], entry, step, locator, policy));
         }
 
         var indexedWeak = TryResolveByIndexedPath(root, entry);
@@ -36,57 +53,80 @@ public sealed class JavaNodeResolverService
             Score(indexedWeak, entry, step) >= 72 &&
             HasStableIdentityMatch(indexedWeak, entry, locator))
         {
-            return indexedWeak;
+            return ResolutionResult.Found(
+                indexedWeak,
+                "indexed-role-path",
+                BuildCandidates([indexedWeak], entry, step, locator, policy));
         }
 
         var ranked = nodes
             .Select(node => (Node: node, Score: Score(node, entry, step)))
             .OrderByDescending(candidate => candidate.Score)
-            .Take(2)
+            .Take(Math.Max(2, policy.MaxCandidates))
             .ToList();
 
-        if (ranked.Count == 0) return null;
+        if (ranked.Count == 0)
+            return ResolutionResult.NotFound("No Java accessibility nodes were available to resolve against.", []);
 
         var best = ranked[0];
-        if (best.Score < 72) return null;
+        var candidates = ranked.Select(x => ToCandidate(x.Node, x.Score, entry, locator)).ToList();
+        if (best.Score < policy.MinimumScore)
+            return ResolutionResult.NotFound(
+                $"Could not resolve '{entry.ObjectKey}'. Best score {best.Score} is below required score {policy.MinimumScore}.",
+                candidates);
 
         if (ranked.Count > 1)
         {
             var second = ranked[1];
-            var ambiguous = best.Score - second.Score < 18;
-            if (ambiguous && !HasStrongDiscriminatorMatch(best.Node, entry, step)) return null;
+            var ambiguous = best.Score - second.Score < policy.AmbiguityScoreDelta;
+            if (ambiguous && policy.RequireUnique && !HasStrongDiscriminatorMatch(best.Node, entry, step))
+            {
+                return ResolutionResult.Ambiguous(
+                    $"Resolution for '{entry.ObjectKey}' is ambiguous. Best score {best.Score}, second score {second.Score}.",
+                    "ranked-fallback",
+                    candidates);
+            }
         }
 
-        return best.Node;
+        return ResolutionResult.Found(best.Node, "ranked-fallback", candidates);
     }
 
     private static AccessibleNode? TryResolveByUniqueLocator(
         IReadOnlyList<AccessibleNode> nodes,
         JavaObjectRepositoryEntry entry,
-        LocatorSuggestion? locator)
+        LocatorSuggestion? locator,
+        out string strategyName,
+        out IReadOnlyList<AccessibleNode> strategyMatches)
     {
-        var attempts = new Func<AccessibleNode, bool>[]
+        var attempts = new (string Name, Func<AccessibleNode, bool> Match)[]
         {
-            node => MatchesExactIndexPath(node, entry, locator) && HasFullIdentityMatch(node, entry, locator),
-            node => MatchesExactXPath(node, locator) && HasFullIdentityMatch(node, entry, locator),
-            node => MatchesExactPath(node, entry, locator) && HasFullIdentityMatch(node, entry, locator),
-            node => MatchesExactIndexPath(node, entry, locator) && HasStableIdentityMatch(node, entry, locator),
-            node => MatchesExactXPath(node, locator) && HasStableIdentityMatch(node, entry, locator),
-            node => MatchesExactPath(node, entry, locator) && HasStableIdentityMatch(node, entry, locator),
-            node => HasSemanticIdentityMatch(node, entry, locator) && BoundsAreCompatible(node, entry, locator)
+            ("strict-index-path", node => MatchesExactIndexPath(node, entry, locator) && HasFullIdentityMatch(node, entry, locator)),
+            ("strict-xpath", node => MatchesExactXPath(node, locator) && HasFullIdentityMatch(node, entry, locator)),
+            ("strict-role-path", node => MatchesExactPath(node, entry, locator) && HasFullIdentityMatch(node, entry, locator)),
+            ("stable-index-path", node => MatchesExactIndexPath(node, entry, locator) && HasStableIdentityMatch(node, entry, locator)),
+            ("stable-xpath", node => MatchesExactXPath(node, locator) && HasStableIdentityMatch(node, entry, locator)),
+            ("stable-role-path", node => MatchesExactPath(node, entry, locator) && HasStableIdentityMatch(node, entry, locator)),
+            ("semantic-bounds", node => HasSemanticIdentityMatch(node, entry, locator) && BoundsAreCompatible(node, entry, locator))
         };
 
         foreach (var attempt in attempts)
         {
             var matches = nodes
-                .Where(attempt)
+                .Where(attempt.Match)
                 .OrderByDescending(node => IdentityScore(node, entry, locator))
                 .Take(2)
                 .ToList();
 
-            if (matches.Count == 1) return matches[0];
+            if (matches.Count == 1)
+            {
+                strategyName = attempt.Name;
+                strategyMatches = matches;
+                return matches[0];
+            }
         }
 
+        strategyName = "";
+        strategyMatches = [];
         return null;
     }
 
@@ -452,6 +492,77 @@ public sealed class JavaNodeResolverService
         var dw = Math.Abs(node.Width - bounds.Width);
         var dh = Math.Abs(node.Height - bounds.Height);
         return dx + dy + dw + dh;
+    }
+
+    private static IReadOnlyList<ResolutionCandidate> BuildCandidates(
+        IReadOnlyList<AccessibleNode> nodes,
+        JavaObjectRepositoryEntry entry,
+        JavaRecordedStep? step,
+        LocatorSuggestion? locator,
+        ResolutionPolicy policy)
+    {
+        return nodes
+            .Select(node => ToCandidate(node, Score(node, entry, step), entry, locator))
+            .OrderByDescending(candidate => candidate.Score)
+            .Take(policy.MaxCandidates)
+            .ToList();
+    }
+
+    private static ResolutionCandidate ToCandidate(
+        AccessibleNode node,
+        int score,
+        JavaObjectRepositoryEntry entry,
+        LocatorSuggestion? locator)
+    {
+        return new ResolutionCandidate(
+            node.DisplayName,
+            score,
+            node.Role,
+            node.RoleEnUs,
+            node.Name,
+            node.VirtualAccessibleName,
+            node.Description,
+            node.Path,
+            LocatorGenerator.BuildIndexPath(node),
+            LocatorGenerator.BuildXPath(node),
+            node.Parent?.Role ?? "",
+            node.Parent?.Name ?? "",
+            new ElementBounds(node.X, node.Y, node.Width, node.Height),
+            BuildMismatches(node, entry, locator));
+    }
+
+    private static IReadOnlyList<string> BuildMismatches(
+        AccessibleNode node,
+        JavaObjectRepositoryEntry entry,
+        LocatorSuggestion? locator)
+    {
+        var result = new List<string>();
+        AddMismatch(result, "roleEnUs", locator?.RoleEnUs ?? entry.RoleEnUs, node.RoleEnUs);
+        AddMismatch(result, "role", locator?.Role ?? entry.Role, node.Role);
+        AddMismatch(result, "name", locator?.Name ?? entry.Name, node.Name);
+        AddMismatch(result, "virtualAccessibleName", locator?.VirtualAccessibleName ?? entry.VirtualAccessibleName, node.VirtualAccessibleName);
+        AddMismatch(result, "description", locator?.Description ?? entry.Description, node.Description);
+        AddMismatch(result, "parentRole", locator?.ParentRole ?? entry.ParentRole, node.Parent?.Role ?? "");
+        AddMismatch(result, "parentName", locator?.ParentName ?? entry.ParentName, node.Parent?.Name ?? "");
+        AddMismatch(result, "path", locator?.Path ?? entry.Path, node.Path);
+        AddMismatch(result, "indexPath", locator?.IndexPath ?? entry.IndexPath, LocatorGenerator.BuildIndexPath(node));
+
+        var expectedDepth = locator?.ObjectDepth ?? entry.ObjectDepth;
+        if (expectedDepth >= 0 && node.ObjectDepth != expectedDepth)
+            result.Add($"objectDepth expected '{expectedDepth}' but was '{node.ObjectDepth}'");
+
+        var expectedIndex = locator?.IndexInParent ?? entry.IndexInParent;
+        if (expectedIndex >= 0 && node.IndexInParent != expectedIndex)
+            result.Add($"indexInParent expected '{expectedIndex}' but was '{node.IndexInParent}'");
+
+        return result;
+    }
+
+    private static void AddMismatch(List<string> mismatches, string property, string? expected, string? actual)
+    {
+        if (string.IsNullOrWhiteSpace(expected)) return;
+        if (EqualsNormalized(expected, actual)) return;
+        mismatches.Add($"{property} expected '{expected}' but was '{actual ?? ""}'");
     }
 
     private static bool EqualsNormalized(string? left, string? right)

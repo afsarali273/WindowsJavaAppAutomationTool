@@ -200,9 +200,9 @@ public sealed class JavaDriverService : IDisposable
                 if (!refresh.Success) return refresh;
             }
 
-            var resolution = ResolveNode(session, request.ObjectKey, request.Locator);
-            if (!resolution.Success || resolution.Node is null)
-                return Fail(resolution.Message, sessionId);
+        var resolution = ResolveNode(session, request.ObjectKey, request.Locator);
+        if (!resolution.Success || resolution.Node is null)
+            return Fail(resolution.Message, sessionId, resolution.Details);
 
             var locator = LocatorGenerator.GenerateLocator(resolution.Node);
             return Ok("Element resolved.", sessionId, new ResolvedElementDto(
@@ -226,9 +226,9 @@ public sealed class JavaDriverService : IDisposable
                 if (!refresh.Success) return refresh;
             }
 
-            var resolution = ResolveNode(session, request.ObjectKey, request.Locator);
-            if (!resolution.Success || resolution.Node is null)
-                return Fail(resolution.Message, sessionId);
+        var resolution = ResolveNode(session, request.ObjectKey, request.Locator);
+        if (!resolution.Success || resolution.Node is null)
+                return Fail(resolution.Message, sessionId, resolution.Details);
 
             var node = resolution.Node;
             if (!TryNormalizeAction(request.Action, out var action, out var actionError))
@@ -422,10 +422,10 @@ public sealed class JavaDriverService : IDisposable
             ObjectDepth = locator.ObjectDepth
         };
 
-        var node = _resolver.Resolve(session.Root, entry, step);
-        return node is null
-            ? new(false, $"Could not resolve '{entry.ObjectKey}' against the current Java hierarchy.", null)
-            : new(true, "Resolved.", node);
+        var resolution = _resolver.ResolveDetailed(session.Root, entry, step);
+        return !resolution.Success || resolution.Node is null
+            ? new(false, resolution.Message, null, resolution)
+            : new(true, $"Resolved using {resolution.StrategyName}.", resolution.Node, resolution);
     }
 
     private static JavaObjectRepositoryEntry CreateRepositoryEntry(LocatorSuggestion locator, JavaWindowInfo window) => new()
@@ -567,11 +567,11 @@ public sealed class JavaDriverService : IDisposable
     };
 
     private static DriverResult Ok(string message, string? sessionId = null, object? data = null) => new(true, message, sessionId, data);
-    private static DriverResult Fail(string message, string? sessionId = null) => new(false, message, sessionId);
+    private static DriverResult Fail(string message, string? sessionId = null, object? data = null) => new(false, message, sessionId, data);
 
     public void Dispose() => _bridge.Dispose();
 
-    private sealed record ResolveResult(bool Success, string Message, AccessibleNode? Node);
+    private sealed record ResolveResult(bool Success, string Message, AccessibleNode? Node, ResolutionResult? Details = null);
 
     private const uint MouseLeftDown = 0x0002;
     private const uint MouseLeftUp = 0x0004;
