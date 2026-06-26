@@ -46,6 +46,7 @@ public sealed record ResolveElementRequest(
     string? ObjectKey = null,
     LocatorSuggestion? Locator = null,
     JavaWindowSelector? Window = null,
+    ResolutionPolicy? ResolutionPolicy = null,
     bool AutoSwitchWindow = true,
     bool RefreshTree = false);
 
@@ -55,6 +56,7 @@ public sealed record JavaActionRequest(
     LocatorSuggestion? Locator = null,
     string? Text = null,
     JavaWindowSelector? Window = null,
+    ResolutionPolicy? ResolutionPolicy = null,
     bool AutoSwitchWindow = true,
     bool RefreshTree = false,
     bool PreferAccessibleAction = true);

@@ -13,7 +13,23 @@ public sealed record ResolutionPolicy(
     int MinimumScore = 72,
     int AmbiguityScoreDelta = 18,
     int MaxCandidates = 5,
-    bool RequireUnique = true);
+    bool RequireUnique = true,
+    int TimeoutMs = 5000,
+    int PollIntervalMs = 200,
+    bool RefreshTreeOnFailure = true,
+    bool AllowCoordinateFallback = false)
+{
+    public static ResolutionPolicy Default { get; } = new();
+
+    public ResolutionPolicy Sanitize() => this with
+    {
+        MinimumScore = Math.Clamp(MinimumScore, 0, 500),
+        AmbiguityScoreDelta = Math.Clamp(AmbiguityScoreDelta, 0, 200),
+        MaxCandidates = Math.Clamp(MaxCandidates, 1, 25),
+        TimeoutMs = Math.Clamp(TimeoutMs, 0, 60000),
+        PollIntervalMs = Math.Clamp(PollIntervalMs, 50, 5000)
+    };
+}
 
 public sealed record LocatorStrategy(
     string Name,

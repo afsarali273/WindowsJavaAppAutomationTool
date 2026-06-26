@@ -1375,6 +1375,12 @@ public partial class MainWindow : Window
 
             var orderedSteps = _viewModel.RecordedSteps.OrderBy(x => x.Sequence).ToList();
             var lines = new List<string>();
+            var playbackResolutionPolicy = new ResolutionPolicy(
+                TimeoutMs: 5000,
+                PollIntervalMs: 200,
+                RefreshTreeOnFailure: true,
+                RequireUnique: true,
+                MaxCandidates: 5);
             for (var index = 0; index < orderedSteps.Count; index++)
             {
                 var step = orderedSteps[index];
@@ -1388,7 +1394,7 @@ public partial class MainWindow : Window
                 }
                 UpdateRecordingBadge();
 
-                var node = _viewModel.ResolveRecordedStep(step, out var message);
+                var node = _viewModel.ResolveRecordedStep(step, out var message, playbackResolutionPolicy);
                 if (node is null)
                 {
                     lines.Add($"Step {step.Sequence}: FAILED - {message}");

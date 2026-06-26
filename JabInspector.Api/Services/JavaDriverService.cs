@@ -200,9 +200,9 @@ public sealed class JavaDriverService : IDisposable
                 if (!refresh.Success) return refresh;
             }
 
-        var resolution = ResolveNode(session, request.ObjectKey, request.Locator);
-        if (!resolution.Success || resolution.Node is null)
-            return Fail(resolution.Message, sessionId, resolution.Details);
+            var resolution = ResolveNodeWithRetry(session, request.ObjectKey, request.Locator, request.ResolutionPolicy);
+            if (!resolution.Success || resolution.Node is null)
+                return Fail(resolution.Message, sessionId, resolution.Details);
 
             var locator = LocatorGenerator.GenerateLocator(resolution.Node);
             return Ok("Element resolved.", sessionId, new ResolvedElementDto(
@@ -226,8 +226,8 @@ public sealed class JavaDriverService : IDisposable
                 if (!refresh.Success) return refresh;
             }
 
-        var resolution = ResolveNode(session, request.ObjectKey, request.Locator);
-        if (!resolution.Success || resolution.Node is null)
+            var resolution = ResolveNodeWithRetry(session, request.ObjectKey, request.Locator, request.ResolutionPolicy);
+            if (!resolution.Success || resolution.Node is null)
                 return Fail(resolution.Message, sessionId, resolution.Details);
 
             var node = resolution.Node;
@@ -391,6 +391,49 @@ public sealed class JavaDriverService : IDisposable
 
     private ResolveResult ResolveNode(JavaDriverSession session, string? objectKey, LocatorSuggestion? locator)
     {
+        return ResolveNode(session, objectKey, locator, ResolutionPolicy.Default);
+    }
+
+    private ResolveResult ResolveNodeWithRetry(
+        JavaDriverSession session,
+        string? objectKey,
+        LocatorSuggestion? locator,
+        ResolutionPolicy? requestedPolicy)
+    {
+        var policy = (requestedPolicy ?? ResolutionPolicy.Default).Sanitize();
+        var started = DateTime.UtcNow;
+        var attempt = 0;
+        ResolveResult? last = null;
+        var refreshedAfterFailure = false;
+
+        while (true)
+        {
+            attempt++;
+            last = ResolveNode(session, objectKey, locator, policy);
+            if (last.Success) return last with { Message = $"{last.Message} Attempts={attempt}." };
+
+            var elapsedMs = (int)(DateTime.UtcNow - started).TotalMilliseconds;
+            if (elapsedMs >= policy.TimeoutMs || policy.TimeoutMs == 0)
+                return last with { Message = $"{last.Message} Attempts={attempt}, elapsedMs={elapsedMs}." };
+
+            if (policy.RefreshTreeOnFailure && !refreshedAfterFailure)
+            {
+                var refresh = RefreshSessionTree(session);
+                refreshedAfterFailure = true;
+                if (!refresh.Success)
+                    return last with { Message = $"{last.Message} Tree refresh after failure also failed: {refresh.Message}" };
+            }
+
+            Thread.Sleep(Math.Min(policy.PollIntervalMs, Math.Max(50, policy.TimeoutMs - elapsedMs)));
+        }
+    }
+
+    private ResolveResult ResolveNode(
+        JavaDriverSession session,
+        string? objectKey,
+        LocatorSuggestion? locator,
+        ResolutionPolicy policy)
+    {
         if (session.Root is null)
             return new(false, "Session tree is empty. Refresh the session first.", null);
 
@@ -422,7 +465,7 @@ public sealed class JavaDriverService : IDisposable
             ObjectDepth = locator.ObjectDepth
         };
 
-        var resolution = _resolver.ResolveDetailed(session.Root, entry, step);
+        var resolution = _resolver.ResolveDetailed(session.Root, entry, step, policy);
         return !resolution.Success || resolution.Node is null
             ? new(false, resolution.Message, null, resolution)
             : new(true, $"Resolved using {resolution.StrategyName}.", resolution.Node, resolution);

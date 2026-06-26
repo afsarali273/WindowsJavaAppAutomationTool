@@ -961,7 +961,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         return true;
     }
 
-    public AccessibleNode? ResolveRecordedStep(JavaRecordedStep step, out string message)
+    public AccessibleNode? ResolveRecordedStep(JavaRecordedStep step, out string message, ResolutionPolicy? policy = null)
     {
         _logger.Debug($"Resolve recorded step requested. Sequence={step.Sequence}, Action={step.ActionKind}, ObjectKey='{step.ObjectKey}', HasRoot={Root is not null}.");
         message = "";
@@ -980,19 +980,42 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return null;
         }
 
-        var resolution = _javaResolver.ResolveDetailed(Root, entry, step);
+        var effectivePolicy = (policy ?? ResolutionPolicy.Default).Sanitize();
+        var started = DateTime.UtcNow;
+        var attempt = 0;
+        var refreshedAfterFailure = false;
+        ResolutionResult resolution;
+
+        while (true)
+        {
+            attempt++;
+            resolution = _javaResolver.ResolveDetailed(Root, entry, step, effectivePolicy);
+            if (resolution.Success && resolution.Node is not null) break;
+
+            var elapsedMs = (int)(DateTime.UtcNow - started).TotalMilliseconds;
+            if (effectivePolicy.TimeoutMs == 0 || elapsedMs >= effectivePolicy.TimeoutMs) break;
+
+            if (effectivePolicy.RefreshTreeOnFailure && !refreshedAfterFailure)
+            {
+                refreshedAfterFailure = true;
+                RefreshCurrentJavaTree($"playback resolve retry for step {step.Sequence}");
+            }
+
+            Thread.Sleep(Math.Min(effectivePolicy.PollIntervalMs, Math.Max(50, effectivePolicy.TimeoutMs - elapsedMs)));
+        }
+
         if (!resolution.Success || resolution.Node is null)
         {
             var closest = resolution.Candidates.Count == 0
                 ? "No close candidates."
                 : string.Join(" | ", resolution.Candidates.Take(3).Select(candidate =>
                     $"{candidate.DisplayName} score={candidate.Score} mismatches={string.Join("; ", candidate.Mismatches.Take(3))}"));
-            message = $"{resolution.Message} Closest candidates: {closest}";
+            message = $"{resolution.Message} Attempts={attempt}. Closest candidates: {closest}";
             _logger.Log($"Resolve recorded step failed. Status={resolution.Status}, Reason='{message}'.");
             return null;
         }
 
-        message = $"Resolved {step.ObjectKey} to {resolution.Node.DisplayName} using {resolution.StrategyName}.";
+        message = $"Resolved {step.ObjectKey} to {resolution.Node.DisplayName} using {resolution.StrategyName} after {attempt} attempt(s).";
         _logger.Debug($"Resolve recorded step succeeded. Sequence={step.Sequence}, ObjectKey='{step.ObjectKey}', Strategy='{resolution.StrategyName}', ResolvedNode='{resolution.Node.DisplayName}', Path='{resolution.Node.Path}'.");
         return resolution.Node;
     }

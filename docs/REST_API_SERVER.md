@@ -177,7 +177,15 @@ Actions and resolve calls also support automatic modal routing. If an `objectKey
   "objectKey": "push_button_open_0",
   "action": "click",
   "autoSwitchWindow": true,
-  "refreshTree": true
+  "refreshTree": true,
+  "resolutionPolicy": {
+    "timeoutMs": 5000,
+    "pollIntervalMs": 200,
+    "refreshTreeOnFailure": true,
+    "requireUnique": true,
+    "allowCoordinateFallback": false,
+    "maxCandidates": 5
+  }
 }
 ```
 
@@ -190,6 +198,12 @@ You can also force routing for one call:
   "window": {
     "title": "Confirm",
     "className": "SunAwtDialog"
+  },
+  "resolutionPolicy": {
+    "timeoutMs": 5000,
+    "pollIntervalMs": 200,
+    "refreshTreeOnFailure": true,
+    "requireUnique": true
   }
 }
 ```
