@@ -137,7 +137,8 @@ Why: inspecting should not disturb the target app unless the user explicitly per
 - [ ] Recording overlay should be click-through and non-focusable.
 - [ ] Recording highlight should flash the exact recorded element or visible ancestor.
 - [ ] Ensure passive recording does not capture clicks inside the inspector itself.
-- [ ] Improve modal detection during recording and playback.
+- [x] Store durable modal/window scopes for recording and playback.
+- [x] Improve modal detection during recording and playback using repository `windowKey` routing.
 - [ ] Add detailed failure logging for missed passive clicks:
   - current window;
   - point;
@@ -146,6 +147,10 @@ Why: inspecting should not disturb the target app unless the user explicitly per
   - JAB logical result;
   - final selected node;
   - bounds.
+
+**Completed:** Added schema-versioned Java window/modal scopes through `JavaWindowLocator`. Recording projects now store top-level `windows`, and repository objects plus recorded steps reference a stable `windowKey`. Desktop playback and the REST API runner prefer this window scope before falling back to legacy title/class/HWND matching.
+
+**Still open:** The visual recorder overlay itself still needs follow/current-modal behavior; the underlying repository and playback/API routing now have the modal identity needed to support it.
 
 ### P1 - Recorder Studio redesign
 
@@ -179,17 +184,19 @@ Why: inspecting should not disturb the target app unless the user explicitly per
   - path;
   - object depth.
 - [x] Store object repository locator JSON.
+- [x] Add schema version to recording project JSON.
+- [x] Add modal/window scope repository with `windowKey`.
 - [ ] Add raw `indexPath` alongside role path.
 - [ ] Add window-relative bounds.
 - [ ] Add window-relative click point.
-- [ ] Add active modal/window context history.
+- [x] Add active modal/window context history foundation via project `windows`.
+- [ ] Add full step-by-step modal transition timeline for recording diagnostics.
 - [ ] Add optional text preview fields:
   - sentence;
   - word;
   - selected text;
   - value.
 - [ ] Add volatile/transient node marker to the visible UI.
-- [ ] Add schema version to recording project JSON.
 
 ## Playback TODOs
 
@@ -197,10 +204,11 @@ Why: inspecting should not disturb the target app unless the user explicitly per
 
 - [x] Use repository-backed resolver.
 - [x] Include virtual/JAWS name and object depth in resolver scoring.
+- [x] Auto-route playback/API actions to recorded Java modal/window using `windowKey`.
 - [ ] Add raw `indexPath` resolution.
 - [ ] Add closest-candidate diagnostics when playback cannot find an element.
 - [ ] Add automatic tree refresh and retry when step resolution fails.
-- [ ] Add modal/window wait strategy per step.
+- [ ] Add modal/window wait strategy per step with explicit timeout and diagnostics.
 - [ ] Add action-specific fallback strategy:
   - semantic JAB action;
   - focus + keyboard;
@@ -225,6 +233,20 @@ Why: inspecting should not disturb the target app unless the user explicitly per
 - [ ] Save playback report.
 
 ## Locator and accessibility metadata TODOs
+
+### P1 - Object repository and window scope
+
+- [x] Keep JSON as the primary repository/project file format.
+- [x] Add `schemaVersion` for forward-compatible recording projects.
+- [x] Add shared Java window/modal scope model.
+- [x] Store `windowKey` on repository objects.
+- [x] Store `windowKey` on recorded steps.
+- [x] Normalize old recordings on load so missing `windowKey` and `windows` are backfilled.
+- [x] Expose repository windows through REST API sessions.
+- [x] Prefer `windowKey` routing in desktop playback and REST API actions.
+- [ ] Add compatibility tests for v1 recording JSON loading/backfill.
+- [ ] Add unit tests for repeated controls in different modal scopes.
+- [ ] Add object repository editor UI for window scope/title match mode.
 
 ### P1 - Locator completeness
 
@@ -337,6 +359,8 @@ Windows mode is intentionally isolated and low priority for now. Do not spend im
 - [ ] Reduce code-behind responsibility to UI orchestration only.
 - [ ] Add tests for `LocatorGenerator`.
 - [ ] Add tests for `JavaNodeResolverService`.
+- [ ] Add tests for `JavaObjectRepositoryService` schema normalization.
+- [ ] Add tests for API/session window-scope routing.
 
 ### P2
 
@@ -352,8 +376,9 @@ Windows mode is intentionally isolated and low priority for now. Do not spend im
 2. Build app-layer `HighlightManager`
 3. Add drag-to-inspect picker (complete)
 4. Extend shared inspection service to manual recorder capture and hierarchy highlight
-5. Formalize object repository schema and locator retry/fallback strategy.
-6. Add playback/API closest-candidate diagnostics and rebind.
-7. Fix overlay follow/current-modal behavior.
-8. Redesign Recorder Studio timeline.
-9. Update README and distribution docs.
+5. Formalize object repository schema and locator retry/fallback strategy. **In progress: schema version, `windowKey`, retry policy, and shared resolver are implemented.**
+6. Add tests for repository schema normalization and modal/window-scope routing.
+7. Add playback/API closest-candidate diagnostics and rebind.
+8. Fix recorder overlay follow/current-modal behavior using the new window scopes.
+9. Redesign Recorder Studio timeline.
+10. Update README and distribution docs.
