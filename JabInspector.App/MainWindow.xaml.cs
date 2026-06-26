@@ -875,7 +875,7 @@ public partial class MainWindow : Window
         var success = actionKind switch
         {
             JavaRecordedActionKind.Focus => _viewModel.FocusSelected(),
-            JavaRecordedActionKind.Click => _viewModel.InvokeDefaultAction() || PhysicalClickForResult(_viewModel.SelectedNode, 1),
+            JavaRecordedActionKind.Click => PhysicalClickForResult(_viewModel.SelectedNode, 1) || _viewModel.InvokeDefaultAction(),
             JavaRecordedActionKind.DoubleClick => PhysicalClickForResult(_viewModel.SelectedNode, 2),
             JavaRecordedActionKind.SetText => _viewModel.SetSelectedText(inputText),
             JavaRecordedActionKind.TypeText => TypeJavaText(inputText),
@@ -932,7 +932,7 @@ public partial class MainWindow : Window
         return sent > 0 || text.Length == 0;
     }
 
-    private void PhysicalClick(AccessibleNode node, int count)
+    private bool PhysicalClick(AccessibleNode node, int count)
     {
         var visualNode = node;
         ElementBounds bounds;
@@ -943,20 +943,27 @@ public partial class MainWindow : Window
             if (HasOnScreenBounds(bounds) || visualNode.Parent is null) break;
             visualNode = visualNode.Parent;
         }
-        if (!HasOnScreenBounds(bounds)) { _viewModel.ReportAutomation("The selected element has no usable on-screen bounds."); return; }
-        if (_viewModel.CurrentWindow is not null) SetForegroundWindow(_viewModel.CurrentWindow.Hwnd);
+        if (!HasOnScreenBounds(bounds))
+        {
+            _viewModel.ReportAutomation("The selected element has no usable on-screen bounds.");
+            return false;
+        }
+
+        if (_viewModel.CurrentWindow is not null)
+        {
+            SetForegroundWindow(_viewModel.CurrentWindow.Hwnd);
+            Thread.Sleep(70);
+        }
+
         PhysicalClickAtPoint(
             new NativePoint { X = bounds.X + bounds.Width / 2, Y = bounds.Y + bounds.Height / 2 },
             count,
             node.DisplayName,
             "physical input");
-    }
-
-    private bool PhysicalClickForResult(AccessibleNode node, int count)
-    {
-        PhysicalClick(node, count);
         return true;
     }
+
+    private bool PhysicalClickForResult(AccessibleNode node, int count) => PhysicalClick(node, count);
 
     private void PhysicalClickAtPoint(NativePoint point, int count, string displayName, string source)
     {
