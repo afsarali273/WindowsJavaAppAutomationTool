@@ -8,11 +8,33 @@ public sealed class JavaObjectRepositoryService
 {
     public JavaRecordingProject CreateProject(string sessionName, string applicationAlias, JavaWindowInfo window) => new()
     {
+        SchemaVersion = 2,
         SessionName = sessionName.Trim(),
         ApplicationAlias = applicationAlias.Trim(),
         CreatedAtUtc = DateTime.UtcNow,
         WindowTitle = window.Title,
-        WindowClassName = window.ClassName
+        WindowClassName = window.ClassName,
+        Windows = [CreateWindowLocator(window)]
+    };
+
+    public JavaWindowLocator CreateWindowLocator(JavaWindowInfo window, AccessibleNode? root = null, string? windowKey = null, int openedByStep = -1) => new()
+    {
+        WindowKey = string.IsNullOrWhiteSpace(windowKey) ? CreateWindowKey(window) : windowKey.Trim(),
+        FriendlyName = string.IsNullOrWhiteSpace(window.Title) ? window.ClassName : window.Title,
+        Title = window.Title,
+        TitleMatch = JavaWindowTitleMatch.Exact,
+        ClassName = window.ClassName,
+        HwndDisplay = window.HwndDisplay,
+        ProcessId = window.ProcessId,
+        VmId = window.VmId,
+        RootRole = root?.Role ?? "",
+        RootRoleEnUs = root?.RoleEnUs ?? "",
+        RootName = root?.Name ?? "",
+        RootVirtualAccessibleName = root?.VirtualAccessibleName ?? "",
+        RootDescription = root?.Description ?? "",
+        RootPath = root?.Path ?? "",
+        OpenedByStep = openedByStep,
+        CapturedAtUtc = DateTime.UtcNow
     };
 
     public JavaObjectRepositoryEntry CreateEntry(JavaWindowInfo window, AccessibleNode node, string objectKey, string friendlyName)
@@ -23,6 +45,7 @@ public sealed class JavaObjectRepositoryService
             ObjectKey = objectKey,
             FriendlyName = string.IsNullOrWhiteSpace(friendlyName) ? node.DisplayName : friendlyName.Trim(),
             CapturedAtUtc = DateTime.UtcNow,
+            WindowKey = CreateWindowKey(window),
             WindowHwndDisplay = window.HwndDisplay,
             WindowTitle = window.Title,
             WindowClassName = window.ClassName,
@@ -65,6 +88,7 @@ public sealed class JavaObjectRepositoryService
 
         entry.Properties =
         [
+            Property("window.key", entry.WindowKey, true),
             Property("window.title", entry.WindowTitle, true),
             Property("window.className", entry.WindowClassName, true),
             Property("window.hwnd", entry.WindowHwndDisplay, true),
@@ -138,6 +162,12 @@ public sealed class JavaObjectRepositoryService
             ObjectKey = entry.ObjectKey,
             InputText = inputText ?? "",
             CapturedAtUtc = DateTime.UtcNow,
+            WindowKey = string.IsNullOrWhiteSpace(entry.WindowKey)
+                ? CreateWindowKey(
+                    window?.Title ?? entry.WindowTitle,
+                    window?.ClassName ?? entry.WindowClassName,
+                    window?.HwndDisplay ?? entry.WindowHwndDisplay)
+                : entry.WindowKey,
             WindowHwndDisplay = window?.HwndDisplay ?? entry.WindowHwndDisplay,
             WindowTitle = window?.Title ?? entry.WindowTitle,
             WindowClassName = window?.ClassName ?? entry.WindowClassName,
@@ -168,6 +198,7 @@ public sealed class JavaObjectRepositoryService
             ObjectKey = step.ObjectKey,
             InputText = step.InputText,
             CapturedAtUtc = DateTime.UtcNow,
+            WindowKey = step.WindowKey,
             WindowHwndDisplay = step.WindowHwndDisplay,
             WindowTitle = step.WindowTitle,
             WindowClassName = step.WindowClassName,
@@ -224,6 +255,7 @@ public sealed class JavaObjectRepositoryService
         builder.AppendLine($"step.name={step.StepName}");
         builder.AppendLine($"step.action={step.ActionKind}");
         builder.AppendLine($"step.objectKey={step.ObjectKey}");
+        builder.AppendLine($"step.windowKey={step.WindowKey}");
         builder.AppendLine($"step.windowHwnd={step.WindowHwndDisplay}");
         builder.AppendLine($"step.windowTitle={step.WindowTitle}");
         builder.AppendLine($"step.windowClassName={step.WindowClassName}");
@@ -266,6 +298,7 @@ public sealed class JavaObjectRepositoryService
 
     public void SaveProject(string path, JavaRecordingProject project)
     {
+        NormalizeProject(project);
         var json = JsonSerializer.Serialize(project, JsonExportService.Options);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, json);
@@ -274,7 +307,59 @@ public sealed class JavaObjectRepositoryService
     public JavaRecordingProject LoadProject(string path)
     {
         var json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<JavaRecordingProject>(json) ?? new JavaRecordingProject();
+        var project = JsonSerializer.Deserialize<JavaRecordingProject>(json, JsonExportService.Options) ?? new JavaRecordingProject();
+        NormalizeProject(project);
+        return project;
+    }
+
+    public void NormalizeProject(JavaRecordingProject project)
+    {
+        project.SchemaVersion = Math.Max(project.SchemaVersion, 2);
+        project.Windows ??= [];
+        project.Repository ??= [];
+        project.Steps ??= [];
+
+        foreach (var entry in project.Repository)
+        {
+            entry.WindowKey = string.IsNullOrWhiteSpace(entry.WindowKey)
+                ? CreateWindowKey(entry.WindowTitle, entry.WindowClassName, entry.WindowHwndDisplay)
+                : entry.WindowKey.Trim();
+
+            UpsertWindow(project.Windows, CreateWindowLocatorFromEntry(entry));
+            EnsureWindowKeyProperty(entry);
+        }
+
+        foreach (var step in project.Steps)
+        {
+            step.WindowKey = string.IsNullOrWhiteSpace(step.WindowKey)
+                ? CreateWindowKey(step.WindowTitle, step.WindowClassName, step.WindowHwndDisplay)
+                : step.WindowKey.Trim();
+
+            UpsertWindow(project.Windows, CreateWindowLocatorFromStep(step));
+        }
+
+        if (project.Windows.Count == 0 && (!string.IsNullOrWhiteSpace(project.WindowTitle) || !string.IsNullOrWhiteSpace(project.WindowClassName)))
+        {
+            var key = CreateWindowKey(project.WindowTitle, project.WindowClassName, "");
+            project.Windows.Add(new JavaWindowLocator
+            {
+                WindowKey = key,
+                FriendlyName = string.IsNullOrWhiteSpace(project.WindowTitle) ? project.WindowClassName : project.WindowTitle,
+                Title = project.WindowTitle,
+                ClassName = project.WindowClassName,
+                CapturedAtUtc = project.CreatedAtUtc == default ? DateTime.UtcNow : project.CreatedAtUtc
+            });
+        }
+    }
+
+    public string CreateWindowKey(JavaWindowInfo window) => CreateWindowKey(window.Title, window.ClassName, window.HwndDisplay);
+
+    public string CreateWindowKey(string title, string className, string hwndDisplay)
+    {
+        var seed = string.Join("_", new[] { className, title }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        if (string.IsNullOrWhiteSpace(seed)) seed = hwndDisplay;
+        var sanitized = Sanitize(seed);
+        return string.IsNullOrWhiteSpace(sanitized) ? "java_window" : $"window_{sanitized}";
     }
 
     public string CreateUniqueObjectKey(string preferredName, IEnumerable<JavaObjectRepositoryEntry> existingEntries)
@@ -297,6 +382,65 @@ public sealed class JavaObjectRepositoryService
         Value = value,
         IsPrimary = primary
     };
+
+    private static JavaWindowLocator CreateWindowLocatorFromEntry(JavaObjectRepositoryEntry entry) => new()
+    {
+        WindowKey = entry.WindowKey,
+        FriendlyName = string.IsNullOrWhiteSpace(entry.WindowTitle) ? entry.WindowClassName : entry.WindowTitle,
+        Title = entry.WindowTitle,
+        TitleMatch = JavaWindowTitleMatch.Exact,
+        ClassName = entry.WindowClassName,
+        HwndDisplay = entry.WindowHwndDisplay,
+        ProcessId = entry.WindowProcessId,
+        VmId = entry.WindowVmId,
+        CapturedAtUtc = entry.CapturedAtUtc == default ? DateTime.UtcNow : entry.CapturedAtUtc
+    };
+
+    private static JavaWindowLocator CreateWindowLocatorFromStep(JavaRecordedStep step) => new()
+    {
+        WindowKey = step.WindowKey,
+        FriendlyName = string.IsNullOrWhiteSpace(step.WindowTitle) ? step.WindowClassName : step.WindowTitle,
+        Title = step.WindowTitle,
+        TitleMatch = JavaWindowTitleMatch.Exact,
+        ClassName = step.WindowClassName,
+        HwndDisplay = step.WindowHwndDisplay,
+        ProcessId = step.WindowProcessId,
+        VmId = step.WindowVmId,
+        OpenedByStep = Math.Max(-1, step.Sequence - 1),
+        CapturedAtUtc = step.CapturedAtUtc == default ? DateTime.UtcNow : step.CapturedAtUtc
+    };
+
+    private static void UpsertWindow(List<JavaWindowLocator> windows, JavaWindowLocator candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate.WindowKey)) return;
+        var existing = windows.FirstOrDefault(x => string.Equals(x.WindowKey, candidate.WindowKey, StringComparison.OrdinalIgnoreCase));
+        if (existing is null)
+        {
+            windows.Add(candidate);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(existing.Title)) existing.Title = candidate.Title;
+        if (string.IsNullOrWhiteSpace(existing.ClassName)) existing.ClassName = candidate.ClassName;
+        if (string.IsNullOrWhiteSpace(existing.HwndDisplay)) existing.HwndDisplay = candidate.HwndDisplay;
+        if (existing.ProcessId == 0) existing.ProcessId = candidate.ProcessId;
+        if (existing.VmId == 0) existing.VmId = candidate.VmId;
+        if (existing.OpenedByStep < 0 && candidate.OpenedByStep >= 0) existing.OpenedByStep = candidate.OpenedByStep;
+    }
+
+    private static void EnsureWindowKeyProperty(JavaObjectRepositoryEntry entry)
+    {
+        entry.Properties ??= [];
+        var existing = entry.Properties.FirstOrDefault(x => string.Equals(x.Name, "window.key", StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            existing.Value = entry.WindowKey;
+            existing.IsPrimary = true;
+            return;
+        }
+
+        entry.Properties.Insert(0, Property("window.key", entry.WindowKey, true));
+    }
 
     private static LocatorSuggestion? TryDeserializeLocator(string json)
     {

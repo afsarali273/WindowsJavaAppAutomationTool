@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using JabInspector.Core.Diagnostics;
 using JabInspector.Core.Models;
 using JabInspector.Core.Services;
@@ -100,6 +101,7 @@ public sealed class JavaDriverService : IDisposable
             return Ok("Session windows returned.", sessionId, new
             {
                 activeWindow = JavaWindowDto.From(session.Window),
+                repositoryWindows = session.Windows,
                 count = windows.Count,
                 windows
             });
@@ -161,11 +163,15 @@ public sealed class JavaDriverService : IDisposable
                 var project = _repositoryService.LoadProject(request.Path);
                 session.Repository.Clear();
                 session.Repository.AddRange(project.Repository);
-                _logger.Log($"API repository loaded. SessionId={sessionId}, Path='{request.Path}', Objects={session.Repository.Count}.");
+                session.Windows.Clear();
+                session.Windows.AddRange(project.Windows);
+                _logger.Log($"API repository loaded. SessionId={sessionId}, Path='{request.Path}', Objects={session.Repository.Count}, Windows={session.Windows.Count}.");
                 return Ok("Repository loaded.", sessionId, new
                 {
                     project.SessionName,
                     project.ApplicationAlias,
+                    windowCount = session.Windows.Count,
+                    windows = session.Windows,
                     objectCount = session.Repository.Count,
                     objects = session.Repository.Select(ToRepositorySummary).ToList()
                 });
@@ -292,9 +298,17 @@ public sealed class JavaDriverService : IDisposable
 
         var entry = session.Repository.FirstOrDefault(x => string.Equals(x.ObjectKey, objectKey, StringComparison.OrdinalIgnoreCase));
         if (entry is null) return Ok("Repository object not loaded; window routing skipped.", session.Id);
-        if (EntryMatchesWindow(entry, session.Window)) return Ok("Session already uses recorded object window.", session.Id);
 
-        var recordedWindow = FindRelatedWindow(session, new JavaWindowSelector(
+        var scope = !string.IsNullOrWhiteSpace(entry.WindowKey)
+            ? session.Windows.FirstOrDefault(x => string.Equals(x.WindowKey, entry.WindowKey, StringComparison.OrdinalIgnoreCase))
+            : null;
+        if (scope is not null && WindowMatchesScope(scope, session.Window) && ScopeProcessMatches(scope, session.Window))
+            return Ok("Session already uses recorded object window scope.", session.Id);
+        if (scope is null && EntryMatchesWindow(entry, session.Window)) return Ok("Session already uses recorded object window.", session.Id);
+
+        var recordedWindow = scope is not null
+            ? FindRelatedWindow(session, scope)
+            : FindRelatedWindow(session, new JavaWindowSelector(
             Hwnd: entry.WindowHwndDisplay,
             Title: entry.WindowTitle,
             ClassName: entry.WindowClassName,
@@ -303,7 +317,13 @@ public sealed class JavaDriverService : IDisposable
             ExactTitle: true));
 
         if (recordedWindow is null)
-            return Fail($"Could not find recorded window/modal '{entry.WindowTitle}' for object '{entry.ObjectKey}'.", session.Id);
+            return Fail($"Could not find recorded window/modal '{scope?.FriendlyName ?? entry.WindowTitle}' for object '{entry.ObjectKey}'.", session.Id, new
+            {
+                entry.ObjectKey,
+                entry.WindowKey,
+                expectedWindow = scope,
+                discoveredWindows = GetRelatedWindows(session).Select(JavaWindowDto.From).ToList()
+            });
 
         SwitchSessionWindow(session, recordedWindow);
         return Ok("Session auto-switched to recorded object window.", session.Id, ToSummary(session));
@@ -326,6 +346,12 @@ public sealed class JavaDriverService : IDisposable
     {
         var related = GetRelatedWindows(session);
         return FindWindow(related, selector) ?? FindWindow(GetWindows(), selector);
+    }
+
+    private JavaWindowInfo? FindRelatedWindow(JavaDriverSession session, JavaWindowLocator scope)
+    {
+        var related = GetRelatedWindows(session);
+        return FindWindow(related, scope) ?? FindWindow(GetWindows(), scope);
     }
 
     private static JavaWindowInfo? FindWindow(IEnumerable<JavaWindowInfo> windows, JavaWindowSelector selector)
@@ -355,6 +381,18 @@ public sealed class JavaDriverService : IDisposable
         return candidates.FirstOrDefault();
     }
 
+    private static JavaWindowInfo? FindWindow(IEnumerable<JavaWindowInfo> windows, JavaWindowLocator scope)
+    {
+        return windows
+            .Where(window => WindowMatchesScope(scope, window))
+            .Where(window => ScopeProcessMatches(scope, window))
+            .OrderByDescending(window => !string.IsNullOrWhiteSpace(scope.HwndDisplay)
+                                         && string.Equals(scope.HwndDisplay, window.HwndDisplay, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(window => !string.IsNullOrWhiteSpace(scope.Title)
+                                        && string.Equals(scope.Title, window.Title, StringComparison.OrdinalIgnoreCase))
+            .FirstOrDefault();
+    }
+
     private void SwitchSessionWindow(JavaDriverSession session, JavaWindowInfo window)
     {
         session.Window = window;
@@ -374,6 +412,41 @@ public sealed class JavaDriverService : IDisposable
             !string.Equals(entry.WindowClassName, window.ClassName, StringComparison.OrdinalIgnoreCase)) return false;
         return string.IsNullOrWhiteSpace(entry.WindowTitle) ||
                string.Equals(entry.WindowTitle, window.Title, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool WindowMatchesScope(JavaWindowLocator scope, JavaWindowInfo window)
+    {
+        if (!string.IsNullOrWhiteSpace(scope.HwndDisplay)
+            && string.Equals(scope.HwndDisplay, window.HwndDisplay, StringComparison.OrdinalIgnoreCase)) return true;
+        if (!string.IsNullOrWhiteSpace(scope.ClassName)
+            && !string.Equals(scope.ClassName, window.ClassName, StringComparison.OrdinalIgnoreCase)) return false;
+
+        return scope.TitleMatch switch
+        {
+            JavaWindowTitleMatch.Contains => string.IsNullOrWhiteSpace(scope.Title) || window.Title.Contains(scope.Title, StringComparison.OrdinalIgnoreCase),
+            JavaWindowTitleMatch.Regex => MatchesRegex(window.Title, scope.Title),
+            _ => string.IsNullOrWhiteSpace(scope.Title) || string.Equals(scope.Title, window.Title, StringComparison.OrdinalIgnoreCase)
+        };
+    }
+
+    private static bool ScopeProcessMatches(JavaWindowLocator scope, JavaWindowInfo window)
+    {
+        if (scope.ProcessId != 0 && scope.ProcessId != window.ProcessId) return false;
+        if (scope.VmId != 0 && scope.VmId != window.VmId) return false;
+        return true;
+    }
+
+    private static bool MatchesRegex(string value, string pattern)
+    {
+        if (string.IsNullOrWhiteSpace(pattern)) return true;
+        try
+        {
+            return Regex.IsMatch(value, pattern, RegexOptions.IgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private DriverResult RefreshSessionTree(JavaDriverSession session)
@@ -471,11 +544,12 @@ public sealed class JavaDriverService : IDisposable
             : new(true, $"Resolved using {resolution.StrategyName}.", resolution.Node, resolution);
     }
 
-    private static JavaObjectRepositoryEntry CreateRepositoryEntry(LocatorSuggestion locator, JavaWindowInfo window) => new()
+    private JavaObjectRepositoryEntry CreateRepositoryEntry(LocatorSuggestion locator, JavaWindowInfo window) => new()
     {
         ObjectKey = "inline_locator",
         FriendlyName = string.IsNullOrWhiteSpace(locator.Name) ? locator.Role : locator.Name,
         CapturedAtUtc = DateTime.UtcNow,
+        WindowKey = _repositoryService.CreateWindowKey(window),
         WindowHwndDisplay = window.HwndDisplay,
         WindowTitle = window.Title,
         WindowClassName = window.ClassName,
@@ -597,6 +671,16 @@ public sealed class JavaDriverService : IDisposable
     {
         entry.ObjectKey,
         entry.FriendlyName,
+        entry.WindowKey,
+        window = new
+        {
+            key = entry.WindowKey,
+            title = entry.WindowTitle,
+            className = entry.WindowClassName,
+            hwnd = entry.WindowHwndDisplay,
+            processId = entry.WindowProcessId,
+            vmId = entry.WindowVmId
+        },
         entry.Role,
         entry.RoleEnUs,
         entry.Name,

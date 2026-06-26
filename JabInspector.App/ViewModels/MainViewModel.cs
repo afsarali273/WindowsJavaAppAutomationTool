@@ -66,6 +66,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ObservableCollection<WindowsAutomationNode> WindowsTree { get; } = [];
     public ObservableCollection<JavaObjectRepositoryEntry> RepositoryEntries { get; } = [];
     public ObservableCollection<JavaRecordedStep> RecordedSteps { get; } = [];
+    public ObservableCollection<JavaWindowLocator> RecordingWindowScopes { get; } = [];
     public ObservableCollection<string> Logs { get; } = [];
     public ObservableCollection<RequirementCheckViewModel> RequirementChecks { get; } = [];
     public IReadOnlyList<InspectorMode> AvailableModes { get; } = Enum.GetValues<InspectorMode>();
@@ -707,6 +708,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         var safeSessionName = string.Concat(normalizedSessionName.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
         RepositoryEntries.Clear();
         RecordedSteps.Clear();
+        RecordingWindowScopes.Clear();
+        RecordingWindowScopes.Add(_javaRepository.CreateWindowLocator(CurrentWindow, Root));
         SelectedRepositoryEntry = null;
         SelectedRecordedStep = null;
         RecordingSessionName = normalizedSessionName;
@@ -793,6 +796,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             var refreshed = _javaRepository.CreateEntry(CurrentWindow, SelectedNode, existing.ObjectKey, existing.FriendlyName);
             var index = RepositoryEntries.IndexOf(existing);
             RepositoryEntries[index] = refreshed;
+            RememberRecordingWindowScope(CurrentWindow);
             SelectedRepositoryEntry = refreshed;
             RecordingStatus = $"Repository refreshed {refreshed.ObjectKey}.";
             RefreshRecordingSurface();
@@ -804,6 +808,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         var key = _javaRepository.CreateUniqueObjectKey(preferredName, RepositoryEntries);
         var entry = _javaRepository.CreateEntry(CurrentWindow, SelectedNode, key, friendlyName ?? SelectedNode.DisplayName);
         RepositoryEntries.Add(entry);
+        RememberRecordingWindowScope(CurrentWindow);
         SelectedRepositoryEntry = entry;
         RecordingStatus = $"Captured repository object {entry.ObjectKey}.";
         RefreshRecordingSurface();
@@ -838,6 +843,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             windowOffsetX,
             windowOffsetY);
         RecordedSteps.Add(step);
+        RememberRecordingWindowScope(CurrentWindow);
         SelectedRecordedStep = step;
         RecordingStatus = $"Recorded step {step.Sequence}: {actionKind} on {entry.ObjectKey}.";
         RefreshRecordingSurface();
@@ -931,6 +937,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             CurrentWindow);
         project.Repository = RepositoryEntries.ToList();
         project.Steps = RecordedSteps.ToList();
+        project.Windows = RecordingWindowScopes.ToList();
         _javaRepository.SaveProject(savePath, project);
         RecordingProjectPath = savePath;
         RecordingStatus = $"Recording project saved to {savePath}.";
@@ -947,6 +954,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         foreach (var entry in project.Repository) RepositoryEntries.Add(entry);
         RecordedSteps.Clear();
         foreach (var step in project.Steps.OrderBy(x => x.Sequence)) RecordedSteps.Add(step);
+        RecordingWindowScopes.Clear();
+        foreach (var window in project.Windows) RecordingWindowScopes.Add(window);
         RecordingSessionName = project.SessionName;
         RecordingApplicationAlias = project.ApplicationAlias;
         RecordingProjectPath = path;
@@ -1178,10 +1187,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool TryAutoAttachJavaWindowForRecordedStep(JavaRecordedStep step, out string message)
     {
         message = "";
+        var stepScope = FindRecordedWindowScope(step);
         if (CurrentWindow is not null
-            && string.Equals(CurrentWindow.Title, step.WindowTitle, StringComparison.Ordinal)
-            && string.Equals(CurrentWindow.ClassName, step.WindowClassName, StringComparison.Ordinal)
-            && CurrentWindow.ProcessId == step.WindowProcessId
+            && ((stepScope is not null && WindowMatchesScope(stepScope, CurrentWindow) && ScopeProcessMatches(stepScope, CurrentWindow))
+                || (string.Equals(CurrentWindow.Title, step.WindowTitle, StringComparison.Ordinal)
+                    && string.Equals(CurrentWindow.ClassName, step.WindowClassName, StringComparison.Ordinal)
+                    && CurrentWindow.ProcessId == step.WindowProcessId))
             && Root is not null)
         {
             return true;
@@ -1195,6 +1206,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             var windows = service.GetJavaWindows();
             lastWindows = windows;
             match = windows.FirstOrDefault(x =>
+                        WindowMatchesScope(stepScope, x)
+                        && ScopeProcessMatches(stepScope, x))
+                    ?? windows.FirstOrDefault(x =>
                         string.Equals(x.Title, step.WindowTitle, StringComparison.Ordinal)
                         && string.Equals(x.ClassName, step.WindowClassName, StringComparison.Ordinal)
                         && x.ProcessId == step.WindowProcessId)
@@ -1266,7 +1280,81 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                || !string.Equals(currentStep.WindowClassName, nextStep.WindowClassName, StringComparison.Ordinal)
                || currentStep.WindowProcessId != nextStep.WindowProcessId
                || currentStep.WindowVmId != nextStep.WindowVmId
+               || !string.Equals(currentStep.WindowKey, nextStep.WindowKey, StringComparison.OrdinalIgnoreCase)
                || !string.Equals(currentStep.WindowHwndDisplay, nextStep.WindowHwndDisplay, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void RememberRecordingWindowScope(JavaWindowInfo? window)
+    {
+        if (window is null) return;
+        var scope = _javaRepository.CreateWindowLocator(window, Root);
+        var existing = RecordingWindowScopes.FirstOrDefault(x => string.Equals(x.WindowKey, scope.WindowKey, StringComparison.OrdinalIgnoreCase));
+        if (existing is null)
+        {
+            RecordingWindowScopes.Add(scope);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(existing.HwndDisplay)) existing.HwndDisplay = scope.HwndDisplay;
+        if (existing.ProcessId == 0) existing.ProcessId = scope.ProcessId;
+        if (existing.VmId == 0) existing.VmId = scope.VmId;
+        if (string.IsNullOrWhiteSpace(existing.RootRole)) existing.RootRole = scope.RootRole;
+        if (string.IsNullOrWhiteSpace(existing.RootRoleEnUs)) existing.RootRoleEnUs = scope.RootRoleEnUs;
+        if (string.IsNullOrWhiteSpace(existing.RootName)) existing.RootName = scope.RootName;
+        if (string.IsNullOrWhiteSpace(existing.RootVirtualAccessibleName)) existing.RootVirtualAccessibleName = scope.RootVirtualAccessibleName;
+        if (string.IsNullOrWhiteSpace(existing.RootDescription)) existing.RootDescription = scope.RootDescription;
+        if (string.IsNullOrWhiteSpace(existing.RootPath)) existing.RootPath = scope.RootPath;
+    }
+
+    private JavaWindowLocator? FindRecordedWindowScope(JavaRecordedStep step)
+    {
+        if (!string.IsNullOrWhiteSpace(step.WindowKey))
+        {
+            var byKey = RecordingWindowScopes.FirstOrDefault(x => string.Equals(x.WindowKey, step.WindowKey, StringComparison.OrdinalIgnoreCase));
+            if (byKey is not null) return byKey;
+        }
+
+        return RecordingWindowScopes.FirstOrDefault(x =>
+            string.Equals(x.Title, step.WindowTitle, StringComparison.Ordinal)
+            && string.Equals(x.ClassName, step.WindowClassName, StringComparison.Ordinal)
+            && (step.WindowProcessId == 0 || x.ProcessId == 0 || x.ProcessId == step.WindowProcessId));
+    }
+
+    private static bool WindowMatchesScope(JavaWindowLocator? scope, JavaWindowInfo window)
+    {
+        if (scope is null) return false;
+        if (!string.IsNullOrWhiteSpace(scope.HwndDisplay)
+            && string.Equals(scope.HwndDisplay, window.HwndDisplay, StringComparison.OrdinalIgnoreCase)) return true;
+        if (!string.IsNullOrWhiteSpace(scope.ClassName)
+            && !string.Equals(scope.ClassName, window.ClassName, StringComparison.OrdinalIgnoreCase)) return false;
+
+        return scope.TitleMatch switch
+        {
+            JavaWindowTitleMatch.Contains => string.IsNullOrWhiteSpace(scope.Title) || window.Title.Contains(scope.Title, StringComparison.OrdinalIgnoreCase),
+            JavaWindowTitleMatch.Regex => MatchesRegex(window.Title, scope.Title),
+            _ => string.IsNullOrWhiteSpace(scope.Title) || string.Equals(window.Title, scope.Title, StringComparison.OrdinalIgnoreCase)
+        };
+    }
+
+    private static bool ScopeProcessMatches(JavaWindowLocator? scope, JavaWindowInfo window)
+    {
+        if (scope is null) return false;
+        if (scope.ProcessId != 0 && scope.ProcessId != window.ProcessId) return false;
+        if (scope.VmId != 0 && scope.VmId != window.VmId) return false;
+        return true;
+    }
+
+    private static bool MatchesRegex(string value, string pattern)
+    {
+        if (string.IsNullOrWhiteSpace(pattern)) return true;
+        try
+        {
+            return System.Text.RegularExpressions.Regex.IsMatch(value, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private AccessibleNode? BuildStableJavaTree(JavaWindowInfo window, string reason, out int finalNodeCount)

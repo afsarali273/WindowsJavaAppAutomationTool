@@ -11,4 +11,5 @@ internal sealed class JavaDriverSession
     public DateTime CreatedAtUtc { get; init; } = DateTime.UtcNow;
     public DateTime LastRefreshedAtUtc { get; set; } = DateTime.UtcNow;
     public List<JavaObjectRepositoryEntry> Repository { get; } = [];
+    public List<JavaWindowLocator> Windows { get; } = [];
 }

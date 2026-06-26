@@ -5,6 +5,7 @@ public sealed class JavaObjectRepositoryEntry
     public string ObjectKey { get; set; } = "";
     public string FriendlyName { get; set; } = "";
     public DateTime CapturedAtUtc { get; set; }
+    public string WindowKey { get; set; } = "";
     public string WindowHwndDisplay { get; set; } = "";
     public string WindowTitle { get; set; } = "";
     public string WindowClassName { get; set; } = "";

@@ -172,6 +172,8 @@ Content-Type: application/json
 
 Actions and resolve calls also support automatic modal routing. If an `objectKey` comes from a recorder repository, the API will try to switch to the recorded window/modal before resolving the object:
 
+Recorder projects now include a top-level `windows` collection and each repository object/step stores a `windowKey`. The API loads those scopes with the repository and prefers `windowKey` routing before falling back to legacy title/class/process/HWND matching. `GET /api/java/sessions/{sessionId}/windows` returns both currently discovered Java windows and the repository window scopes loaded for the session.
+
 ```json
 {
   "objectKey": "push_button_open_0",

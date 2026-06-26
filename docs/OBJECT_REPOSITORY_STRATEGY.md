@@ -60,6 +60,28 @@ The current locator JSON is a good foundation because it already carries:
 
 This is enough for a first robust repository. We should not replace JSON yet. Instead, evolve it into a versioned object repository format that wraps one or more locator strategies per object.
 
+## Implemented window/modal scope
+
+Recording projects now use `schemaVersion: 2` and include a top-level `windows` collection. Each entry is a reusable `JavaWindowLocator`:
+
+- `windowKey`: stable repository key such as `window_sunawtdialog_download`;
+- title/class/HWND/process/JVM metadata;
+- title match mode: exact, contains, or regex;
+- optional root accessible metadata captured from the inspected tree;
+- `openedByStep` when the scope was inferred from a recorded playback step.
+
+Repository objects and recorded steps both store `windowKey` in addition to the older window title/class/HWND fields. This keeps older recordings compatible while giving new recordings a proper modal/window identity.
+
+The resolver flow now treats window routing as part of object identity:
+
+1. Find the repository object by `objectKey`.
+2. Read the object `windowKey`.
+3. Resolve that key against the project/session `windows` collection.
+4. Auto-switch to the matching Java window/modal before refreshing the tree and resolving the element.
+5. Fall back to the legacy title/class/process/HWND fields only when no window scope is available.
+
+This is especially important for Java dialogs where multiple buttons or tabs have similar properties. The API runner and desktop playback share the same repository fields, so an object recorded inside a child modal is expected to replay inside that same modal scope rather than the parent window.
+
 ## Proposed repository schema
 
 Recommended direction:
@@ -73,11 +95,26 @@ Recommended direction:
     "processName": "javaw",
     "mainWindowTitle": "Java OpenStreetMap Editor"
   },
+  "windows": [
+    {
+      "windowKey": "window_sunawtdialog_download",
+      "friendlyName": "Download",
+      "title": "Download",
+      "titleMatch": "Exact",
+      "className": "SunAwtDialog",
+      "hwndDisplay": "0x904CC",
+      "processId": 27516,
+      "vmId": 657816,
+      "rootRole": "dialog",
+      "rootName": "Download"
+    }
+  ],
   "objects": [
     {
       "objectKey": "downloadDialog.tabs.boundingBox",
       "friendlyName": "Bounding Box tab",
       "objectType": "page tab",
+      "windowKey": "window_sunawtdialog_download",
       "window": {
         "title": "Download",
         "className": "SunAwtDialog",
@@ -269,7 +306,7 @@ This should be shared between desktop playback and API runner.
 
 ## Implementation milestones
 
-1. Add `schemaVersion` to recording project JSON.
+1. Add `schemaVersion` to recording project JSON. **Done.**
 2. Add `LocatorStrategy` model. **Done: foundational model added in Core.**
 3. Wrap existing locator JSON into `locatorStrategies`.
 4. Add `ResolutionPolicy`. **Done: policy added in Core and exposed through API resolve/action requests.**
@@ -278,9 +315,10 @@ This should be shared between desktop playback and API runner.
    - selected node;
    - candidates;
    - mismatch diagnostics.
-6. Update recorder playback to use `ResolutionResult`.
-7. Update REST API runner to use the same resolver service.
-8. Add unit tests for similar sibling controls:
+6. Update recorder playback to use `ResolutionResult`. **Done.**
+7. Update REST API runner to use the same resolver service. **Done.**
+8. Add shared Java window/modal scope with `windowKey`. **Done: recording projects store `windows`, repository objects and steps reference `windowKey`, desktop playback and REST API routing prefer scope matching.**
+9. Add unit tests for similar sibling controls:
    - page tabs;
    - repeated OK buttons in different modals;
    - repeated text fields;
