@@ -9,7 +9,7 @@ The current product focus is:
 3. Smooth Java recorder and playback.
 4. Clean, compact, Inspect.exe/Spy++-style desktop UX.
 
-Windows/UIA/Win32/FlaUI support exists as an isolated foundation, but Java inspection and recording are the near-term priority.
+Windows/UIA/Win32/FlaUI support exists as an isolated foundation, but Java inspection, Java recording/playback, and the Java REST/API runner are the priority. Windows app implementation is intentionally low priority for now.
 
 ## Priority legend
 
@@ -320,7 +320,7 @@ Why: inspecting should not disturb the target app unless the user explicitly per
 
 ## Windows backend TODOs
 
-Windows mode is intentionally isolated for now.
+Windows mode is intentionally isolated and low priority for now. Do not spend implementation effort here until the Java inspector, recorder, object repository, playback, and API runner are robust.
 
 - [ ] Keep Win/UIA/Win32 backend separate from Java backend.
 - [ ] Revisit shared UI once Java workflow stabilizes.
@@ -352,8 +352,8 @@ Windows mode is intentionally isolated for now.
 2. Build app-layer `HighlightManager`
 3. Add drag-to-inspect picker (complete)
 4. Extend shared inspection service to manual recorder capture and hierarchy highlight
-5. Fix overlay follow/current-modal behavior.
-6. Redesign Recorder Studio timeline.
-7. Add index-path locator.
-8. Add playback failure diagnostics and rebind.
+5. Formalize object repository schema and locator retry/fallback strategy.
+6. Add playback/API closest-candidate diagnostics and rebind.
+7. Fix overlay follow/current-modal behavior.
+8. Redesign Recorder Studio timeline.
 9. Update README and distribution docs.
