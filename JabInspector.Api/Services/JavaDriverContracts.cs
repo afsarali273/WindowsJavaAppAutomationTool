@@ -61,6 +61,19 @@ public sealed record JavaActionRequest(
     bool RefreshTree = false,
     bool PreferAccessibleAction = true);
 
+public sealed record JavaOneShotActionRequest(
+    string Action,
+    string? RepositoryPath = null,
+    string? ObjectKey = null,
+    LocatorSuggestion? Locator = null,
+    string? Text = null,
+    JavaWindowSelector? Window = null,
+    ResolutionPolicy? ResolutionPolicy = null,
+    bool AutoSwitchWindow = true,
+    bool RefreshTree = true,
+    bool PreferAccessibleAction = true,
+    bool KeepSession = false);
+
 public sealed record DriverResult(
     bool Success,
     string Message,

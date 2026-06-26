@@ -224,37 +224,70 @@ public sealed class JavaDriverService : IDisposable
         lock (_sync)
         {
             if (!TryGetSession(sessionId, out var session, out var result)) return result;
-            var routed = RouteSessionWindow(session, request.ObjectKey, request.Window, request.AutoSwitchWindow);
-            if (!routed.Success) return routed;
+            return ExecuteActionCore(session, request, isOneShot: false);
+        }
+    }
 
-            if (request.RefreshTree || session.Root is null)
+    public DriverResult ExecuteOneShotAction(JavaOneShotActionRequest request)
+    {
+        lock (_sync)
+        {
+            JavaRecordingProject? project = null;
+            if (!string.IsNullOrWhiteSpace(request.RepositoryPath))
             {
-                var refresh = RefreshSessionTree(session);
-                if (!refresh.Success) return refresh;
+                if (!File.Exists(request.RepositoryPath))
+                    return Fail($"Repository/project file was not found: {request.RepositoryPath}");
+
+                try
+                {
+                    project = _repositoryService.LoadProject(request.RepositoryPath);
+                }
+                catch (Exception ex)
+                {
+                    return Fail($"Could not load repository: {ex.Message}");
+                }
             }
 
-            var resolution = ResolveNodeWithRetry(session, request.ObjectKey, request.Locator, request.ResolutionPolicy);
-            if (!resolution.Success || resolution.Node is null)
-                return Fail(resolution.Message, sessionId, resolution.Details);
+            var window = FindInitialWindow(request, project);
+            if (window is null)
+                return Fail("No matching Java window was found for one-shot action. Provide window title/hwnd/className/processId, or a repository object with window metadata.");
 
-            var node = resolution.Node;
-            if (!TryNormalizeAction(request.Action, out var action, out var actionError))
-                return Fail(actionError, sessionId);
-
-            var execution = _javaActions.Execute(
-                action,
-                node,
-                request.Text ?? "",
-                new ApiJavaActionHost(this, session.Window, request.PreferAccessibleAction));
-            if (!execution.Success) return Fail($"Action '{request.Action}' failed for {node.DisplayName}: {execution.Message}", sessionId);
-
-            return Ok($"Action '{action}' executed.", sessionId, new
+            var session = new JavaDriverSession
             {
-                action,
-                element = new ResolvedElementDto(node.DisplayName, LocatorGenerator.GenerateLocator(node), _automation.GetActions(node)),
-                message = execution.Message,
-                text = execution.Text
-            });
+                Id = Guid.NewGuid().ToString("N"),
+                Window = window
+            };
+
+            if (project is not null)
+            {
+                session.Repository.AddRange(project.Repository);
+                session.Windows.AddRange(project.Windows);
+            }
+
+            var actionRequest = new JavaActionRequest(
+                request.Action,
+                request.ObjectKey,
+                request.Locator,
+                request.Text,
+                request.Window,
+                request.ResolutionPolicy,
+                request.AutoSwitchWindow,
+                request.RefreshTree,
+                request.PreferAccessibleAction);
+
+            if (request.KeepSession)
+            {
+                _sessions[session.Id] = session;
+                _logger.Log($"API one-shot action created keep-alive session. SessionId={session.Id}, Window='{window.Title}', Hwnd={window.HwndDisplay}.");
+            }
+
+            var result = ExecuteActionCore(session, actionRequest, isOneShot: true);
+            if (!request.KeepSession)
+            {
+                _logger.Log($"API one-shot action completed with ephemeral session. SessionId={session.Id}, Success={result.Success}.");
+            }
+
+            return result;
         }
     }
 
@@ -276,6 +309,89 @@ public sealed class JavaDriverService : IDisposable
             return windows.FirstOrDefault(x => x.Title.Contains(request.Title, StringComparison.OrdinalIgnoreCase));
 
         return windows.FirstOrDefault();
+    }
+
+    private JavaWindowInfo? FindInitialWindow(JavaOneShotActionRequest request, JavaRecordingProject? project)
+    {
+        var windows = GetWindows();
+        if (request.Window is not null)
+        {
+            var selected = FindWindow(windows, request.Window);
+            if (selected is not null) return selected;
+        }
+
+        if (project is not null && !string.IsNullOrWhiteSpace(request.ObjectKey))
+        {
+            var entry = project.Repository.FirstOrDefault(x => string.Equals(x.ObjectKey, request.ObjectKey, StringComparison.OrdinalIgnoreCase));
+            if (entry is not null)
+            {
+                var scope = !string.IsNullOrWhiteSpace(entry.WindowKey)
+                    ? project.Windows.FirstOrDefault(x => string.Equals(x.WindowKey, entry.WindowKey, StringComparison.OrdinalIgnoreCase))
+                    : null;
+                if (scope is not null)
+                {
+                    var scoped = FindWindow(windows, scope);
+                    if (scoped is not null) return scoped;
+                }
+
+                var recorded = FindWindow(windows, new JavaWindowSelector(
+                    entry.WindowHwndDisplay,
+                    entry.WindowTitle,
+                    entry.WindowClassName,
+                    entry.WindowProcessId == 0 ? null : entry.WindowProcessId,
+                    entry.WindowVmId == 0 ? null : entry.WindowVmId,
+                    ExactTitle: true));
+                if (recorded is not null) return recorded;
+            }
+        }
+
+        if (project?.Windows.Count > 0)
+        {
+            foreach (var scope in project.Windows)
+            {
+                var scoped = FindWindow(windows, scope);
+                if (scoped is not null) return scoped;
+            }
+        }
+
+        return windows.FirstOrDefault();
+    }
+
+    private DriverResult ExecuteActionCore(JavaDriverSession session, JavaActionRequest request, bool isOneShot)
+    {
+        var routed = RouteSessionWindow(session, request.ObjectKey, request.Window, request.AutoSwitchWindow);
+        if (!routed.Success) return routed;
+
+        if (request.RefreshTree || session.Root is null)
+        {
+            var refresh = RefreshSessionTree(session);
+            if (!refresh.Success) return refresh;
+        }
+
+        var resolution = ResolveNodeWithRetry(session, request.ObjectKey, request.Locator, request.ResolutionPolicy);
+        if (!resolution.Success || resolution.Node is null)
+            return Fail(resolution.Message, session.Id, resolution.Details);
+
+        var node = resolution.Node;
+        if (!TryNormalizeAction(request.Action, out var action, out var actionError))
+            return Fail(actionError, session.Id);
+
+        var execution = _javaActions.Execute(
+            action,
+            node,
+            request.Text ?? "",
+            new ApiJavaActionHost(this, session.Window, request.PreferAccessibleAction));
+        if (!execution.Success) return Fail($"Action '{request.Action}' failed for {node.DisplayName}: {execution.Message}", session.Id);
+
+        return Ok($"Action '{action}' executed.", session.Id, new
+        {
+            mode = isOneShot ? "one-shot" : "session",
+            session = ToSummary(session),
+            action,
+            element = new ResolvedElementDto(node.DisplayName, LocatorGenerator.GenerateLocator(node), _automation.GetActions(node)),
+            message = execution.Message,
+            text = execution.Text
+        });
     }
 
     private DriverResult RouteSessionWindow(JavaDriverSession session, string? objectKey, JavaWindowSelector? selector, bool autoSwitch)

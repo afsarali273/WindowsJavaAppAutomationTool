@@ -20,7 +20,7 @@ The OpenAPI JSON document is available at:
 http://127.0.0.1:5055/swagger/v1/swagger.json
 ```
 
-## Basic flow
+## Stateful session flow
 
 1. Discover Java windows.
 
@@ -110,6 +110,48 @@ Content-Type: application/json
 }
 ```
 
+## Session-independent one-shot flow
+
+For external clients that do not want to keep a session open, use:
+
+```http
+POST http://127.0.0.1:5055/api/java/actions/run
+Content-Type: application/json
+
+{
+  "repositoryPath": "C:\\path\\to\\recording-project.jrecording.json",
+  "objectKey": "page_tab_bounding_box_2",
+  "action": "click",
+  "window": {
+    "title": "Download",
+    "className": "SunAwtDialog",
+    "exactTitle": false
+  },
+  "refreshTree": true,
+  "autoSwitchWindow": true,
+  "keepSession": false,
+  "resolutionPolicy": {
+    "timeoutMs": 5000,
+    "pollIntervalMs": 200,
+    "refreshTreeOnFailure": true,
+    "requireUnique": true
+  }
+}
+```
+
+The API will:
+
+1. discover Java windows;
+2. attach to the requested/current matching window;
+3. load the recorder repository if provided;
+4. route to the recorded modal/window using `windowKey` when available;
+5. refresh the accessibility tree;
+6. resolve the object/locator;
+7. execute the action through the shared Core action policy;
+8. discard the ephemeral session unless `keepSession` is `true`.
+
+If `keepSession` is `true`, the response includes a usable `sessionId` and the created session remains available through the normal `/api/java/sessions/{sessionId}/...` endpoints.
+
 ## Endpoints
 
 - `GET /api/health`
@@ -125,6 +167,7 @@ Content-Type: application/json
 - `GET /api/java/sessions/{sessionId}/repository`
 - `POST /api/java/sessions/{sessionId}/elements/resolve`
 - `POST /api/java/sessions/{sessionId}/actions`
+- `POST /api/java/actions/run`
 
 ## Supported actions
 

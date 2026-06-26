@@ -254,6 +254,7 @@ Why: inspecting should not disturb the target app unless the user explicitly per
 - [x] Use shared virtual keypad planner from desktop Automation/Recorder actions.
 - [x] Use shared virtual keypad planner from REST API `typeText`.
 - [x] Add shared Java action execution policy for recorder/playback/API.
+- [x] Add REST one-shot action endpoint for session-independent API clients.
 - [x] Keep only host-specific primitives at module edges:
   - foreground/focus routing;
   - physical mouse input;
