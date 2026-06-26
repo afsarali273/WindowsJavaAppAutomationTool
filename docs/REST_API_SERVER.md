@@ -139,6 +139,8 @@ The resolver uses the same rich locator snapshot as the desktop inspector/record
 
 `typeText` shares the same Java virtual-keypad planner used by the desktop recorder. If the resolved target is a pane/layered-pane/panel that looks like an on-screen keypad, the API resolves child keys by accessible name/description/virtual name/text/value and physically clicks them in sequence. Otherwise it falls back to the JAB text setter path.
 
+Java action fallback order is shared with the desktop recorder/playback through the Core action execution service. The API supplies only host primitives such as foreground routing, physical click, Unicode keyboard input, and JAB set/get/focus/default-action calls.
+
 ## Stability and production-readiness notes
 
 The API now includes Swagger UI, request logging, global exception handling, request-size/time limits, and serialized Java Access Bridge operations so simultaneous client calls do not poke the same native automation bridge at the same time.

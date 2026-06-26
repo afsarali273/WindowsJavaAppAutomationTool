@@ -13,10 +13,10 @@ using WinInspector.Core.Models;
 
 namespace JabInspector.App;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IJavaActionExecutionHost
 {
     private readonly MainViewModel _viewModel = new();
-    private readonly JavaVirtualKeypadService _virtualKeypad = new();
+    private readonly JavaActionExecutionService _javaActions = new();
     private readonly System.Windows.Threading.DispatcherTimer _hoverTimer;
     private readonly System.Windows.Threading.DispatcherTimer _recordingMonitorTimer;
     private RecordingStudioWindow? _recordingStudioWindow;
@@ -871,18 +871,9 @@ public partial class MainWindow : Window
             return false;
         }
 
-        HighlightCurrentJavaSelection();
-
-        var success = actionKind switch
-        {
-            JavaRecordedActionKind.Focus => _viewModel.FocusSelected(),
-            JavaRecordedActionKind.Click => PhysicalClickForResult(_viewModel.SelectedNode, 1) || _viewModel.InvokeDefaultAction(),
-            JavaRecordedActionKind.DoubleClick => PhysicalClickForResult(_viewModel.SelectedNode, 2),
-            JavaRecordedActionKind.SetText => _viewModel.SetSelectedText(inputText),
-            JavaRecordedActionKind.TypeText => TypeJavaText(inputText),
-            JavaRecordedActionKind.GetText => !string.IsNullOrWhiteSpace(_viewModel.GetSelectedText()),
-            _ => false
-        };
+        var result = _javaActions.Execute(actionKind, _viewModel.SelectedNode, inputText, this);
+        var success = result.Success;
+        _viewModel.ReportAutomation(result.Text is null ? result.Message : $"{result.Message}{Environment.NewLine}{result.Text}");
 
         _viewModel.Log($"ExecuteJavaRecordedAction completed. Action={actionKind}, Success={success}, CaptureStep={captureStep}.");
         if (captureStep && success && !_viewModel.IsRecordingPaused)
@@ -917,63 +908,57 @@ public partial class MainWindow : Window
         };
     }
 
-    private bool TypeJavaText(string text)
+    bool IJavaActionExecutionHost.Focus(AccessibleNode node, out string message)
     {
-        if (_viewModel.SelectedNode is null)
-        {
-            _viewModel.ReportAutomation("Select an element first.");
-            return false;
-        }
+        var success = _viewModel.FocusSelected();
+        message = success ? "Focus requested successfully." : $"Focus request failed for {node.DisplayName}.";
+        return success;
+    }
 
-        if (_virtualKeypad.ShouldUseVirtualKeypad(_viewModel.SelectedNode, text))
-        {
-            return TryTypeViaVirtualKeypad(_viewModel.SelectedNode, text, out _);
-        }
+    bool IJavaActionExecutionHost.InvokeDefaultAction(AccessibleNode node, out string message)
+    {
+        var success = _viewModel.InvokeDefaultAction();
+        message = success ? $"Executed semantic action on {node.DisplayName}." : $"No semantic action was available for {node.DisplayName}.";
+        return success;
+    }
 
+    bool IJavaActionExecutionHost.SetText(AccessibleNode node, string text, out string message)
+    {
+        var success = _viewModel.SetSelectedText(text);
+        message = success ? $"Text set successfully on {node.DisplayName} ({text.Length} characters)." : $"Set text failed for {node.DisplayName}.";
+        return success;
+    }
+
+    string IJavaActionExecutionHost.GetText(AccessibleNode node, out string message)
+    {
+        var text = _viewModel.GetSelectedText();
+        message = $"Read text from {node.DisplayName}.";
+        return text;
+    }
+
+    bool IJavaActionExecutionHost.PhysicalClick(AccessibleNode node, int count, out string message)
+    {
+        var success = PhysicalClick(node, count);
+        message = success
+            ? $"{(count == 2 ? "Double-clicked" : "Clicked")} {node.DisplayName} using physical input."
+            : $"Physical click failed for {node.DisplayName}.";
+        return success;
+    }
+
+    int IJavaActionExecutionHost.TypeUnicodeText(AccessibleNode node, string text, out string message)
+    {
         _viewModel.FocusSelected();
         if (_viewModel.CurrentWindow is not null) SetForegroundWindow(_viewModel.CurrentWindow.Hwnd);
         Thread.Sleep(100);
         var sent = SendUnicodeText(text);
-        _viewModel.ReportAutomation($"Typed {sent} of {text.Length} Unicode character(s). Text was inserted at the control's current caret position.");
-        _viewModel.Log($"Typed {sent} character(s) into {_viewModel.SelectedNode.DisplayName}.");
-        return sent > 0 || text.Length == 0;
-    }
-
-    private bool TryTypeViaVirtualKeypad(AccessibleNode keyboardRoot, string text, out string message)
-    {
-        if (!_virtualKeypad.TryBuildPlan(keyboardRoot, text, out var plan, out message))
-        {
-            _viewModel.ReportAutomation(message);
-            _viewModel.Log(message);
-            return false;
-        }
-
-        if (_viewModel.CurrentWindow is not null)
-        {
-            SetForegroundWindow(_viewModel.CurrentWindow.Hwnd);
-            Thread.Sleep(100);
-        }
-
-        var clicked = 0;
-        foreach (var step in plan.Steps)
-        {
-            if (!PhysicalClickForResult(step.KeyNode, 1))
-            {
-                message = $"Found virtual keypad key '{step.KeyNode.DisplayName}', but it had no usable bounds.";
-                _viewModel.ReportAutomation(message);
-                _viewModel.Log(message);
-                return false;
-            }
-
-            clicked++;
-            Thread.Sleep(80);
-        }
-
-        message = $"Typed {clicked} key(s) using virtual keypad container {keyboardRoot.DisplayName}.";
-        _viewModel.ReportAutomation(message);
+        message = $"Typed {sent} of {text.Length} Unicode character(s) into {node.DisplayName}.";
         _viewModel.Log(message);
-        return clicked > 0 || text.Length == 0;
+        return sent;
     }
+
+    void IJavaActionExecutionHost.BeforeAction(AccessibleNode node) => HighlightCurrentJavaSelection();
+
+    void IJavaActionExecutionHost.BetweenVirtualKeyClicks() => Thread.Sleep(80);
 
     private bool PhysicalClick(AccessibleNode node, int count)
     {

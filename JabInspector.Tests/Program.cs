@@ -99,6 +99,22 @@ var tests = new (string Name, Action Run)[]
         Assert(plan.Steps[2].KeyNode.Name == "Space", "Space key was not resolved");
         Assert(plan.Steps[3].KeyNode.Name == "OK", "Enter/OK key was not resolved");
     }),
+    ("Shared Java action executor uses virtual keypad policy", () =>
+    {
+        var keyboard = new AccessibleNode { Role = "layered pane", RoleEnUs = "layered pane", ChildrenCount = 2 };
+        var one = new AccessibleNode { Role = "push button", RoleEnUs = "push button", Name = "1", Parent = keyboard, X = 10, Y = 10, Width = 20, Height = 20 };
+        var two = new AccessibleNode { Role = "push button", RoleEnUs = "push button", Name = "2", Parent = keyboard, X = 40, Y = 10, Width = 20, Height = 20 };
+        keyboard.Children.Add(one);
+        keyboard.Children.Add(two);
+
+        var host = new FakeJavaActionHost();
+        var service = new JavaActionExecutionService();
+        var result = service.Execute(JavaRecordedActionKind.TypeText, keyboard, "12", host);
+
+        Assert(result.Success, result.Message);
+        Assert(host.ClickedNodes.SequenceEqual([one, two]), "Virtual keypad clicks were not executed through shared action policy");
+        Assert(host.TypedTexts.Count == 0, "Unicode typing should not be used for virtual keypad containers");
+    }),
     ("Diagnostics bitness", () => Assert(StartupDiagnostics.Generate().Any(x => x.Contains("64-bit process")), "Bitness diagnostic missing")),
     ("Windows classifier detects Java", () =>
     {
@@ -140,4 +156,19 @@ file sealed class FakeBackend(WindowsAutomationBackendKind kind, bool available,
     public bool IsAvailable() => available;
     public bool CanInspect(DesktopWindowInfo window) => canInspect;
     public WindowsAutomationResult InspectWindow(DesktopWindowInfo window, int maxDepth = 4, int maxChildren = 200) => result;
+}
+
+file sealed class FakeJavaActionHost : IJavaActionExecutionHost
+{
+    public List<AccessibleNode> ClickedNodes { get; } = [];
+    public List<string> TypedTexts { get; } = [];
+
+    public bool Focus(AccessibleNode node, out string message) { message = "focused"; return true; }
+    public bool InvokeDefaultAction(AccessibleNode node, out string message) { message = "invoked"; return true; }
+    public bool SetText(AccessibleNode node, string text, out string message) { message = "set"; return true; }
+    public string GetText(AccessibleNode node, out string message) { message = "read"; return node.Name; }
+    public bool PhysicalClick(AccessibleNode node, int count, out string message) { ClickedNodes.Add(node); message = "clicked"; return true; }
+    public int TypeUnicodeText(AccessibleNode node, string text, out string message) { TypedTexts.Add(text); message = "typed"; return text.Length; }
+    public void BeforeAction(AccessibleNode node) { }
+    public void BetweenVirtualKeyClicks() { }
 }

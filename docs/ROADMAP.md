@@ -253,13 +253,19 @@ Why: inspecting should not disturb the target app unless the user explicitly per
 - [x] Add shared Java virtual keypad planner for layered-pane/pane keyboards.
 - [x] Use shared virtual keypad planner from desktop Automation/Recorder actions.
 - [x] Use shared virtual keypad planner from REST API `typeText`.
+- [x] Add shared Java action execution policy for recorder/playback/API.
+- [x] Keep only host-specific primitives at module edges:
+  - foreground/focus routing;
+  - physical mouse input;
+  - Unicode keyboard input;
+  - JAB set/get/focus/default action calls.
 - [ ] Add tests for virtual keypad matching:
   - digits;
   - letters;
   - enter/space;
   - symbol aliases;
   - nested labels under layered panes.
-- [ ] Move more action fallback policy into Core so desktop playback and API actions stay identical.
+- [ ] Move recorded-point/window-relative playback click into a shared execution option, or remove it if it creates API/playback drift.
 
 ### P1 - Locator completeness
 

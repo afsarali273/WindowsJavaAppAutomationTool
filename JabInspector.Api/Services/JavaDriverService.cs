@@ -13,7 +13,7 @@ public sealed class JavaDriverService : IDisposable
     private readonly InspectorLogger _logger;
     private readonly JavaObjectRepositoryService _repositoryService = new();
     private readonly JavaNodeResolverService _resolver = new();
-    private readonly JavaVirtualKeypadService _virtualKeypad = new();
+    private readonly JavaActionExecutionService _javaActions = new();
     private readonly AutomationService _automation;
     private readonly ConcurrentDictionary<string, JavaDriverSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _sync = new();
@@ -241,26 +241,19 @@ public sealed class JavaDriverService : IDisposable
             if (!TryNormalizeAction(request.Action, out var action, out var actionError))
                 return Fail(actionError, sessionId);
 
-            SetForegroundWindow(session.Window.Hwnd);
-            var success = action switch
-            {
-                JavaRecordedActionKind.Focus => _automation.Focus(node),
-                JavaRecordedActionKind.Click => ExecuteClick(node, request.PreferAccessibleAction),
-                JavaRecordedActionKind.DoubleClick => PhysicalClick(node, 2),
-                JavaRecordedActionKind.SetText => _automation.SetText(node, request.Text ?? ""),
-                JavaRecordedActionKind.TypeText => ExecuteTypeText(node, request.Text ?? ""),
-                JavaRecordedActionKind.GetText => true,
-                _ => false
-            };
-
-            var text = action == JavaRecordedActionKind.GetText ? _automation.GetText(node) : null;
-            if (!success) return Fail($"Action '{request.Action}' failed for {node.DisplayName}.", sessionId);
+            var execution = _javaActions.Execute(
+                action,
+                node,
+                request.Text ?? "",
+                new ApiJavaActionHost(this, session.Window, request.PreferAccessibleAction));
+            if (!execution.Success) return Fail($"Action '{request.Action}' failed for {node.DisplayName}: {execution.Message}", sessionId);
 
             return Ok($"Action '{action}' executed.", sessionId, new
             {
                 action,
                 element = new ResolvedElementDto(node.DisplayName, LocatorGenerator.GenerateLocator(node), _automation.GetActions(node)),
-                text
+                message = execution.Message,
+                text = execution.Text
             });
         }
     }
@@ -584,45 +577,6 @@ public sealed class JavaDriverService : IDisposable
         ActionNames = locator.ActionNames.ToList()
     };
 
-    private bool ExecuteClick(AccessibleNode node, bool preferAccessibleAction)
-    {
-        if (preferAccessibleAction && _automation.InvokeDefaultAction(node, out _)) return true;
-        return PhysicalClick(node, 1);
-    }
-
-    private bool ExecuteTypeText(AccessibleNode node, string text)
-    {
-        if (_virtualKeypad.ShouldUseVirtualKeypad(node, text))
-            return ExecuteVirtualKeypadTyping(node, text);
-
-        return _automation.SetText(node, text);
-    }
-
-    private bool ExecuteVirtualKeypadTyping(AccessibleNode keyboardRoot, string text)
-    {
-        if (!_virtualKeypad.TryBuildPlan(keyboardRoot, text, out var plan, out var message))
-        {
-            _logger.Log($"API virtual keypad typing failed: {message}");
-            return false;
-        }
-
-        var clicked = 0;
-        foreach (var step in plan.Steps)
-        {
-            if (!PhysicalClick(step.KeyNode, 1))
-            {
-                _logger.Log($"API virtual keypad typing failed. Key='{step.Label}', Node='{step.KeyNode.DisplayName}' had no usable bounds.");
-                return false;
-            }
-
-            clicked++;
-            Thread.Sleep(80);
-        }
-
-        _logger.Log($"API virtual keypad typing clicked {clicked} key(s) under {keyboardRoot.DisplayName}.");
-        return clicked > 0 || text.Length == 0;
-    }
-
     private bool PhysicalClick(AccessibleNode node, int count)
     {
         if (node.Width <= 0 || node.Height <= 0) return false;
@@ -641,6 +595,84 @@ public sealed class JavaDriverService : IDisposable
 
         _logger.Log($"API physical click executed on {node.DisplayName} at ({x}, {y}), Count={count}.");
         return true;
+    }
+
+    private int TypeUnicodeText(JavaWindowInfo window, AccessibleNode node, string text)
+    {
+        _automation.Focus(node);
+        SetForegroundWindow(window.Hwnd);
+        Thread.Sleep(100);
+        var inputs = new List<NativeInput>(text.Length * 2);
+        foreach (var character in text)
+        {
+            inputs.Add(NativeInput.Unicode(character, false));
+            inputs.Add(NativeInput.Unicode(character, true));
+        }
+
+        var sent = inputs.Count == 0 ? 0 : (int)SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<NativeInput>()) / 2;
+        _logger.Log($"API typed {sent} of {text.Length} Unicode character(s) into {node.DisplayName}.");
+        return sent;
+    }
+
+    private sealed class ApiJavaActionHost(JavaDriverService owner, JavaWindowInfo window, bool allowSemanticFallback) : IJavaActionExecutionHost
+    {
+        public bool Focus(AccessibleNode node, out string message)
+        {
+            var success = owner._automation.Focus(node);
+            message = success ? $"Focus requested successfully for {node.DisplayName}." : $"Focus request failed for {node.DisplayName}.";
+            return success;
+        }
+
+        public bool InvokeDefaultAction(AccessibleNode node, out string message)
+        {
+            if (!allowSemanticFallback)
+            {
+                message = "Semantic fallback disabled for this request.";
+                return false;
+            }
+
+            var success = owner._automation.InvokeDefaultAction(node, out var action);
+            message = success ? $"Executed semantic action '{action}' on {node.DisplayName}." : $"No semantic action was available for {node.DisplayName}.";
+            return success;
+        }
+
+        public bool SetText(AccessibleNode node, string text, out string message)
+        {
+            var success = owner._automation.SetText(node, text);
+            message = success ? $"Text set successfully on {node.DisplayName} ({text.Length} characters)." : $"Set text failed for {node.DisplayName}.";
+            return success;
+        }
+
+        public string GetText(AccessibleNode node, out string message)
+        {
+            var text = owner._automation.GetText(node);
+            message = $"Read text from {node.DisplayName}.";
+            return text;
+        }
+
+        public bool PhysicalClick(AccessibleNode node, int count, out string message)
+        {
+            var success = owner.PhysicalClick(node, count);
+            message = success
+                ? $"{(count == 2 ? "Double-clicked" : "Clicked")} {node.DisplayName} using physical input."
+                : $"Physical click failed for {node.DisplayName}.";
+            return success;
+        }
+
+        public int TypeUnicodeText(AccessibleNode node, string text, out string message)
+        {
+            var sent = owner.TypeUnicodeText(window, node, text);
+            message = $"Typed {sent} of {text.Length} Unicode character(s) into {node.DisplayName}.";
+            return sent;
+        }
+
+        public void BeforeAction(AccessibleNode node)
+        {
+            SetForegroundWindow(window.Hwnd);
+            Thread.Sleep(70);
+        }
+
+        public void BetweenVirtualKeyClicks() => Thread.Sleep(80);
     }
 
     private static bool TryNormalizeAction(string action, out JavaRecordedActionKind actionKind, out string error)
@@ -736,6 +768,43 @@ public sealed class JavaDriverService : IDisposable
 
     private const uint MouseLeftDown = 0x0002;
     private const uint MouseLeftUp = 0x0004;
+    private const uint KeyEventUnicode = 0x0004;
+    private const uint KeyEventKeyUp = 0x0002;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeInput
+    {
+        public uint Type;
+        public InputUnion Data;
+        public static NativeInput Unicode(char value, bool keyUp) => new()
+        {
+            Type = 1,
+            Data = new InputUnion
+            {
+                Keyboard = new KeyboardInput
+                {
+                    Scan = value,
+                    Flags = KeyEventUnicode | (keyUp ? KeyEventKeyUp : 0)
+                }
+            }
+        };
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct InputUnion
+    {
+        [FieldOffset(0)] public KeyboardInput Keyboard;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KeyboardInput
+    {
+        public ushort VirtualKey;
+        public ushort Scan;
+        public uint Flags;
+        public uint Time;
+        public UIntPtr ExtraInfo;
+    }
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -747,4 +816,7 @@ public sealed class JavaDriverService : IDisposable
 
     [DllImport("user32.dll", EntryPoint = "mouse_event")]
     private static extern void MouseEvent(uint flags, uint x, uint y, uint data, UIntPtr extraInfo);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint count, NativeInput[] inputs, int size);
 }
