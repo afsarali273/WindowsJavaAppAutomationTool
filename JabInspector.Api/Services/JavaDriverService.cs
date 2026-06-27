@@ -416,6 +416,7 @@ public sealed class JavaDriverService : IDisposable
 
         var objectsByKey = new Dictionary<string, JavaObjectRepositoryEntry>(StringComparer.OrdinalIgnoreCase);
         var windowsByKey = new Dictionary<string, JavaWindowLocator>(StringComparer.OrdinalIgnoreCase);
+        var steps = new List<JavaRecordedStep>();
 
         foreach (var project in projects)
         {
@@ -432,10 +433,14 @@ public sealed class JavaDriverService : IDisposable
                 if (string.IsNullOrWhiteSpace(entry.ObjectKey)) continue;
                 objectsByKey[entry.ObjectKey] = entry;
             }
+
+            steps.AddRange(project.Steps);
         }
 
         session.Repository.AddRange(objectsByKey.Values);
         session.Windows.AddRange(windowsByKey.Values);
+        session.Steps.Clear();
+        session.Steps.AddRange(steps.OrderBy(step => step.Sequence));
     }
 
     private EphemeralSessionResult CreateEphemeralSession(
@@ -706,19 +711,21 @@ public sealed class JavaDriverService : IDisposable
             if (!refresh.Success) return refresh;
         }
 
-        var resolution = ResolveNodeWithRetry(session, request.ObjectKey, request.Locator, request.ResolutionPolicy);
+        if (!TryNormalizeAction(request.Action, out var action, out var actionError))
+            return Fail(actionError, session.Id);
+
+        var resolution = ResolveNodeWithRetry(session, request.ObjectKey, request.Locator, request.ResolutionPolicy, action);
         if (!resolution.Success || resolution.Node is null)
             return Fail(resolution.Message, session.Id, resolution.Details);
 
         var node = resolution.Node;
-        if (!TryNormalizeAction(request.Action, out var action, out var actionError))
-            return Fail(actionError, session.Id);
+        var recordedStep = FindRecordedStep(session, request.ObjectKey, action);
 
         var execution = _javaActions.Execute(
             action,
             node,
             request.Text ?? "",
-            new ApiJavaActionHost(this, session.Window, request.PreferAccessibleAction));
+            new ApiJavaActionHost(this, session.Window, request.PreferAccessibleAction, recordedStep));
         if (!execution.Success) return Fail($"Action '{request.Action}' failed for {node.DisplayName}: {execution.Message}", session.Id);
 
         return Ok($"Action '{action}' executed.", session.Id, new
@@ -1052,7 +1059,8 @@ public sealed class JavaDriverService : IDisposable
         JavaDriverSession session,
         string? objectKey,
         LocatorSuggestion? locator,
-        ResolutionPolicy? requestedPolicy)
+        ResolutionPolicy? requestedPolicy,
+        JavaRecordedActionKind? actionKind = null)
     {
         var policy = (requestedPolicy ?? ResolutionPolicy.Default).Sanitize();
         var started = DateTime.UtcNow;
@@ -1063,7 +1071,7 @@ public sealed class JavaDriverService : IDisposable
         while (true)
         {
             attempt++;
-            last = ResolveNode(session, objectKey, locator, policy);
+            last = ResolveNode(session, objectKey, locator, policy, actionKind);
             if (last.Success) return last with { Message = $"{last.Message} Attempts={attempt}." };
 
             var elapsedMs = (int)(DateTime.UtcNow - started).TotalMilliseconds;
@@ -1086,7 +1094,8 @@ public sealed class JavaDriverService : IDisposable
         JavaDriverSession session,
         string? objectKey,
         LocatorSuggestion? locator,
-        ResolutionPolicy policy)
+        ResolutionPolicy policy,
+        JavaRecordedActionKind? actionKind = null)
     {
         if (session.Root is null)
             return new(false, "Session tree is empty. Refresh the session first.", null);
@@ -1106,23 +1115,42 @@ public sealed class JavaDriverService : IDisposable
             return new(false, "Provide either objectKey or locator.", null);
         }
 
-        var step = locator is null ? null : new JavaRecordedStep
-        {
-            ObjectKey = entry.ObjectKey,
-            ObjectLocator = locator,
-            ObjectLocatorJson = JsonExportService.Serialize(locator),
-            ObjectRole = locator.Role,
-            ObjectName = locator.Name,
-            ObjectVirtualAccessibleName = locator.VirtualAccessibleName,
-            ObjectDescription = locator.Description,
-            ObjectPath = locator.Path,
-            ObjectDepth = locator.ObjectDepth
-        };
+        var step = locator is null
+            ? FindRecordedStep(session, objectKey, actionKind)
+            : new JavaRecordedStep
+            {
+                ObjectKey = entry.ObjectKey,
+                ObjectLocator = locator,
+                ObjectLocatorJson = JsonExportService.Serialize(locator),
+                ObjectRole = locator.Role,
+                ObjectName = locator.Name,
+                ObjectVirtualAccessibleName = locator.VirtualAccessibleName,
+                ObjectDescription = locator.Description,
+                ObjectPath = locator.Path,
+                ObjectDepth = locator.ObjectDepth
+            };
 
         var resolution = _resolver.ResolveDetailed(session.Root, entry, step, policy);
         return !resolution.Success || resolution.Node is null
             ? new(false, resolution.Message, null, resolution)
             : new(true, $"Resolved using {resolution.StrategyName}.", resolution.Node, resolution);
+    }
+
+    private static JavaRecordedStep? FindRecordedStep(JavaDriverSession session, string? objectKey, JavaRecordedActionKind? actionKind)
+    {
+        if (string.IsNullOrWhiteSpace(objectKey)) return null;
+        var steps = session.Steps
+            .Where(step => string.Equals(step.ObjectKey, objectKey, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (steps.Count == 0) return null;
+
+        if (actionKind is not null)
+        {
+            var exact = steps.FirstOrDefault(step => step.ActionKind == actionKind.Value);
+            if (exact is not null) return exact;
+        }
+
+        return steps.FirstOrDefault();
     }
 
     private JavaObjectRepositoryEntry CreateRepositoryEntry(LocatorSuggestion locator, JavaWindowInfo window) => new()
@@ -1164,13 +1192,29 @@ public sealed class JavaDriverService : IDisposable
         ActionNames = locator.ActionNames.ToList()
     };
 
-    private bool PhysicalClick(AccessibleNode node, int count)
+    private bool PhysicalClick(JavaWindowInfo window, AccessibleNode node, int count, JavaRecordedStep? step)
     {
-        if (node.Width <= 0 || node.Height <= 0) return false;
-        if (node.X == 0 && node.Y == 0) return false;
+        SetForegroundWindow(window.Hwnd);
+        Thread.Sleep(70);
 
-        var x = node.X + node.Width / 2;
-        var y = node.Y + node.Height / 2;
+        if (TryGetRecordedPlaybackPoint(window, step, out var recordedX, out var recordedY))
+            return PhysicalClickAt(recordedX, recordedY, count, node.DisplayName, "recorded window-relative point");
+
+        var visualNode = node;
+        while (visualNode.Parent is not null && !HasUsableBounds(visualNode))
+        {
+            visualNode = visualNode.Parent;
+        }
+
+        if (!HasUsableBounds(visualNode)) return false;
+
+        var x = visualNode.X + visualNode.Width / 2;
+        var y = visualNode.Y + visualNode.Height / 2;
+        return PhysicalClickAt(x, y, count, node.DisplayName, ReferenceEquals(visualNode, node) ? "element center" : $"ancestor center ({visualNode.DisplayName})");
+    }
+
+    private bool PhysicalClickAt(int x, int y, int count, string displayName, string source)
+    {
         if (!SetCursorPos(x, y)) return false;
 
         for (var i = 0; i < count; i++)
@@ -1180,8 +1224,25 @@ public sealed class JavaDriverService : IDisposable
             if (i + 1 < count) Thread.Sleep(100);
         }
 
-        _logger.Log($"API physical click executed on {node.DisplayName} at ({x}, {y}), Count={count}.");
+        _logger.Log($"API physical click executed on {displayName} at ({x}, {y}), Count={count}, Source={source}.");
         return true;
+    }
+
+    private static bool HasUsableBounds(AccessibleNode node)
+    {
+        return node.Width > 0 && node.Height > 0 && !(node.X == 0 && node.Y == 0);
+    }
+
+    private static bool TryGetRecordedPlaybackPoint(JavaWindowInfo window, JavaRecordedStep? step, out int x, out int y)
+    {
+        x = 0;
+        y = 0;
+        if (step?.WindowOffsetX is null || step.WindowOffsetY is null) return false;
+        if (!User32Native.GetWindowRect(window.Hwnd, out var rect)) return false;
+
+        x = rect.Left + step.WindowOffsetX.Value;
+        y = rect.Top + step.WindowOffsetY.Value;
+        return x >= rect.Left && x < rect.Right && y >= rect.Top && y < rect.Bottom;
     }
 
     private int TypeUnicodeText(JavaWindowInfo window, AccessibleNode node, string text)
@@ -1201,7 +1262,7 @@ public sealed class JavaDriverService : IDisposable
         return sent;
     }
 
-    private sealed class ApiJavaActionHost(JavaDriverService owner, JavaWindowInfo window, bool allowSemanticFallback) : IJavaActionExecutionHost
+    private sealed class ApiJavaActionHost(JavaDriverService owner, JavaWindowInfo window, bool allowSemanticFallback, JavaRecordedStep? recordedStep) : IJavaActionExecutionHost
     {
         public bool Focus(AccessibleNode node, out string message)
         {
@@ -1239,7 +1300,7 @@ public sealed class JavaDriverService : IDisposable
 
         public bool PhysicalClick(AccessibleNode node, int count, out string message)
         {
-            var success = owner.PhysicalClick(node, count);
+            var success = owner.PhysicalClick(window, node, count, recordedStep);
             message = success
                 ? $"{(count == 2 ? "Double-clicked" : "Clicked")} {node.DisplayName} using physical input."
                 : $"Physical click failed for {node.DisplayName}.";
