@@ -24,7 +24,7 @@ public sealed class AccessBridgeService : IDisposable
         try
         {
             var bridgePath = JabInspector.Native.NativeEnvironment.FindAccessBridgeDll() ?? "(default loader)";
-            AccessBridgeNative.WindowsRun();
+            AccessBridgePump.EnsureStarted(_logger.Log);
             _initialized = true;
             _logger.Log($"Access Bridge initialized using: {bridgePath}");
             return true;
