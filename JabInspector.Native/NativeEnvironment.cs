@@ -4,8 +4,13 @@ public static class NativeEnvironment
 {
     public static string? FindAccessBridgeDll()
     {
+        return GetAccessBridgeDllCandidates().FirstOrDefault(File.Exists);
+    }
+
+    public static IReadOnlyList<string> GetAccessBridgeDllCandidates()
+    {
         var candidates = new List<string>();
-        candidates.AddRange(FindBridgesForRunningJavaProcesses());
+        AddExplicitBridgeOverride(candidates);
         var javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
         if (!string.IsNullOrWhiteSpace(javaHome)) candidates.Add(Path.Combine(javaHome, "bin", AccessBridgeNative.DllName));
         foreach (var folder in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
@@ -23,7 +28,21 @@ public static class NativeEnvironment
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
         }
-        return candidates.FirstOrDefault(File.Exists);
+        candidates.AddRange(FindBridgesForRunningJavaProcesses());
+        return candidates
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static void AddExplicitBridgeOverride(List<string> candidates)
+    {
+        foreach (var variable in new[] { "JAB_BRIDGE_DLL", "WINDOWS_ACCESS_BRIDGE_DLL" })
+        {
+            var value = Environment.GetEnvironmentVariable(variable);
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            candidates.Add(value.Trim());
+        }
     }
 
     private static IEnumerable<string> FindBridgesForRunningJavaProcesses()
@@ -50,13 +69,24 @@ public static class NativeEnvironment
         return matches;
     }
 
-    public static IReadOnlyList<string> GetDiagnostics() => new[]
+    public static IReadOnlyList<string> GetDiagnostics()
     {
-        $"Process architecture: {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}",
-        $"64-bit process: {Environment.Is64BitProcess}",
-        $"OS: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}",
-        $"Expected bridge: {AccessBridgeNative.DllName}",
-        $"JAVA_HOME: {Environment.GetEnvironmentVariable("JAVA_HOME") ?? "Not set"}",
-        $"Bridge location: {FindAccessBridgeDll() ?? "Not found"}"
-    };
+        var diagnostics = new List<string>
+        {
+            $"Process architecture: {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}",
+            $"64-bit process: {Environment.Is64BitProcess}",
+            $"OS: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}",
+            $"Expected bridge: {AccessBridgeNative.DllName}",
+            $"JAB_BRIDGE_DLL: {Environment.GetEnvironmentVariable("JAB_BRIDGE_DLL") ?? "Not set"}",
+            $"WINDOWS_ACCESS_BRIDGE_DLL: {Environment.GetEnvironmentVariable("WINDOWS_ACCESS_BRIDGE_DLL") ?? "Not set"}",
+            $"JAVA_HOME: {Environment.GetEnvironmentVariable("JAVA_HOME") ?? "Not set"}",
+            $"Bridge location: {FindAccessBridgeDll() ?? "Not found"}"
+        };
+
+        var existingCandidates = GetAccessBridgeDllCandidates().Where(File.Exists).Take(8).ToList();
+        diagnostics.Add(existingCandidates.Count == 0
+            ? "Existing bridge candidates: none"
+            : $"Existing bridge candidates: {string.Join(" | ", existingCandidates)}");
+        return diagnostics;
+    }
 }

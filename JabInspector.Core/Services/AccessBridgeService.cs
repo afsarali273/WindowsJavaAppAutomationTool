@@ -21,7 +21,14 @@ public sealed class AccessBridgeService : IDisposable
     public bool Initialize()
     {
         if (_initialized) return true;
-        try { AccessBridgeNative.WindowsRun(); _initialized = true; return true; }
+        try
+        {
+            var bridgePath = JabInspector.Native.NativeEnvironment.FindAccessBridgeDll() ?? "(default loader)";
+            AccessBridgeNative.WindowsRun();
+            _initialized = true;
+            _logger.Log($"Access Bridge initialized using: {bridgePath}");
+            return true;
+        }
         catch (DllNotFoundException) { _logger.Log("WindowsAccessBridge-64.dll was not found. Ensure Java Access Bridge is installed, JAVA_HOME is set, and the application is running as x64."); }
         catch (Exception ex) { _logger.Log($"Access Bridge initialization failed: {ex.Message}"); }
         return false;
