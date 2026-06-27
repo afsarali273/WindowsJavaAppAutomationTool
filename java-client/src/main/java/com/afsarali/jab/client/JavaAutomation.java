@@ -3,6 +3,7 @@ package com.afsarali.jab.client;
 import com.afsarali.jab.client.model.*;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -52,6 +53,23 @@ public final class JavaAutomation {
 
     public JavaWindowScope window(JavaWindowSelector selector) {
         return new JavaWindowScope(this, selector);
+    }
+
+    public JavaWindowScope window(JavaWindowSelector selector, RetryOptions waitOptions) {
+        JavaWindow window = waitForWindow(selector, waitOptions);
+        return new JavaWindowScope(this, JavaWindowWait.selectorFor(window));
+    }
+
+    public JavaWindow waitForWindow(JavaWindowSelector selector) {
+        return waitForWindow(selector, RetryOptions.defaults());
+    }
+
+    public JavaWindow waitForWindow(JavaWindowSelector selector, Duration timeout, Duration pollInterval) {
+        return waitForWindow(selector, RetryOptions.of(timeout, pollInterval));
+    }
+
+    public JavaWindow waitForWindow(JavaWindowSelector selector, RetryOptions options) {
+        return JavaWindowWait.waitForWindow(api, selector, options);
     }
 
     public JavaObject object(String objectKey) {

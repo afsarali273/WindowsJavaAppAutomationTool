@@ -26,8 +26,18 @@ public final class JavaDriver implements AutoCloseable {
         return attach(apiBaseUri, CreateSessionRequest.byTitle(title), JavaWindowSelector.title(title));
     }
 
+    public static JavaDriver attachByTitle(URI apiBaseUri, String title, RetryOptions waitOptions) {
+        return attach(apiBaseUri, CreateSessionRequest.byTitle(title), JavaWindowSelector.title(title), waitOptions);
+    }
+
     public static JavaDriver attachByTitle(URI apiBaseUri, String title, String repositoryPath) {
         JavaDriver driver = attachByTitle(apiBaseUri, title);
+        driver.loadRepository(repositoryPath);
+        return driver;
+    }
+
+    public static JavaDriver attachByTitle(URI apiBaseUri, String title, String repositoryPath, RetryOptions waitOptions) {
+        JavaDriver driver = attachByTitle(apiBaseUri, title, waitOptions);
         driver.loadRepository(repositoryPath);
         return driver;
     }
@@ -36,13 +46,40 @@ public final class JavaDriver implements AutoCloseable {
         return attach(apiBaseUri, CreateSessionRequest.byHwnd(hwnd), JavaWindowSelector.hwnd(hwnd));
     }
 
+    public static JavaDriver attachByHwnd(URI apiBaseUri, String hwnd, RetryOptions waitOptions) {
+        return attach(apiBaseUri, CreateSessionRequest.byHwnd(hwnd), JavaWindowSelector.hwnd(hwnd), waitOptions);
+    }
+
     public static JavaDriver attachByProcessId(URI apiBaseUri, int processId) {
         return attach(apiBaseUri, CreateSessionRequest.byProcessId(processId), JavaWindowSelector.processId(processId));
+    }
+
+    public static JavaDriver attachByProcessId(URI apiBaseUri, int processId, RetryOptions waitOptions) {
+        return attach(apiBaseUri, CreateSessionRequest.byProcessId(processId), JavaWindowSelector.processId(processId), waitOptions);
+    }
+
+    public static JavaDriver attachToWindow(URI apiBaseUri, JavaWindowSelector selector, RetryOptions waitOptions) {
+        JabApiClient api = new JabApiClient(apiBaseUri);
+        JavaWindow window = JavaWindowWait.waitForWindow(api, selector, waitOptions);
+        JavaWindowSelector matched = JavaWindowWait.selectorFor(window);
+        DriverResult result = api.createSession(CreateSessionRequest.byHwnd(window.hwnd()));
+        ensureSuccess(result);
+        return new JavaDriver(api, Objects.requireNonNull(result.sessionId(), "API did not return a session id."), matched);
     }
 
     public static JavaDriver attach(URI apiBaseUri, CreateSessionRequest request, JavaWindowSelector initialWindow) {
         JabApiClient api = new JabApiClient(apiBaseUri);
         DriverResult result = api.createSession(request);
+        ensureSuccess(result);
+        return new JavaDriver(api, Objects.requireNonNull(result.sessionId(), "API did not return a session id."), initialWindow);
+    }
+
+    public static JavaDriver attach(URI apiBaseUri, CreateSessionRequest request, JavaWindowSelector initialWindow, RetryOptions waitOptions) {
+        JabApiClient api = new JabApiClient(apiBaseUri);
+        DriverResult result = Wait.call(
+                () -> api.createSession(request),
+                waitOptions,
+                "Timed out attaching to Java window.");
         ensureSuccess(result);
         return new JavaDriver(api, Objects.requireNonNull(result.sessionId(), "API did not return a session id."), initialWindow);
     }
@@ -53,6 +90,18 @@ public final class JavaDriver implements AutoCloseable {
 
     public List<JavaWindow> windows() {
         return api.windows();
+    }
+
+    public JavaWindow waitForWindow(JavaWindowSelector selector) {
+        return waitForWindow(selector, RetryOptions.defaults());
+    }
+
+    public JavaWindow waitForWindow(JavaWindowSelector selector, Duration timeout, Duration pollInterval) {
+        return waitForWindow(selector, RetryOptions.of(timeout, pollInterval));
+    }
+
+    public JavaWindow waitForWindow(JavaWindowSelector selector, RetryOptions options) {
+        return JavaWindowWait.waitForWindow(api, selector, options);
     }
 
     public JavaDriver refresh() {
@@ -85,8 +134,24 @@ public final class JavaDriver implements AutoCloseable {
         return this;
     }
 
+    public JavaDriver switchTo(JavaWindowSelector selector, RetryOptions waitOptions) {
+        JavaWindow window = waitForWindow(selector, waitOptions);
+        JavaWindowSelector matched = JavaWindowWait.selectorFor(window);
+        DriverResult result = Wait.call(
+                () -> api.switchWindow(sessionId, SwitchWindowRequest.from(matched)),
+                waitOptions,
+                "Timed out switching to Java window '" + window.title() + "'.");
+        ensureSuccess(result);
+        activeWindow = matched;
+        return this;
+    }
+
     public JavaDriver window(JavaWindowSelector selector) {
         return switchTo(selector);
+    }
+
+    public JavaDriver window(JavaWindowSelector selector, RetryOptions waitOptions) {
+        return switchTo(selector, waitOptions);
     }
 
     public JavaElement element(String objectKey) {

@@ -17,6 +17,16 @@ public final class JavaWindowScope {
         return new JavaObject(automation, selector, objectKey);
     }
 
+    public JavaWindowScope waitUntilVisible() {
+        automation.waitForWindow(selector);
+        return this;
+    }
+
+    public JavaWindowScope waitUntilVisible(RetryOptions waitOptions) {
+        automation.waitForWindow(selector, waitOptions);
+        return this;
+    }
+
     public JavaObject object(LocatorSuggestion locator) {
         return new JavaObject(automation, selector, locator);
     }
