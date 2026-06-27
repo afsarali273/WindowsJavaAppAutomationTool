@@ -25,6 +25,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly WindowsWindowDiscoveryService _windowsDiscovery = new();
     private readonly WindowsAutomationRouter _windowsRouter = new();
     private readonly WindowsAutomationActionService _windowsActions = new();
+    private readonly object _pendingLogLock = new();
+    private readonly Queue<string> _pendingLogs = new();
+    private bool _logDrainScheduled;
 
     private JavaWindowViewModel? _selectedJavaWindow;
     private WindowsWindowViewModel? _selectedWindowsWindow;
@@ -85,11 +88,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _bridge = new AccessBridgeService(_logger);
         _automation = new AutomationService(_bridge, _logger);
         _javaInspection = new JavaElementInspectionService(_bridge, _logger);
-        _logger.MessageLogged += message => App.Current.Dispatcher.BeginInvoke(new Action(() =>
-        {
-            Logs.Add(message);
-            while (Logs.Count > 500) Logs.RemoveAt(0);
-        }));
+        _logger.MessageLogged += EnqueueLogMessage;
 
         RefreshWindowsCommand = new RelayCommand(RefreshWindows, () => !IsBusy);
         AttachCommand = new RelayCommand(Attach, () => !IsBusy && (IsJavaMode ? SelectedJavaWindow is not null : SelectedWindowsWindow is not null));
@@ -1489,6 +1488,34 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void EnqueueLogMessage(string message)
+    {
+        lock (_pendingLogLock)
+        {
+            _pendingLogs.Enqueue(message);
+            if (_logDrainScheduled) return;
+            _logDrainScheduled = true;
+        }
+
+        App.Current.Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Background,
+            new Action(DrainPendingLogs));
+    }
+
+    private void DrainPendingLogs()
+    {
+        List<string> batch;
+        lock (_pendingLogLock)
+        {
+            batch = _pendingLogs.ToList();
+            _pendingLogs.Clear();
+            _logDrainScheduled = false;
+        }
+
+        foreach (var message in batch) Logs.Add(message);
+        while (Logs.Count > 500) Logs.RemoveAt(0);
+    }
 
     private void ClearSelectionsForModeChange()
     {
