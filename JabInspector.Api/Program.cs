@@ -2,6 +2,7 @@ using JabInspector.Api.Services;
 using JabInspector.Core.Diagnostics;
 using JabInspector.Core.Models;
 using JabInspector.Core.Services;
+using JabInspector.Native;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -78,6 +79,7 @@ app.MapGet("/", () => Results.Ok(new
     docs = new
     {
         health = "GET /api/health",
+        settings = "GET /api/settings",
         windows = "GET /api/java/windows",
         attach = "POST /api/java/sessions",
         sessionWindows = "GET /api/java/sessions/{sessionId}/windows",
@@ -98,6 +100,9 @@ app.MapGet("/api/health", (JavaDriverService driver) =>
     var initialized = driver.Initialize();
     return Results.Ok(new { ok = initialized, engine = "java-access-bridge" });
 });
+
+app.MapGet("/api/settings", () => Results.Ok(NativeEnvironment.GetSettingsMetadata()));
+app.MapGet("/api/java/settings", () => Results.Ok(NativeEnvironment.GetSettingsMetadata()));
 
 app.MapGet("/api/java/windows", (JavaDriverService driver) =>
 {

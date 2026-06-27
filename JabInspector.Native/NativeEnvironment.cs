@@ -89,4 +89,64 @@ public static class NativeEnvironment
             : $"Existing bridge candidates: {string.Join(" | ", existingCandidates)}");
         return diagnostics;
     }
+
+    public static object GetSettingsMetadata()
+    {
+        var candidates = GetAccessBridgeDllCandidates()
+            .Select(path => new
+            {
+                path,
+                exists = File.Exists(path),
+                source = GetBridgeCandidateSource(path)
+            })
+            .ToList();
+
+        return new
+        {
+            process = new
+            {
+                architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(),
+                is64Bit = Environment.Is64BitProcess,
+                isUserInteractive = Environment.UserInteractive,
+                processPath = Environment.ProcessPath ?? "",
+                currentDirectory = Environment.CurrentDirectory,
+                os = System.Runtime.InteropServices.RuntimeInformation.OSDescription
+            },
+            java = new
+            {
+                javaHome = Environment.GetEnvironmentVariable("JAVA_HOME") ?? "",
+                jabBridgeDll = Environment.GetEnvironmentVariable("JAB_BRIDGE_DLL") ?? "",
+                windowsAccessBridgeDll = Environment.GetEnvironmentVariable("WINDOWS_ACCESS_BRIDGE_DLL") ?? ""
+            },
+            accessBridge = new
+            {
+                expectedDll = AccessBridgeNative.DllName,
+                selectedDll = FindAccessBridgeDll() ?? "",
+                candidates
+            }
+        };
+    }
+
+    private static string GetBridgeCandidateSource(string path)
+    {
+        var jabOverride = Environment.GetEnvironmentVariable("JAB_BRIDGE_DLL");
+        if (!string.IsNullOrWhiteSpace(jabOverride) && string.Equals(path, jabOverride.Trim(), StringComparison.OrdinalIgnoreCase))
+            return "JAB_BRIDGE_DLL";
+
+        var windowsOverride = Environment.GetEnvironmentVariable("WINDOWS_ACCESS_BRIDGE_DLL");
+        if (!string.IsNullOrWhiteSpace(windowsOverride) && string.Equals(path, windowsOverride.Trim(), StringComparison.OrdinalIgnoreCase))
+            return "WINDOWS_ACCESS_BRIDGE_DLL";
+
+        var javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
+        if (!string.IsNullOrWhiteSpace(javaHome) && path.StartsWith(javaHome.Trim(), StringComparison.OrdinalIgnoreCase))
+            return "JAVA_HOME";
+
+        foreach (var folder in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (string.Equals(path, Path.Combine(folder.Trim(), AccessBridgeNative.DllName), StringComparison.OrdinalIgnoreCase))
+                return "PATH";
+        }
+
+        return "discovered";
+    }
 }
