@@ -10,7 +10,7 @@ import java.util.List;
 public final class JavaAutomation {
     private final JabApiClient api;
     private final List<String> repositoryPaths = new ArrayList<>();
-    private ResolutionPolicy resolutionPolicy = ResolutionPolicy.strict();
+    private ResolutionPolicy resolutionPolicy = ResolutionPolicy.standard();
 
     private JavaAutomation(JabApiClient api) {
         this.api = api;

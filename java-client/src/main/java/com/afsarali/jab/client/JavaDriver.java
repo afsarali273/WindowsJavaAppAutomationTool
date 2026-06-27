@@ -14,7 +14,7 @@ public final class JavaDriver implements AutoCloseable {
     private final JabApiClient api;
     private final String sessionId;
     private JavaWindowSelector activeWindow;
-    private ResolutionPolicy resolutionPolicy = ResolutionPolicy.strict();
+    private ResolutionPolicy resolutionPolicy = ResolutionPolicy.standard();
 
     private JavaDriver(JabApiClient api, String sessionId, JavaWindowSelector activeWindow) {
         this.api = api;

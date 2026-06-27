@@ -39,6 +39,14 @@ public final class ResolutionPolicy {
         return new ResolutionPolicy(82, 18, 5, true, 5000, 200, true, false);
     }
 
+    public static ResolutionPolicy standard() {
+        return new ResolutionPolicy(72, 18, 5, true, 5000, 200, true, false);
+    }
+
+    public static ResolutionPolicy inline() {
+        return new ResolutionPolicy(70, 14, 8, true, 7000, 200, true, false);
+    }
+
     public static ResolutionPolicy tolerant() {
         return new ResolutionPolicy(65, 12, 8, true, 7000, 200, true, false);
     }
@@ -53,6 +61,22 @@ public final class ResolutionPolicy {
     public Boolean allowCoordinateFallback() { return allowCoordinateFallback; }
 
     public ResolutionPolicy timeoutMs(int timeoutMs) {
+        return new ResolutionPolicy(minimumScore, ambiguityScoreDelta, maxCandidates, requireUnique, timeoutMs, pollIntervalMs, refreshTreeOnFailure, allowCoordinateFallback);
+    }
+
+    public ResolutionPolicy minimumScore(int minimumScore) {
+        return new ResolutionPolicy(minimumScore, ambiguityScoreDelta, maxCandidates, requireUnique, timeoutMs, pollIntervalMs, refreshTreeOnFailure, allowCoordinateFallback);
+    }
+
+    public ResolutionPolicy ambiguityScoreDelta(int ambiguityScoreDelta) {
+        return new ResolutionPolicy(minimumScore, ambiguityScoreDelta, maxCandidates, requireUnique, timeoutMs, pollIntervalMs, refreshTreeOnFailure, allowCoordinateFallback);
+    }
+
+    public ResolutionPolicy maxCandidates(int maxCandidates) {
+        return new ResolutionPolicy(minimumScore, ambiguityScoreDelta, maxCandidates, requireUnique, timeoutMs, pollIntervalMs, refreshTreeOnFailure, allowCoordinateFallback);
+    }
+
+    public ResolutionPolicy requireUnique(boolean requireUnique) {
         return new ResolutionPolicy(minimumScore, ambiguityScoreDelta, maxCandidates, requireUnique, timeoutMs, pollIntervalMs, refreshTreeOnFailure, allowCoordinateFallback);
     }
 }

@@ -5,6 +5,7 @@ import com.afsarali.jab.client.JavaDriver;
 import com.afsarali.jab.client.RetryOptions;
 import com.afsarali.jab.client.model.JavaWindowSelector;
 import com.afsarali.jab.client.model.LocatorSuggestion;
+import com.afsarali.jab.client.model.ResolutionPolicy;
 
 import java.net.URI;
 import java.time.Duration;
@@ -26,7 +27,8 @@ public final class InlineLocatorExample {
 
         LocatorSuggestion boundingBoxTab = LocatorSuggestion.roleAndName("page tab", "Bounding Box");
 
-        try (JavaDriver driver = JavaDriver.attachByTitle(api, "Download")) {
+        try (JavaDriver driver = JavaDriver.attachByTitle(api, "Download")
+                .resolutionPolicy(ResolutionPolicy.inline())) {
             driver.window(downloadDialog)
                     .element(bookmarksTab)
                     .waitUntilExists(Duration.ofSeconds(10), Duration.ofMillis(250))
@@ -36,6 +38,7 @@ public final class InlineLocatorExample {
         }
 
         JavaAutomation.connect(api)
+                .resolutionPolicy(ResolutionPolicy.inline())
                 .window(downloadDialog)
                 .object(LocatorSuggestion.roleAndName("page tab", "Slippy map"))
                 .click(RetryOptions.of(Duration.ofSeconds(5), Duration.ofMillis(200)));
