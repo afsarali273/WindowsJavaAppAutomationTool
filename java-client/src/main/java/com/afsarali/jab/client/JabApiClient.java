@@ -93,6 +93,14 @@ public final class JabApiClient {
         return post("/api/java/sessions/" + encode(sessionId) + "/elements/validate", request, DriverResult.class);
     }
 
+    public DriverResult findElements(String sessionId, JavaFindElementsRequest request) {
+        return post("/api/java/sessions/" + encode(sessionId) + "/elements/find", request, DriverResult.class);
+    }
+
+    public DriverResult findChildElements(String sessionId, JavaFindChildElementsRequest request) {
+        return post("/api/java/sessions/" + encode(sessionId) + "/elements/children", request, DriverResult.class);
+    }
+
     public DriverResult executeAction(String sessionId, JavaActionRequest request) {
         return post("/api/java/sessions/" + encode(sessionId) + "/actions", request, DriverResult.class);
     }
@@ -103,6 +111,14 @@ public final class JabApiClient {
 
     public DriverResult validateOneShot(JavaValidationRequest request) {
         return post("/api/java/validate/run", request, DriverResult.class);
+    }
+
+    public DriverResult findElementsOneShot(JavaFindElementsRequest request) {
+        return post("/api/java/elements/find", request, DriverResult.class);
+    }
+
+    public DriverResult findChildElementsOneShot(JavaFindChildElementsRequest request) {
+        return post("/api/java/elements/children", request, DriverResult.class);
     }
 
     private <T> T get(String path, Class<T> responseType) {

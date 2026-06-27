@@ -83,9 +83,13 @@ app.MapGet("/", () => Results.Ok(new
         sessionWindows = "GET /api/java/sessions/{sessionId}/windows",
         switchWindow = "POST /api/java/sessions/{sessionId}/window",
         validate = "POST /api/java/sessions/{sessionId}/elements/validate",
+        findElements = "POST /api/java/sessions/{sessionId}/elements/find",
+        findChildElements = "POST /api/java/sessions/{sessionId}/elements/children",
         actions = "POST /api/java/sessions/{sessionId}/actions",
         oneShotAction = "POST /api/java/actions/run",
-        oneShotValidate = "POST /api/java/validate/run"
+        oneShotValidate = "POST /api/java/validate/run",
+        oneShotFindElements = "POST /api/java/elements/find",
+        oneShotFindChildElements = "POST /api/java/elements/children"
     }
 }));
 
@@ -165,6 +169,18 @@ app.MapPost("/api/java/sessions/{sessionId}/elements/validate", (string sessionI
     return result.Success ? Results.Ok(result) : Results.NotFound(result);
 });
 
+app.MapPost("/api/java/sessions/{sessionId}/elements/find", (string sessionId, JavaFindElementsRequest request, JavaDriverService driver) =>
+{
+    var result = driver.FindElements(sessionId, request);
+    return result.Success ? Results.Ok(result) : Results.NotFound(result);
+});
+
+app.MapPost("/api/java/sessions/{sessionId}/elements/children", (string sessionId, JavaFindChildElementsRequest request, JavaDriverService driver) =>
+{
+    var result = driver.FindChildElements(sessionId, request);
+    return result.Success ? Results.Ok(result) : Results.NotFound(result);
+});
+
 app.MapPost("/api/java/sessions/{sessionId}/actions", (string sessionId, JavaActionRequest request, JavaDriverService driver) =>
 {
     var result = driver.ExecuteAction(sessionId, request);
@@ -180,6 +196,18 @@ app.MapPost("/api/java/actions/run", (JavaOneShotActionRequest request, JavaDriv
 app.MapPost("/api/java/validate/run", (JavaValidationRequest request, JavaDriverService driver) =>
 {
     var result = driver.ValidateOneShot(request);
+    return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+});
+
+app.MapPost("/api/java/elements/find", (JavaFindElementsRequest request, JavaDriverService driver) =>
+{
+    var result = driver.FindElementsOneShot(request);
+    return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+});
+
+app.MapPost("/api/java/elements/children", (JavaFindChildElementsRequest request, JavaDriverService driver) =>
+{
+    var result = driver.FindChildElementsOneShot(request);
     return result.Success ? Results.Ok(result) : Results.BadRequest(result);
 });
 

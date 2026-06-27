@@ -58,6 +58,43 @@ public final class JavaAutomation {
         return new JavaObject(this, null, objectKey);
     }
 
+    public List<JavaElementSnapshot> findElements(String objectKey) {
+        return findElements(objectKey, null, null, null);
+    }
+
+    public List<JavaElementSnapshot> findElements(String objectKey, Integer minimumScore, Integer maxResults, JavaWindowSelector window) {
+        JavaFindElementsRequest request = JavaFindElementsRequest.oneShot(
+                List.copyOf(repositoryPaths),
+                objectKey,
+                null,
+                window,
+                resolutionPolicy,
+                minimumScore,
+                maxResults);
+        DriverResult result = api.findElementsOneShot(request);
+        JavaDriver.ensureSuccess(result);
+        return JavaDriver.snapshots(result);
+    }
+
+    public List<JavaElementSnapshot> findChildElements(String parentObjectKey) {
+        return findChildElements(parentObjectKey, null, null, false, null);
+    }
+
+    public List<JavaElementSnapshot> findChildElements(String parentObjectKey, Integer maxDepth, Integer maxResults, boolean includeSelf, JavaWindowSelector window) {
+        JavaFindChildElementsRequest request = JavaFindChildElementsRequest.oneShot(
+                List.copyOf(repositoryPaths),
+                parentObjectKey,
+                null,
+                window,
+                resolutionPolicy,
+                includeSelf,
+                maxDepth,
+                maxResults);
+        DriverResult result = api.findChildElementsOneShot(request);
+        JavaDriver.ensureSuccess(result);
+        return JavaDriver.snapshots(result);
+    }
+
     DriverResult run(JavaAction action, String objectKey, String text, JavaWindowSelector window) {
         JavaOneShotActionRequest request = JavaOneShotActionRequest.of(
                 action,

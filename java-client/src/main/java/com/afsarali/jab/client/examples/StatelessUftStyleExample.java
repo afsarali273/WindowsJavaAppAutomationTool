@@ -1,12 +1,14 @@
 package com.afsarali.jab.client.examples;
 
 import com.afsarali.jab.client.JavaAutomation;
+import com.afsarali.jab.client.JavaElementSnapshot;
 import com.afsarali.jab.client.RetryOptions;
 import com.afsarali.jab.client.model.JavaWindowSelector;
 import com.afsarali.jab.client.model.ResolutionPolicy;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.List;
 
 public final class StatelessUftStyleExample {
     private StatelessUftStyleExample() {
@@ -37,5 +39,9 @@ public final class StatelessUftStyleExample {
                     .object("button_open_0")
                     .click();
         }
+
+        List<JavaElementSnapshot> candidates = automation.window(JavaWindowSelector.title("Open").className("SunAwtDialog"))
+                .findElements("button_open_0", 70, 10);
+        candidates.forEach(candidate -> System.out.println(candidate.displayName() + " score=" + candidate.score()));
     }
 }

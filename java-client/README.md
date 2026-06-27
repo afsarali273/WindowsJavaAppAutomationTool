@@ -79,3 +79,28 @@ Convenience methods include:
 - `isSelected()`
 - `hasText()`
 - `hasText("expected text")`
+
+## Finding multiple elements
+
+Use `findElements` when a locator/object repository key may match more than one live element:
+
+```java
+List<JavaElementSnapshot> tabs = automation
+    .window(JavaWindowSelector.title("Download").className("SunAwtDialog"))
+    .findElements("page_tab_download_from_osm_0", 70, 20);
+
+for (JavaElementSnapshot tab : tabs) {
+    System.out.println(tab.displayName() + " score=" + tab.score());
+}
+```
+
+Use `findChildElements` to return all descendants under a resolved parent object:
+
+```java
+List<JavaElementSnapshot> descendants = automation
+    .window(JavaWindowSelector.title("Download").className("SunAwtDialog"))
+    .object("download_dialog_root")
+    .findChildElements(10, 500, false);
+```
+
+If no parent object is supplied through the low-level API, child search starts from the current window root.

@@ -88,6 +88,31 @@ public sealed record JavaValidationRequest(
     bool AutoSwitchWindow = true,
     bool RefreshTree = true);
 
+public sealed record JavaFindElementsRequest(
+    string? RepositoryPath = null,
+    IReadOnlyList<string>? RepositoryPaths = null,
+    string? ObjectKey = null,
+    LocatorSuggestion? Locator = null,
+    JavaWindowSelector? Window = null,
+    ResolutionPolicy? ResolutionPolicy = null,
+    bool AutoSwitchWindow = true,
+    bool RefreshTree = true,
+    int? MinimumScore = null,
+    int? MaxResults = null);
+
+public sealed record JavaFindChildElementsRequest(
+    string? RepositoryPath = null,
+    IReadOnlyList<string>? RepositoryPaths = null,
+    string? ParentObjectKey = null,
+    LocatorSuggestion? ParentLocator = null,
+    JavaWindowSelector? Window = null,
+    ResolutionPolicy? ResolutionPolicy = null,
+    bool AutoSwitchWindow = true,
+    bool RefreshTree = true,
+    bool IncludeSelf = false,
+    int? MaxDepth = null,
+    int? MaxResults = null);
+
 public sealed record DriverResult(
     bool Success,
     string Message,
@@ -129,3 +154,27 @@ public sealed record JavaElementValidationDto(
     LocatorSuggestion? Locator,
     IReadOnlyList<string> Actions,
     string Message);
+
+public sealed record JavaElementSnapshotDto(
+    string DisplayName,
+    string Role,
+    string RoleEnUs,
+    string Name,
+    string VirtualAccessibleName,
+    string Description,
+    string States,
+    string StatesEnUs,
+    int IndexInParent,
+    int ObjectDepth,
+    int ChildrenCount,
+    string Path,
+    string IndexPath,
+    string XPath,
+    string ParentRole,
+    string ParentName,
+    string TextPreview,
+    string CurrentValue,
+    ElementBounds Bounds,
+    LocatorSuggestion Locator,
+    IReadOnlyList<string> Actions,
+    int Score);

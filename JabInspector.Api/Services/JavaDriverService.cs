@@ -327,6 +327,56 @@ public sealed class JavaDriverService : IDisposable
         }
     }
 
+    public DriverResult FindElements(string sessionId, JavaFindElementsRequest request)
+    {
+        lock (_sync)
+        {
+            if (!TryGetSession(sessionId, out var session, out var result)) return result;
+            return FindElementsCore(session, request);
+        }
+    }
+
+    public DriverResult FindElementsOneShot(JavaFindElementsRequest request)
+    {
+        lock (_sync)
+        {
+            var sessionResult = CreateEphemeralSession(
+                request.RepositoryPath,
+                request.RepositoryPaths,
+                request.Window,
+                request.ObjectKey);
+            if (!sessionResult.Success || sessionResult.Session is null)
+                return Ok("Find elements completed. No matching Java window was found.", null, Array.Empty<JavaElementSnapshotDto>());
+
+            return FindElementsCore(sessionResult.Session, request);
+        }
+    }
+
+    public DriverResult FindChildElements(string sessionId, JavaFindChildElementsRequest request)
+    {
+        lock (_sync)
+        {
+            if (!TryGetSession(sessionId, out var session, out var result)) return result;
+            return FindChildElementsCore(session, request);
+        }
+    }
+
+    public DriverResult FindChildElementsOneShot(JavaFindChildElementsRequest request)
+    {
+        lock (_sync)
+        {
+            var sessionResult = CreateEphemeralSession(
+                request.RepositoryPath,
+                request.RepositoryPaths,
+                request.Window,
+                request.ParentObjectKey);
+            if (!sessionResult.Success || sessionResult.Session is null)
+                return Ok("Find child elements completed. No matching Java window was found.", null, Array.Empty<JavaElementSnapshotDto>());
+
+            return FindChildElementsCore(sessionResult.Session, request);
+        }
+    }
+
     private List<string> NormalizeRepositoryPaths(string? path, IReadOnlyList<string>? paths)
     {
         var normalized = new List<string>();
@@ -382,6 +432,38 @@ public sealed class JavaDriverService : IDisposable
 
         session.Repository.AddRange(objectsByKey.Values);
         session.Windows.AddRange(windowsByKey.Values);
+    }
+
+    private EphemeralSessionResult CreateEphemeralSession(
+        string? repositoryPath,
+        IReadOnlyList<string>? repositoryPaths,
+        JavaWindowSelector? requestedWindow,
+        string? objectKey)
+    {
+        var paths = NormalizeRepositoryPaths(repositoryPath, repositoryPaths);
+        List<JavaRecordingProject> projects = [];
+        if (paths.Count > 0)
+        {
+            try
+            {
+                projects = LoadRecordingProjects(paths);
+            }
+            catch (Exception ex)
+            {
+                return new(false, null, $"Could not load repository: {ex.Message}");
+            }
+        }
+
+        var window = FindInitialWindow(requestedWindow, objectKey, projects);
+        if (window is null) return new(false, null, "No matching Java window was found.");
+
+        var session = new JavaDriverSession
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Window = window
+        };
+        ReplaceSessionRepositories(session, projects);
+        return new(true, session, "Ephemeral session created.");
     }
 
     private JavaWindowInfo? FindWindow(CreateSessionRequest request)
@@ -515,6 +597,85 @@ public sealed class JavaDriverService : IDisposable
         return Ok("Validation completed.", session.Id, validation);
     }
 
+    private DriverResult FindElementsCore(JavaDriverSession session, JavaFindElementsRequest request)
+    {
+        var routed = RouteSessionWindow(session, request.ObjectKey, request.Window, request.AutoSwitchWindow);
+        if (!routed.Success) return Ok("Find elements completed. Requested window/modal was not found.", session.Id, Array.Empty<JavaElementSnapshotDto>());
+
+        if (request.RefreshTree || session.Root is null)
+        {
+            var refresh = RefreshSessionTree(session);
+            if (!refresh.Success) return refresh;
+        }
+
+        if (session.Root is null) return Ok("Find elements completed. Tree is empty.", session.Id, Array.Empty<JavaElementSnapshotDto>());
+
+        var entry = ResolveFindEntry(session, request.ObjectKey, request.Locator);
+        var policy = (request.ResolutionPolicy ?? ResolutionPolicy.Default).Sanitize();
+        var minimumScore = Math.Clamp(request.MinimumScore ?? policy.MinimumScore, 0, 500);
+        var maxResults = Math.Clamp(request.MaxResults ?? policy.MaxCandidates, 1, 500);
+
+        var matches = EnumerateNodes(session.Root)
+            .Select(node => new { Node = node, Score = ScoreFindCandidate(node, entry, request.Locator) })
+            .Where(candidate => entry is null && request.Locator is null || candidate.Score >= minimumScore)
+            .OrderByDescending(candidate => candidate.Score)
+            .ThenBy(candidate => candidate.Node.ObjectDepth)
+            .ThenBy(candidate => candidate.Node.IndexInParent)
+            .Take(maxResults)
+            .Select(candidate => CreateSnapshot(candidate.Node, candidate.Score))
+            .ToList();
+
+        return Ok($"Find elements completed. {matches.Count} match(es) returned.", session.Id, matches);
+    }
+
+    private DriverResult FindChildElementsCore(JavaDriverSession session, JavaFindChildElementsRequest request)
+    {
+        var routed = RouteSessionWindow(session, request.ParentObjectKey, request.Window, request.AutoSwitchWindow);
+        if (!routed.Success) return Ok("Find child elements completed. Requested window/modal was not found.", session.Id, Array.Empty<JavaElementSnapshotDto>());
+
+        if (request.RefreshTree || session.Root is null)
+        {
+            var refresh = RefreshSessionTree(session);
+            if (!refresh.Success) return refresh;
+        }
+
+        if (session.Root is null) return Ok("Find child elements completed. Tree is empty.", session.Id, Array.Empty<JavaElementSnapshotDto>());
+
+        AccessibleNode parent;
+        if (string.IsNullOrWhiteSpace(request.ParentObjectKey) && request.ParentLocator is null)
+        {
+            parent = session.Root;
+        }
+        else
+        {
+            var parentEntry = ResolveFindEntry(session, request.ParentObjectKey, request.ParentLocator);
+            if (parentEntry is null && request.ParentLocator is null)
+                return Ok("Find child elements completed. Parent repository object was not found.", session.Id, Array.Empty<JavaElementSnapshotDto>());
+
+            var step = parentEntry is null
+                ? null
+                : new JavaRecordedStep { ObjectKey = parentEntry.ObjectKey, ObjectLocator = parentEntry.Locator };
+            var candidateEntry = parentEntry ?? CreateRepositoryEntry(request.ParentLocator!, session.Window);
+            var resolution = ResolveNodeWithRetry(session, candidateEntry.ObjectKey, candidateEntry.Locator, request.ResolutionPolicy);
+            if (!resolution.Success || resolution.Node is null)
+                return Ok($"Find child elements completed. Parent was not found: {resolution.Message}", session.Id, Array.Empty<JavaElementSnapshotDto>());
+            parent = resolution.Node;
+        }
+
+        var maxDepth = request.MaxDepth is null ? int.MaxValue : Math.Clamp(request.MaxDepth.Value, 0, 100);
+        var maxResults = Math.Clamp(request.MaxResults ?? 500, 1, 5000);
+        var baseDepth = parent.ObjectDepth < 0 ? 0 : parent.ObjectDepth;
+
+        var children = EnumerateNodes(parent)
+            .Where(node => request.IncludeSelf || !ReferenceEquals(node, parent))
+            .Where(node => maxDepth == int.MaxValue || ((node.ObjectDepth < 0 ? baseDepth : node.ObjectDepth) - baseDepth) <= maxDepth)
+            .Take(maxResults)
+            .Select(node => CreateSnapshot(node, 0))
+            .ToList();
+
+        return Ok($"Find child elements completed. {children.Count} descendant element(s) returned.", session.Id, children);
+    }
+
     private DriverResult ExecuteActionCore(JavaDriverSession session, JavaActionRequest request, bool isOneShot)
     {
         var routed = RouteSessionWindow(session, request.ObjectKey, request.Window, request.AutoSwitchWindow);
@@ -581,6 +742,108 @@ public sealed class JavaDriverService : IDisposable
         if (string.IsNullOrWhiteSpace(states)) return false;
         return states.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Any(x => string.Equals(x, state, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private JavaObjectRepositoryEntry? ResolveFindEntry(JavaDriverSession session, string? objectKey, LocatorSuggestion? locator)
+    {
+        if (!string.IsNullOrWhiteSpace(objectKey))
+        {
+            var entry = session.Repository.LastOrDefault(x => string.Equals(x.ObjectKey, objectKey, StringComparison.OrdinalIgnoreCase));
+            if (entry is not null) return entry;
+        }
+
+        return locator is null ? null : CreateRepositoryEntry(locator, session.Window);
+    }
+
+    private JavaElementSnapshotDto CreateSnapshot(AccessibleNode node, int score)
+    {
+        return new JavaElementSnapshotDto(
+            node.DisplayName,
+            node.Role,
+            node.RoleEnUs,
+            node.Name,
+            node.VirtualAccessibleName,
+            node.Description,
+            node.States,
+            node.StatesEnUs,
+            node.IndexInParent,
+            node.ObjectDepth,
+            node.ChildrenCount,
+            node.Path,
+            LocatorGenerator.BuildIndexPath(node),
+            LocatorGenerator.BuildXPath(node),
+            node.Parent?.Role ?? "",
+            node.Parent?.Name ?? "",
+            node.TextPreview,
+            node.CurrentValue,
+            new ElementBounds(node.X, node.Y, node.Width, node.Height),
+            LocatorGenerator.GenerateLocator(node),
+            _automation.GetActions(node),
+            score);
+    }
+
+    private static int ScoreFindCandidate(AccessibleNode node, JavaObjectRepositoryEntry? entry, LocatorSuggestion? locator)
+    {
+        if (entry is null && locator is null) return 0;
+        var score = 0;
+        AddScore(ref score, TextEquals(node.RoleEnUs, locator?.RoleEnUs ?? entry?.RoleEnUs), 22);
+        AddScore(ref score, TextEquals(node.Role, locator?.Role ?? entry?.Role), 20);
+        AddScore(ref score, TextEquals(node.Name, locator?.Name ?? entry?.Name), 28);
+        AddScore(ref score, TextEquals(node.VirtualAccessibleName, locator?.VirtualAccessibleName ?? entry?.VirtualAccessibleName), 26);
+        AddScore(ref score, TextEquals(node.Description, locator?.Description ?? entry?.Description), 12);
+        AddScore(ref score, TextEquals(node.Path, locator?.Path ?? entry?.Path), 35);
+        AddScore(ref score, TextEquals(LocatorGenerator.BuildIndexPath(node), locator?.IndexPath ?? entry?.IndexPath), 35);
+        AddScore(ref score, TextEquals(LocatorGenerator.BuildXPath(node), locator?.XPath ?? entry?.XPath), 30);
+        AddScore(ref score, TextEquals(LocatorGenerator.BuildIndexXPath(node), locator?.IndexXPath ?? entry?.IndexXPath), 30);
+        AddScore(ref score, TextEquals(node.Parent?.Role, locator?.ParentRole ?? entry?.ParentRole), 10);
+        AddScore(ref score, TextEquals(node.Parent?.Name, locator?.ParentName ?? entry?.ParentName), 10);
+        AddScore(ref score, TextEquals(node.TextPreview, locator?.TextPreview ?? entry?.Locator?.TextPreview), 12);
+        AddScore(ref score, TextEquals(node.CurrentValue, locator?.CurrentValue ?? entry?.Locator?.CurrentValue), 14);
+
+        var expectedDepth = locator?.ObjectDepth ?? entry?.ObjectDepth ?? -1;
+        if (expectedDepth >= 0 && node.ObjectDepth == expectedDepth) score += 8;
+        var expectedIndex = locator?.IndexInParent ?? entry?.IndexInParent ?? -1;
+        if (expectedIndex >= 0 && node.IndexInParent == expectedIndex) score += 8;
+
+        if (locator?.Bounds is not null && BoundsClose(node, locator.Bounds)) score += 8;
+        else if (entry is not null && BoundsClose(node, new ElementBounds(entry.X, entry.Y, entry.Width, entry.Height))) score += 8;
+
+        return score;
+    }
+
+    private static void AddScore(ref int score, bool matched, int value)
+    {
+        if (matched) score += value;
+    }
+
+    private static bool TextEquals(string? left, string? right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return false;
+        return string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool BoundsClose(AccessibleNode node, ElementBounds bounds)
+    {
+        if (bounds.Width <= 0 || bounds.Height <= 0 || node.Width <= 0 || node.Height <= 0) return false;
+        return Math.Abs(node.X - bounds.X)
+               + Math.Abs(node.Y - bounds.Y)
+               + Math.Abs(node.Width - bounds.Width)
+               + Math.Abs(node.Height - bounds.Height) <= 24;
+    }
+
+    private static IEnumerable<AccessibleNode> EnumerateNodes(AccessibleNode root)
+    {
+        var stack = new Stack<AccessibleNode>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            yield return current;
+            for (var i = current.Children.Count - 1; i >= 0; i--)
+            {
+                stack.Push(current.Children[i]);
+            }
+        }
     }
 
     private DriverResult RouteSessionWindow(JavaDriverSession session, string? objectKey, JavaWindowSelector? selector, bool autoSwitch)
@@ -1070,6 +1333,7 @@ public sealed class JavaDriverService : IDisposable
     public void Dispose() => _bridge.Dispose();
 
     private sealed record ResolveResult(bool Success, string Message, AccessibleNode? Node, ResolutionResult? Details = null);
+    private sealed record EphemeralSessionResult(bool Success, JavaDriverSession? Session, string Message);
 
     private const uint MouseLeftDown = 0x0002;
     private const uint MouseLeftUp = 0x0004;

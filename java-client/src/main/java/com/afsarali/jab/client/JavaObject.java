@@ -5,6 +5,7 @@ import com.afsarali.jab.client.model.JavaAction;
 import com.afsarali.jab.client.model.JavaWindowSelector;
 
 import java.time.Duration;
+import java.util.List;
 
 public final class JavaObject {
     private final JavaAutomation automation;
@@ -132,5 +133,13 @@ public final class JavaObject {
     public JavaObject waitUntilExists(RetryOptions options) {
         Wait.until(this::exists, options, "Timed out waiting for Java object '" + objectKey + "'.");
         return this;
+    }
+
+    public List<JavaElementSnapshot> findChildElements() {
+        return automation.findChildElements(objectKey, null, null, false, window);
+    }
+
+    public List<JavaElementSnapshot> findChildElements(Integer maxDepth, Integer maxResults, boolean includeSelf) {
+        return automation.findChildElements(objectKey, maxDepth, maxResults, includeSelf, window);
     }
 }

@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.StreamSupport;
 
 public final class JavaDriver implements AutoCloseable {
     private final JabApiClient api;
@@ -122,6 +123,32 @@ public final class JavaDriver implements AutoCloseable {
         return JavaValidation.from(result.data());
     }
 
+    public List<JavaElementSnapshot> findElements(String objectKey) {
+        return findElements(objectKey, null, null);
+    }
+
+    public List<JavaElementSnapshot> findElements(String objectKey, Integer minimumScore, Integer maxResults) {
+        return findElements(objectKey, minimumScore, maxResults, activeWindow);
+    }
+
+    public List<JavaElementSnapshot> findElements(String objectKey, Integer minimumScore, Integer maxResults, JavaWindowSelector window) {
+        JavaFindElementsRequest request = JavaFindElementsRequest.session(objectKey, null, window, resolutionPolicy, minimumScore, maxResults);
+        DriverResult result = api.findElements(sessionId, request);
+        ensureSuccess(result);
+        return snapshots(result);
+    }
+
+    public List<JavaElementSnapshot> findChildElements(String parentObjectKey) {
+        return findChildElements(parentObjectKey, null, null, false);
+    }
+
+    public List<JavaElementSnapshot> findChildElements(String parentObjectKey, Integer maxDepth, Integer maxResults, boolean includeSelf) {
+        JavaFindChildElementsRequest request = JavaFindChildElementsRequest.session(parentObjectKey, null, activeWindow, resolutionPolicy, includeSelf, maxDepth, maxResults);
+        DriverResult result = api.findChildElements(sessionId, request);
+        ensureSuccess(result);
+        return snapshots(result);
+    }
+
     public JavaDriver waitUntilExists(String objectKey) {
         return waitUntilExists(objectKey, RetryOptions.defaults());
     }
@@ -154,6 +181,13 @@ public final class JavaDriver implements AutoCloseable {
                 () -> execute(action, objectKey, text, window),
                 retryOptions,
                 "Timed out executing " + action.apiName() + " on Java object '" + objectKey + "'.");
+    }
+
+    static List<JavaElementSnapshot> snapshots(DriverResult result) {
+        if (result.data() == null || !result.data().isArray()) return List.of();
+        return StreamSupport.stream(result.data().spliterator(), false)
+                .map(JavaElementSnapshot::from)
+                .toList();
     }
 
     static void ensureSuccess(DriverResult result) {

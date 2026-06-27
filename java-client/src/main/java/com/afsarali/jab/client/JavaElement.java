@@ -5,6 +5,7 @@ import com.afsarali.jab.client.model.JavaAction;
 import com.afsarali.jab.client.model.JavaWindowSelector;
 
 import java.time.Duration;
+import java.util.List;
 
 public final class JavaElement {
     private final JavaDriver driver;
@@ -132,5 +133,13 @@ public final class JavaElement {
     public JavaElement waitUntilExists(RetryOptions options) {
         Wait.until(this::exists, options, "Timed out waiting for Java object '" + objectKey + "'.");
         return this;
+    }
+
+    public List<JavaElementSnapshot> findChildElements() {
+        return driver.findChildElements(objectKey);
+    }
+
+    public List<JavaElementSnapshot> findChildElements(Integer maxDepth, Integer maxResults, boolean includeSelf) {
+        return driver.findChildElements(objectKey, maxDepth, maxResults, includeSelf);
     }
 }
