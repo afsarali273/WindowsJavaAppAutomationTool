@@ -49,6 +49,9 @@ The Java and Windows backends are intentionally kept separate in the codebase so
 - `JabInspector.Tests`  
   Lightweight test harness for core logic and routing behavior.
 
+- `java-client`  
+  Maven-based Java client wrapper for the REST API, supporting both persistent session automation and session-independent window/object repository automation.
+
 ## Features
 
 ### Java inspection
@@ -78,6 +81,16 @@ The Java and Windows backends are intentionally kept separate in the codebase so
 Java mode uses Java Access Bridge where possible and falls back to physical input when needed.  
 Windows mode uses backend-specific action routing where available and physical input fallback for some controls.
 
+### REST API Java client
+
+The `java-client` Maven project provides a Java wrapper for external automation scripts:
+
+- Selenium/WebDriver-style flow with a persistent `JavaDriver` session.
+- UFT/TOSCA-style flow with `JavaAutomation.window(...).object(...).click()` one-shot actions.
+- Window/modal routing by title, class name, process id, VM id, HWND, or repository window scope.
+
+See [java-client/README.md](java-client/README.md) for usage examples.
+
 ### Settings and diagnostics
 
 - Review Java Access Bridge requirements from inside the app
@@ -93,6 +106,7 @@ Windows mode uses backend-specific action routing where available and physical i
 - Windows x64
 - .NET 8 SDK
 - PowerShell
+- Java 17 and Maven, only if building the optional Java REST client
 
 ### For Java inspection
 

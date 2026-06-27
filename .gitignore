@@ -25,6 +25,7 @@ publish/
 *.nupkg
 *.snupkg
 packages/
+target/
 
 *.DS_Store
 Thumbs.db
