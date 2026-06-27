@@ -21,6 +21,8 @@ public final class InlineLocatorExample {
         LocatorSuggestion bookmarksTab = LocatorSuggestion.builder()
                 .role("page tab")
                 .name("Bookmarks")
+                .virtualAccessibleName("Bookmarks")
+                .path("dialog[0]/root pane[0]/layered pane[0]/panel[0]/panel[0]/split pane[0]/page tab list[1]/page tab[1]")
                 .parentRole("page tab list")
                 .objectDepth(8)
                 .build();
