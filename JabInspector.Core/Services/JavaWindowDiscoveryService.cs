@@ -7,7 +7,23 @@ namespace JabInspector.Core.Services;
 
 public sealed class JavaWindowDiscoveryService(AccessBridgeService bridge, InspectorLogger logger)
 {
-    public IReadOnlyList<JavaWindowInfo> GetJavaWindows()
+    public IReadOnlyList<JavaWindowInfo> GetJavaWindows(int attempts = 1, int retryDelayMs = 250)
+    {
+        attempts = Math.Clamp(attempts, 1, 5);
+        retryDelayMs = Math.Clamp(retryDelayMs, 50, 2000);
+        List<JavaWindowInfo> result = [];
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            result = ScanJavaWindows();
+            if (result.Count > 0 || attempt == attempts) return result;
+            logger.Debug($"No Java windows found on discovery attempt {attempt}; retrying after {retryDelayMs}ms.");
+            Thread.Sleep(retryDelayMs);
+        }
+
+        return result;
+    }
+
+    private List<JavaWindowInfo> ScanJavaWindows()
     {
         var result = new List<JavaWindowInfo>();
         var scanned = 0;

@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using JabInspector.Core.Diagnostics;
 using JabInspector.Core.Models;
 using JabInspector.Core.Services;
+using JabInspector.Native;
 
 namespace JabInspector.Api.Services;
 
@@ -17,6 +18,7 @@ public sealed class JavaDriverService : IDisposable
     private readonly AutomationService _automation;
     private readonly ConcurrentDictionary<string, JavaDriverSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _sync = new();
+    private bool _diagnosticsLogged;
 
     public JavaDriverService(AccessBridgeService bridge, InspectorLogger logger)
     {
@@ -32,7 +34,9 @@ public sealed class JavaDriverService : IDisposable
         lock (_sync)
         {
             var discovery = new JavaWindowDiscoveryService(_bridge, _logger);
-            return discovery.GetJavaWindows();
+            var windows = discovery.GetJavaWindows(attempts: 3, retryDelayMs: 300);
+            if (windows.Count == 0) LogApiDiscoveryDiagnostics();
+            return windows;
         }
     }
 
@@ -42,7 +46,7 @@ public sealed class JavaDriverService : IDisposable
         {
             var window = FindWindow(request);
             if (window is null)
-                return Fail("No matching Java window was found. Provide hwnd, title, or processId.");
+                return Fail("No matching Java window was found. Provide hwnd, title, or processId. The API server could not see any Java Access Bridge windows; check /api/health and /api/java/windows from the same server process.");
 
             var session = new JavaDriverSession
             {
@@ -484,6 +488,21 @@ public sealed class JavaDriverService : IDisposable
             return windows.FirstOrDefault(x => x.Title.Contains(request.Title, StringComparison.OrdinalIgnoreCase));
 
         return windows.FirstOrDefault();
+    }
+
+    private void LogApiDiscoveryDiagnostics()
+    {
+        if (_diagnosticsLogged) return;
+        _diagnosticsLogged = true;
+        _logger.Log("API Java discovery diagnostics:");
+        foreach (var line in NativeEnvironment.GetDiagnostics())
+        {
+            _logger.Log($"  {line}");
+        }
+
+        _logger.Log($"  User interactive: {Environment.UserInteractive}");
+        _logger.Log($"  Process path: {Environment.ProcessPath ?? "(unknown)"}");
+        _logger.Log($"  Current directory: {Environment.CurrentDirectory}");
     }
 
     private JavaWindowInfo? FindInitialWindow(JavaOneShotActionRequest request, IReadOnlyList<JavaRecordingProject> projects)
