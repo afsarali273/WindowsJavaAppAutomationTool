@@ -71,6 +71,18 @@ public final class JavaAutomation {
         return result;
     }
 
+    JavaValidation validate(String objectKey, String expectedText, JavaWindowSelector window) {
+        JavaValidationRequest request = JavaValidationRequest.oneShot(
+                List.copyOf(repositoryPaths),
+                objectKey,
+                expectedText,
+                window,
+                resolutionPolicy);
+        DriverResult result = api.validateOneShot(request);
+        JavaDriver.ensureSuccess(result);
+        return JavaValidation.from(result.data());
+    }
+
     DriverResult run(JavaAction action, String objectKey, String text, JavaWindowSelector window, RetryOptions retryOptions) {
         return Wait.call(
                 () -> run(action, objectKey, text, window),

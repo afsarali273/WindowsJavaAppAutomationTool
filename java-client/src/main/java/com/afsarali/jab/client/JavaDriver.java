@@ -92,12 +92,34 @@ public final class JavaDriver implements AutoCloseable {
     }
 
     public boolean exists(String objectKey) {
-        try {
-            resolve(objectKey, activeWindow);
-            return true;
-        } catch (ApiException ex) {
-            return false;
-        }
+        return validate(objectKey).exists();
+    }
+
+    public boolean isVisible(String objectKey) {
+        return validate(objectKey).isVisible();
+    }
+
+    public boolean isEnabled(String objectKey) {
+        return validate(objectKey).isEnabled();
+    }
+
+    public boolean hasText(String objectKey, String expectedText) {
+        return validate(objectKey, expectedText).textMatches();
+    }
+
+    public JavaValidation validate(String objectKey) {
+        return validate(objectKey, null, activeWindow);
+    }
+
+    public JavaValidation validate(String objectKey, String expectedText) {
+        return validate(objectKey, expectedText, activeWindow);
+    }
+
+    public JavaValidation validate(String objectKey, String expectedText, JavaWindowSelector window) {
+        JavaValidationRequest request = JavaValidationRequest.session(objectKey, expectedText, window, resolutionPolicy);
+        DriverResult result = api.validateElement(sessionId, request);
+        ensureSuccess(result);
+        return JavaValidation.from(result.data());
     }
 
     public JavaDriver waitUntilExists(String objectKey) {

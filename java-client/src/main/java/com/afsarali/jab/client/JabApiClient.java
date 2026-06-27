@@ -89,12 +89,20 @@ public final class JabApiClient {
         return post("/api/java/sessions/" + encode(sessionId) + "/elements/resolve", request, DriverResult.class);
     }
 
+    public DriverResult validateElement(String sessionId, JavaValidationRequest request) {
+        return post("/api/java/sessions/" + encode(sessionId) + "/elements/validate", request, DriverResult.class);
+    }
+
     public DriverResult executeAction(String sessionId, JavaActionRequest request) {
         return post("/api/java/sessions/" + encode(sessionId) + "/actions", request, DriverResult.class);
     }
 
     public DriverResult runOneShot(JavaOneShotActionRequest request) {
         return post("/api/java/actions/run", request, DriverResult.class);
+    }
+
+    public DriverResult validateOneShot(JavaValidationRequest request) {
+        return post("/api/java/validate/run", request, DriverResult.class);
     }
 
     private <T> T get(String path, Class<T> responseType) {

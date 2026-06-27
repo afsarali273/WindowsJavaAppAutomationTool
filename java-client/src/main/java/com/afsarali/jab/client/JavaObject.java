@@ -78,12 +78,47 @@ public final class JavaObject {
     }
 
     public boolean exists() {
-        try {
-            automation.run(JavaAction.GET_TEXT, objectKey, "", window);
-            return true;
-        } catch (ApiException ex) {
-            return false;
-        }
+        return validate().exists();
+    }
+
+    public boolean isExist() {
+        return exists();
+    }
+
+    public boolean isVisible() {
+        return validate().isVisible();
+    }
+
+    public boolean isShowing() {
+        return validate().isShowing();
+    }
+
+    public boolean isEnabled() {
+        return validate().isEnabled();
+    }
+
+    public boolean isFocusable() {
+        return validate().isFocusable();
+    }
+
+    public boolean isSelected() {
+        return validate().isSelected();
+    }
+
+    public boolean hasText() {
+        return validate().hasText();
+    }
+
+    public boolean hasText(String expectedText) {
+        return validate(expectedText).textMatches();
+    }
+
+    public JavaValidation validate() {
+        return automation.validate(objectKey, null, window);
+    }
+
+    public JavaValidation validate(String expectedText) {
+        return automation.validate(objectKey, expectedText, window);
     }
 
     public JavaObject waitUntilExists() {

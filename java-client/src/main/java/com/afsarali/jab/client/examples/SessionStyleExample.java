@@ -24,7 +24,9 @@ public final class SessionStyleExample {
                     .waitUntilExists(Duration.ofSeconds(10), Duration.ofMillis(250))
                     .click(RetryOptions.of(Duration.ofSeconds(5), Duration.ofMillis(200)));
 
-            driver.element("button_ok_0").click();
+            if (driver.element("button_ok_0").isVisible()) {
+                driver.element("button_ok_0").click();
+            }
         }
     }
 }

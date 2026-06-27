@@ -217,6 +217,15 @@ public sealed class JavaDriverService : IDisposable
         }
     }
 
+    public DriverResult ValidateElement(string sessionId, JavaValidationRequest request)
+    {
+        lock (_sync)
+        {
+            if (!TryGetSession(sessionId, out var session, out var result)) return result;
+            return ValidateElementCore(session, request);
+        }
+    }
+
     public DriverResult ExecuteAction(string sessionId, JavaActionRequest request)
     {
         lock (_sync)
@@ -280,6 +289,41 @@ public sealed class JavaDriverService : IDisposable
             }
 
             return result;
+        }
+    }
+
+    public DriverResult ValidateOneShot(JavaValidationRequest request)
+    {
+        lock (_sync)
+        {
+            var repositoryPaths = NormalizeRepositoryPaths(request.RepositoryPath, request.RepositoryPaths);
+            List<JavaRecordingProject> projects = [];
+            if (repositoryPaths.Count > 0)
+            {
+                try
+                {
+                    projects = LoadRecordingProjects(repositoryPaths);
+                }
+                catch (Exception ex)
+                {
+                    return Fail($"Could not load repository: {ex.Message}");
+                }
+            }
+
+            var window = FindInitialWindow(request, projects);
+            if (window is null)
+            {
+                return Ok("Validation completed. No matching Java window was found.", null, CreateMissingValidation("No matching Java window was found."));
+            }
+
+            var session = new JavaDriverSession
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Window = window
+            };
+            ReplaceSessionRepositories(session, projects);
+
+            return ValidateElementCore(session, request);
         }
     }
 
@@ -362,18 +406,28 @@ public sealed class JavaDriverService : IDisposable
 
     private JavaWindowInfo? FindInitialWindow(JavaOneShotActionRequest request, IReadOnlyList<JavaRecordingProject> projects)
     {
+        return FindInitialWindow(request.Window, request.ObjectKey, projects);
+    }
+
+    private JavaWindowInfo? FindInitialWindow(JavaValidationRequest request, IReadOnlyList<JavaRecordingProject> projects)
+    {
+        return FindInitialWindow(request.Window, request.ObjectKey, projects);
+    }
+
+    private JavaWindowInfo? FindInitialWindow(JavaWindowSelector? requestedWindow, string? objectKey, IReadOnlyList<JavaRecordingProject> projects)
+    {
         var windows = GetWindows();
-        if (request.Window is not null)
+        if (requestedWindow is not null)
         {
-            var selected = FindWindow(windows, request.Window);
+            var selected = FindWindow(windows, requestedWindow);
             if (selected is not null) return selected;
         }
 
-        if (projects.Count > 0 && !string.IsNullOrWhiteSpace(request.ObjectKey))
+        if (projects.Count > 0 && !string.IsNullOrWhiteSpace(objectKey))
         {
             var entry = projects
                 .SelectMany(project => project.Repository)
-                .LastOrDefault(x => string.Equals(x.ObjectKey, request.ObjectKey, StringComparison.OrdinalIgnoreCase));
+                .LastOrDefault(x => string.Equals(x.ObjectKey, objectKey, StringComparison.OrdinalIgnoreCase));
             if (entry is not null)
             {
                 var scope = !string.IsNullOrWhiteSpace(entry.WindowKey)
@@ -403,6 +457,62 @@ public sealed class JavaDriverService : IDisposable
         }
 
         return windows.FirstOrDefault();
+    }
+
+    private DriverResult ValidateElementCore(JavaDriverSession session, JavaValidationRequest request)
+    {
+        var routed = RouteSessionWindow(session, request.ObjectKey, request.Window, request.AutoSwitchWindow);
+        if (!routed.Success)
+        {
+            return Ok("Validation completed. Requested window/modal was not found.", session.Id, CreateMissingValidation(routed.Message));
+        }
+
+        if (request.RefreshTree || session.Root is null)
+        {
+            var refresh = RefreshSessionTree(session);
+            if (!refresh.Success) return refresh;
+        }
+
+        var resolution = ResolveNodeWithRetry(session, request.ObjectKey, request.Locator, request.ResolutionPolicy);
+        if (!resolution.Success || resolution.Node is null)
+        {
+            return Ok("Validation completed. Element was not found.", session.Id, CreateMissingValidation(resolution.Message));
+        }
+
+        var node = resolution.Node;
+        var locator = LocatorGenerator.GenerateLocator(node);
+        var text = "";
+        try
+        {
+            text = _automation.GetText(node) ?? "";
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug($"Validation text read failed for {node.DisplayName}: {ex.Message}");
+        }
+
+        var bounds = new ElementBounds(node.X, node.Y, node.Width, node.Height);
+        var hasPositiveBounds = node.Width > 0 && node.Height > 0;
+        var validation = new JavaElementValidationDto(
+            Exists: true,
+            IsVisible: HasState(node, "visible") && hasPositiveBounds,
+            IsShowing: HasState(node, "showing") && hasPositiveBounds,
+            IsEnabled: HasState(node, "enabled"),
+            IsFocusable: HasState(node, "focusable"),
+            IsSelected: HasState(node, "selected"),
+            HasText: !string.IsNullOrEmpty(text),
+            TextMatches: string.IsNullOrEmpty(request.ExpectedText) || text.Contains(request.ExpectedText, StringComparison.OrdinalIgnoreCase),
+            DisplayName: node.DisplayName,
+            Role: node.Role,
+            Name: node.Name,
+            States: string.IsNullOrWhiteSpace(node.StatesEnUs) ? node.States : node.StatesEnUs,
+            Text: text,
+            Bounds: bounds,
+            Locator: locator,
+            Actions: _automation.GetActions(node),
+            Message: $"Resolved '{node.DisplayName}' for validation.");
+
+        return Ok("Validation completed.", session.Id, validation);
     }
 
     private DriverResult ExecuteActionCore(JavaDriverSession session, JavaActionRequest request, bool isOneShot)
@@ -440,6 +550,37 @@ public sealed class JavaDriverService : IDisposable
             message = execution.Message,
             text = execution.Text
         });
+    }
+
+    private static JavaElementValidationDto CreateMissingValidation(string message) => new(
+        Exists: false,
+        IsVisible: false,
+        IsShowing: false,
+        IsEnabled: false,
+        IsFocusable: false,
+        IsSelected: false,
+        HasText: false,
+        TextMatches: false,
+        DisplayName: "",
+        Role: "",
+        Name: "",
+        States: "",
+        Text: "",
+        Bounds: null,
+        Locator: null,
+        Actions: [],
+        Message: message);
+
+    private static bool HasState(AccessibleNode node, string state)
+    {
+        return ContainsState(node.States, state) || ContainsState(node.StatesEnUs, state);
+    }
+
+    private static bool ContainsState(string states, string state)
+    {
+        if (string.IsNullOrWhiteSpace(states)) return false;
+        return states.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Any(x => string.Equals(x, state, StringComparison.OrdinalIgnoreCase));
     }
 
     private DriverResult RouteSessionWindow(JavaDriverSession session, string? objectKey, JavaWindowSelector? selector, bool autoSwitch)

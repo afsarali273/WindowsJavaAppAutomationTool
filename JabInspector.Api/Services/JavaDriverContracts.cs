@@ -77,6 +77,17 @@ public sealed record JavaOneShotActionRequest(
     bool PreferAccessibleAction = true,
     bool KeepSession = false);
 
+public sealed record JavaValidationRequest(
+    string? RepositoryPath = null,
+    IReadOnlyList<string>? RepositoryPaths = null,
+    string? ObjectKey = null,
+    LocatorSuggestion? Locator = null,
+    string? ExpectedText = null,
+    JavaWindowSelector? Window = null,
+    ResolutionPolicy? ResolutionPolicy = null,
+    bool AutoSwitchWindow = true,
+    bool RefreshTree = true);
+
 public sealed record DriverResult(
     bool Success,
     string Message,
@@ -99,3 +110,22 @@ public sealed record ResolvedElementDto(
     string DisplayName,
     LocatorSuggestion Locator,
     IReadOnlyList<string> Actions);
+
+public sealed record JavaElementValidationDto(
+    bool Exists,
+    bool IsVisible,
+    bool IsShowing,
+    bool IsEnabled,
+    bool IsFocusable,
+    bool IsSelected,
+    bool HasText,
+    bool TextMatches,
+    string DisplayName,
+    string Role,
+    string Name,
+    string States,
+    string Text,
+    ElementBounds? Bounds,
+    LocatorSuggestion? Locator,
+    IReadOnlyList<string> Actions,
+    string Message);

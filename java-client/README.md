@@ -31,6 +31,7 @@ try (JavaDriver driver = JavaDriver.attachByTitle(
           .waitUntilExists()
           .click();
 
+    boolean okVisible = driver.element("button_ok_0").isVisible();
     driver.element("button_ok_0").click();
 }
 ```
@@ -51,3 +52,30 @@ automation.window(JavaWindowSelector.title("Download").className("SunAwtDialog")
 The second style is useful when scripts should re-attach on each action and naturally follow modals/popups by title, class name, process id, VM id, or repository window scope.
 
 When multiple repositories contain the same `objectKey`, the last repository in the list wins. Use this to layer a shared/common repository first and a screen-specific repository last.
+
+## Validation helpers
+
+Validation is available in both session and session-independent flows:
+
+```java
+JavaValidation validation = automation.window(JavaWindowSelector.title("Download"))
+    .object("button_ok_0")
+    .validate();
+
+if (validation.exists() && validation.isVisible() && validation.isEnabled()) {
+    automation.window(JavaWindowSelector.title("Download"))
+        .object("button_ok_0")
+        .click();
+}
+```
+
+Convenience methods include:
+
+- `exists()` / `isExist()`
+- `isVisible()`
+- `isShowing()`
+- `isEnabled()`
+- `isFocusable()`
+- `isSelected()`
+- `hasText()`
+- `hasText("expected text")`

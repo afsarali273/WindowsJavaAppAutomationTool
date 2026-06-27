@@ -82,8 +82,10 @@ app.MapGet("/", () => Results.Ok(new
         attach = "POST /api/java/sessions",
         sessionWindows = "GET /api/java/sessions/{sessionId}/windows",
         switchWindow = "POST /api/java/sessions/{sessionId}/window",
+        validate = "POST /api/java/sessions/{sessionId}/elements/validate",
         actions = "POST /api/java/sessions/{sessionId}/actions",
-        oneShotAction = "POST /api/java/actions/run"
+        oneShotAction = "POST /api/java/actions/run",
+        oneShotValidate = "POST /api/java/validate/run"
     }
 }));
 
@@ -157,6 +159,12 @@ app.MapPost("/api/java/sessions/{sessionId}/elements/resolve", (string sessionId
     return result.Success ? Results.Ok(result) : Results.NotFound(result);
 });
 
+app.MapPost("/api/java/sessions/{sessionId}/elements/validate", (string sessionId, JavaValidationRequest request, JavaDriverService driver) =>
+{
+    var result = driver.ValidateElement(sessionId, request);
+    return result.Success ? Results.Ok(result) : Results.NotFound(result);
+});
+
 app.MapPost("/api/java/sessions/{sessionId}/actions", (string sessionId, JavaActionRequest request, JavaDriverService driver) =>
 {
     var result = driver.ExecuteAction(sessionId, request);
@@ -166,6 +174,12 @@ app.MapPost("/api/java/sessions/{sessionId}/actions", (string sessionId, JavaAct
 app.MapPost("/api/java/actions/run", (JavaOneShotActionRequest request, JavaDriverService driver) =>
 {
     var result = driver.ExecuteOneShotAction(request);
+    return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+});
+
+app.MapPost("/api/java/validate/run", (JavaValidationRequest request, JavaDriverService driver) =>
+{
+    var result = driver.ValidateOneShot(request);
     return result.Success ? Results.Ok(result) : Results.BadRequest(result);
 });
 

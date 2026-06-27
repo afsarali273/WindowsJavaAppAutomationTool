@@ -28,6 +28,14 @@ public final class StatelessUftStyleExample {
 
         automation.window(JavaWindowSelector.title("Open").className("SunAwtDialog"))
                 .object("button_open_0")
-                .click();
+                .waitUntilExists(Duration.ofSeconds(10), Duration.ofMillis(250));
+
+        if (automation.window(JavaWindowSelector.title("Open").className("SunAwtDialog"))
+                .object("button_open_0")
+                .isEnabled()) {
+            automation.window(JavaWindowSelector.title("Open").className("SunAwtDialog"))
+                    .object("button_open_0")
+                    .click();
+        }
     }
 }
