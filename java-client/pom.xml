@@ -11,7 +11,7 @@
   <description>Java Maven client and automation wrapper for the Java Access Bridge Inspector REST API.</description>
 
   <properties>
-    <maven.compiler.release>17</maven.compiler.release>
+    <maven.compiler.release>11</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <jackson.version>2.17.2</jackson.version>
   </properties>

@@ -106,7 +106,7 @@ See [java-client/README.md](java-client/README.md) for usage examples.
 - Windows x64
 - .NET 8 SDK
 - PowerShell
-- Java 17 and Maven, only if building the optional Java REST client
+- Java 11 or newer and Maven, only if building the optional Java REST client
 
 ### For Java inspection
 

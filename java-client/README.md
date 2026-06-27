@@ -2,6 +2,8 @@
 
 Maven client wrapper for the Java Access Bridge Inspector REST API.
 
+The client compiles with Java 11 or newer.
+
 It supports two automation styles:
 
 - Selenium/WebDriver style: create a driver session once, load a repository, then act on elements through that session.

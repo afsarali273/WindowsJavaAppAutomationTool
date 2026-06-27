@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 public final class JavaDriver implements AutoCloseable {
@@ -187,7 +188,7 @@ public final class JavaDriver implements AutoCloseable {
         if (result.data() == null || !result.data().isArray()) return List.of();
         return StreamSupport.stream(result.data().spliterator(), false)
                 .map(JavaElementSnapshot::from)
-                .toList();
+                .collect(Collectors.toList());
     }
 
     static void ensureSuccess(DriverResult result) {
