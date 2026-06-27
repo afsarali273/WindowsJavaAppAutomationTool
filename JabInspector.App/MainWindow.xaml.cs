@@ -39,6 +39,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     private AccessibleNode? _lastActivatedNode;
     private DateTime _lastActivationAt;
     private bool _startupPositioned;
+    private bool _logScrollScheduled;
     public MainWindow()
     {
         InitializeComponent(); DataContext = _viewModel;
@@ -1251,7 +1252,15 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     }
 
     private void Logs_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    { if (_viewModel.Logs.Count > 0) LogList.ScrollIntoView(_viewModel.Logs[^1]); }
+    {
+        if (_logScrollScheduled) return;
+        _logScrollScheduled = true;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
+        {
+            _logScrollScheduled = false;
+            if (_viewModel.Logs.Count > 0) LogList.ScrollIntoView(_viewModel.Logs[^1]);
+        }));
+    }
 
     private void CopyLogs_Click(object sender, RoutedEventArgs e)
     {
