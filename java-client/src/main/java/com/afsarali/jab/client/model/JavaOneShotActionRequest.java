@@ -80,4 +80,26 @@ public final class JavaOneShotActionRequest {
                 true,
                 false);
     }
+
+    public static JavaOneShotActionRequest of(
+            JavaAction action,
+            List<String> repositoryPaths,
+            LocatorSuggestion locator,
+            String text,
+            JavaWindowSelector window,
+            ResolutionPolicy policy) {
+        return new JavaOneShotActionRequest(
+                action.apiName(),
+                null,
+                repositoryPaths,
+                null,
+                locator,
+                text,
+                window,
+                policy,
+                true,
+                true,
+                true,
+                false);
+    }
 }

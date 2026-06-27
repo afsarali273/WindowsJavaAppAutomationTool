@@ -32,4 +32,8 @@ public final class ResolveElementRequest {
     public static ResolveElementRequest object(String objectKey, JavaWindowSelector window) {
         return new ResolveElementRequest(objectKey, null, window, ResolutionPolicy.strict(), true, false);
     }
+
+    public static ResolveElementRequest locator(LocatorSuggestion locator, JavaWindowSelector window) {
+        return new ResolveElementRequest(null, locator, window, ResolutionPolicy.strict(), true, false);
+    }
 }

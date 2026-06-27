@@ -58,8 +58,20 @@ public final class JavaAutomation {
         return new JavaObject(this, null, objectKey);
     }
 
+    public JavaObject object(LocatorSuggestion locator) {
+        return new JavaObject(this, null, locator);
+    }
+
+    public JavaObject locator(LocatorSuggestion locator) {
+        return object(locator);
+    }
+
     public List<JavaElementSnapshot> findElements(String objectKey) {
         return findElements(objectKey, null, null, null);
+    }
+
+    public List<JavaElementSnapshot> findElements(LocatorSuggestion locator) {
+        return findElements(locator, null, null, null);
     }
 
     public List<JavaElementSnapshot> findElements(String objectKey, Integer minimumScore, Integer maxResults, JavaWindowSelector window) {
@@ -76,15 +88,41 @@ public final class JavaAutomation {
         return JavaDriver.snapshots(result);
     }
 
+    public List<JavaElementSnapshot> findElements(LocatorSuggestion locator, Integer minimumScore, Integer maxResults, JavaWindowSelector window) {
+        JavaFindElementsRequest request = JavaFindElementsRequest.oneShot(
+                List.copyOf(repositoryPaths),
+                null,
+                locator,
+                window,
+                resolutionPolicy,
+                minimumScore,
+                maxResults);
+        DriverResult result = api.findElementsOneShot(request);
+        JavaDriver.ensureSuccess(result);
+        return JavaDriver.snapshots(result);
+    }
+
     public List<JavaElementSnapshot> findChildElements(String parentObjectKey) {
         return findChildElements(parentObjectKey, null, null, false, null);
     }
 
+    public List<JavaElementSnapshot> findChildElements(LocatorSuggestion parentLocator) {
+        return findChildElements(null, parentLocator, null, null, false, null);
+    }
+
     public List<JavaElementSnapshot> findChildElements(String parentObjectKey, Integer maxDepth, Integer maxResults, boolean includeSelf, JavaWindowSelector window) {
+        return findChildElements(parentObjectKey, null, maxDepth, maxResults, includeSelf, window);
+    }
+
+    public List<JavaElementSnapshot> findChildElements(LocatorSuggestion parentLocator, Integer maxDepth, Integer maxResults, boolean includeSelf, JavaWindowSelector window) {
+        return findChildElements(null, parentLocator, maxDepth, maxResults, includeSelf, window);
+    }
+
+    List<JavaElementSnapshot> findChildElements(String parentObjectKey, LocatorSuggestion parentLocator, Integer maxDepth, Integer maxResults, boolean includeSelf, JavaWindowSelector window) {
         JavaFindChildElementsRequest request = JavaFindChildElementsRequest.oneShot(
                 List.copyOf(repositoryPaths),
                 parentObjectKey,
-                null,
+                parentLocator,
                 window,
                 resolutionPolicy,
                 includeSelf,
@@ -96,6 +134,10 @@ public final class JavaAutomation {
     }
 
     DriverResult run(JavaAction action, String objectKey, String text, JavaWindowSelector window) {
+        return run(action, objectKey, null, text, window);
+    }
+
+    DriverResult run(JavaAction action, String objectKey, LocatorSuggestion locator, String text, JavaWindowSelector window) {
         JavaOneShotActionRequest request = JavaOneShotActionRequest.of(
                 action,
                 List.copyOf(repositoryPaths),
@@ -103,27 +145,53 @@ public final class JavaAutomation {
                 text,
                 window,
                 resolutionPolicy);
+        if (locator != null) {
+            request = JavaOneShotActionRequest.of(
+                    action,
+                    List.copyOf(repositoryPaths),
+                    locator,
+                    text,
+                    window,
+                    resolutionPolicy);
+        }
         DriverResult result = api.runOneShot(request);
         JavaDriver.ensureSuccess(result);
         return result;
     }
 
     JavaValidation validate(String objectKey, String expectedText, JavaWindowSelector window) {
+        return validate(objectKey, null, expectedText, window);
+    }
+
+    JavaValidation validate(String objectKey, LocatorSuggestion locator, String expectedText, JavaWindowSelector window) {
         JavaValidationRequest request = JavaValidationRequest.oneShot(
                 List.copyOf(repositoryPaths),
                 objectKey,
                 expectedText,
                 window,
                 resolutionPolicy);
+        if (locator != null) {
+            request = JavaValidationRequest.oneShot(
+                    List.copyOf(repositoryPaths),
+                    locator,
+                    expectedText,
+                    window,
+                    resolutionPolicy);
+        }
         DriverResult result = api.validateOneShot(request);
         JavaDriver.ensureSuccess(result);
         return JavaValidation.from(result.data());
     }
 
     DriverResult run(JavaAction action, String objectKey, String text, JavaWindowSelector window, RetryOptions retryOptions) {
+        return run(action, objectKey, null, text, window, retryOptions);
+    }
+
+    DriverResult run(JavaAction action, String objectKey, LocatorSuggestion locator, String text, JavaWindowSelector window, RetryOptions retryOptions) {
+        String label = objectKey != null && !objectKey.isBlank() ? objectKey : "inline locator";
         return Wait.call(
-                () -> run(action, objectKey, text, window),
+                () -> run(action, objectKey, locator, text, window),
                 retryOptions,
-                "Timed out executing " + action.apiName() + " on Java object '" + objectKey + "'.");
+                "Timed out executing " + action.apiName() + " on Java element '" + label + "'.");
     }
 }

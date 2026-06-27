@@ -93,32 +93,74 @@ public final class JavaDriver implements AutoCloseable {
         return new JavaElement(this, objectKey, activeWindow);
     }
 
+    public JavaElement element(LocatorSuggestion locator) {
+        return new JavaElement(this, locator, activeWindow);
+    }
+
+    public JavaElement locator(LocatorSuggestion locator) {
+        return element(locator);
+    }
+
     public boolean exists(String objectKey) {
         return validate(objectKey).exists();
+    }
+
+    public boolean exists(LocatorSuggestion locator) {
+        return validate(locator).exists();
     }
 
     public boolean isVisible(String objectKey) {
         return validate(objectKey).isVisible();
     }
 
+    public boolean isVisible(LocatorSuggestion locator) {
+        return validate(locator).isVisible();
+    }
+
     public boolean isEnabled(String objectKey) {
         return validate(objectKey).isEnabled();
+    }
+
+    public boolean isEnabled(LocatorSuggestion locator) {
+        return validate(locator).isEnabled();
     }
 
     public boolean hasText(String objectKey, String expectedText) {
         return validate(objectKey, expectedText).textMatches();
     }
 
+    public boolean hasText(LocatorSuggestion locator, String expectedText) {
+        return validate(locator, expectedText).textMatches();
+    }
+
     public JavaValidation validate(String objectKey) {
         return validate(objectKey, null, activeWindow);
+    }
+
+    public JavaValidation validate(LocatorSuggestion locator) {
+        return validate(locator, null, activeWindow);
     }
 
     public JavaValidation validate(String objectKey, String expectedText) {
         return validate(objectKey, expectedText, activeWindow);
     }
 
+    public JavaValidation validate(LocatorSuggestion locator, String expectedText) {
+        return validate(locator, expectedText, activeWindow);
+    }
+
     public JavaValidation validate(String objectKey, String expectedText, JavaWindowSelector window) {
-        JavaValidationRequest request = JavaValidationRequest.session(objectKey, expectedText, window, resolutionPolicy);
+        return validate(objectKey, null, expectedText, window);
+    }
+
+    public JavaValidation validate(LocatorSuggestion locator, String expectedText, JavaWindowSelector window) {
+        return validate(null, locator, expectedText, window);
+    }
+
+    JavaValidation validate(String objectKey, LocatorSuggestion locator, String expectedText, JavaWindowSelector window) {
+        JavaValidationRequest request = locator == null
+                ? JavaValidationRequest.session(objectKey, expectedText, window, resolutionPolicy)
+                : JavaValidationRequest.session(locator, expectedText, window, resolutionPolicy);
         DriverResult result = api.validateElement(sessionId, request);
         ensureSuccess(result);
         return JavaValidation.from(result.data());
@@ -128,8 +170,16 @@ public final class JavaDriver implements AutoCloseable {
         return findElements(objectKey, null, null);
     }
 
+    public List<JavaElementSnapshot> findElements(LocatorSuggestion locator) {
+        return findElements(locator, null, null);
+    }
+
     public List<JavaElementSnapshot> findElements(String objectKey, Integer minimumScore, Integer maxResults) {
         return findElements(objectKey, minimumScore, maxResults, activeWindow);
+    }
+
+    public List<JavaElementSnapshot> findElements(LocatorSuggestion locator, Integer minimumScore, Integer maxResults) {
+        return findElements(locator, minimumScore, maxResults, activeWindow);
     }
 
     public List<JavaElementSnapshot> findElements(String objectKey, Integer minimumScore, Integer maxResults, JavaWindowSelector window) {
@@ -139,12 +189,35 @@ public final class JavaDriver implements AutoCloseable {
         return snapshots(result);
     }
 
+    public List<JavaElementSnapshot> findElements(LocatorSuggestion locator, Integer minimumScore, Integer maxResults, JavaWindowSelector window) {
+        JavaFindElementsRequest request = JavaFindElementsRequest.session(null, locator, window, resolutionPolicy, minimumScore, maxResults);
+        DriverResult result = api.findElements(sessionId, request);
+        ensureSuccess(result);
+        return snapshots(result);
+    }
+
     public List<JavaElementSnapshot> findChildElements(String parentObjectKey) {
         return findChildElements(parentObjectKey, null, null, false);
     }
 
+    public List<JavaElementSnapshot> findChildElements(LocatorSuggestion parentLocator) {
+        return findChildElements(parentLocator, null, null, false);
+    }
+
     public List<JavaElementSnapshot> findChildElements(String parentObjectKey, Integer maxDepth, Integer maxResults, boolean includeSelf) {
-        JavaFindChildElementsRequest request = JavaFindChildElementsRequest.session(parentObjectKey, null, activeWindow, resolutionPolicy, includeSelf, maxDepth, maxResults);
+        return findChildElements(parentObjectKey, null, maxDepth, maxResults, includeSelf);
+    }
+
+    public List<JavaElementSnapshot> findChildElements(LocatorSuggestion parentLocator, Integer maxDepth, Integer maxResults, boolean includeSelf) {
+        return findChildElements(null, parentLocator, maxDepth, maxResults, includeSelf);
+    }
+
+    List<JavaElementSnapshot> findChildElements(String parentObjectKey, LocatorSuggestion parentLocator) {
+        return findChildElements(parentObjectKey, parentLocator, null, null, false);
+    }
+
+    List<JavaElementSnapshot> findChildElements(String parentObjectKey, LocatorSuggestion parentLocator, Integer maxDepth, Integer maxResults, boolean includeSelf) {
+        JavaFindChildElementsRequest request = JavaFindChildElementsRequest.session(parentObjectKey, parentLocator, activeWindow, resolutionPolicy, includeSelf, maxDepth, maxResults);
         DriverResult result = api.findChildElements(sessionId, request);
         ensureSuccess(result);
         return snapshots(result);
@@ -163,6 +236,19 @@ public final class JavaDriver implements AutoCloseable {
         return this;
     }
 
+    public JavaDriver waitUntilExists(LocatorSuggestion locator) {
+        return waitUntilExists(locator, RetryOptions.defaults());
+    }
+
+    public JavaDriver waitUntilExists(LocatorSuggestion locator, Duration timeout, Duration pollInterval) {
+        return waitUntilExists(locator, RetryOptions.of(timeout, pollInterval));
+    }
+
+    public JavaDriver waitUntilExists(LocatorSuggestion locator, RetryOptions options) {
+        Wait.until(() -> exists(locator), options, "Timed out waiting for Java inline locator.");
+        return this;
+    }
+
     DriverResult resolve(String objectKey, JavaWindowSelector window) {
         ResolveElementRequest request = new ResolveElementRequest(objectKey, null, window, resolutionPolicy, true, false);
         DriverResult result = api.resolveElement(sessionId, request);
@@ -170,18 +256,36 @@ public final class JavaDriver implements AutoCloseable {
         return result;
     }
 
+    DriverResult resolve(LocatorSuggestion locator, JavaWindowSelector window) {
+        ResolveElementRequest request = new ResolveElementRequest(null, locator, window, resolutionPolicy, true, false);
+        DriverResult result = api.resolveElement(sessionId, request);
+        ensureSuccess(result);
+        return result;
+    }
+
     DriverResult execute(JavaAction action, String objectKey, String text, JavaWindowSelector window) {
-        JavaActionRequest request = JavaActionRequest.of(action, objectKey, text, window, resolutionPolicy);
+        return execute(action, objectKey, null, text, window);
+    }
+
+    DriverResult execute(JavaAction action, String objectKey, LocatorSuggestion locator, String text, JavaWindowSelector window) {
+        JavaActionRequest request = locator == null
+                ? JavaActionRequest.of(action, objectKey, text, window, resolutionPolicy)
+                : JavaActionRequest.of(action, locator, text, window, resolutionPolicy);
         DriverResult result = api.executeAction(sessionId, request);
         ensureSuccess(result);
         return result;
     }
 
     DriverResult execute(JavaAction action, String objectKey, String text, JavaWindowSelector window, RetryOptions retryOptions) {
+        return execute(action, objectKey, null, text, window, retryOptions);
+    }
+
+    DriverResult execute(JavaAction action, String objectKey, LocatorSuggestion locator, String text, JavaWindowSelector window, RetryOptions retryOptions) {
+        String label = objectKey != null && !objectKey.isBlank() ? objectKey : "inline locator";
         return Wait.call(
-                () -> execute(action, objectKey, text, window),
+                () -> execute(action, objectKey, locator, text, window),
                 retryOptions,
-                "Timed out executing " + action.apiName() + " on Java object '" + objectKey + "'.");
+                "Timed out executing " + action.apiName() + " on Java element '" + label + "'.");
     }
 
     static List<JavaElementSnapshot> snapshots(DriverResult result) {

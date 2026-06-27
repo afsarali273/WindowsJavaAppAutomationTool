@@ -47,6 +47,14 @@ public final class JavaValidationRequest {
         return new JavaValidationRequest(null, null, objectKey, null, expectedText, window, policy, true, false);
     }
 
+    public static JavaValidationRequest session(
+            LocatorSuggestion locator,
+            String expectedText,
+            JavaWindowSelector window,
+            ResolutionPolicy policy) {
+        return new JavaValidationRequest(null, null, null, locator, expectedText, window, policy, true, false);
+    }
+
     public static JavaValidationRequest oneShot(
             List<String> repositoryPaths,
             String objectKey,
@@ -54,5 +62,14 @@ public final class JavaValidationRequest {
             JavaWindowSelector window,
             ResolutionPolicy policy) {
         return new JavaValidationRequest(null, repositoryPaths, objectKey, null, expectedText, window, policy, true, true);
+    }
+
+    public static JavaValidationRequest oneShot(
+            List<String> repositoryPaths,
+            LocatorSuggestion locator,
+            String expectedText,
+            JavaWindowSelector window,
+            ResolutionPolicy policy) {
+        return new JavaValidationRequest(null, repositoryPaths, null, locator, expectedText, window, policy, true, true);
     }
 }
