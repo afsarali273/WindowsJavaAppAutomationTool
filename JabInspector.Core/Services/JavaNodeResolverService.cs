@@ -172,9 +172,10 @@ public sealed class JavaNodeResolverService
         if (node.AccessibleComponent == entry.AccessibleComponent) score += 2;
         if (node.HasManagedDescendantAncestor == entry.HasManagedDescendantAncestor) score += 2;
         score += TextValueScore(node, step?.ObjectLocator ?? entry.Locator);
-        if (entry.ActionNames.Count > 0 && node.ActionNames.Count > 0)
+        var entryActionNames = entry.ActionNames ?? [];
+        if (entryActionNames.Count > 0 && node.ActionNames.Count > 0)
         {
-            var overlap = node.ActionNames.Count(action => entry.ActionNames.Any(recorded => EqualsNormalized(action, recorded)));
+            var overlap = node.ActionNames.Count(action => entryActionNames.Any(recorded => EqualsNormalized(action, recorded)));
             score += Math.Min(10, overlap * 3);
         }
 
@@ -302,7 +303,7 @@ public sealed class JavaNodeResolverService
         CountMatch(node.ChildrenCount == (locator?.ChildrenCount ?? entry.ChildrenCount), locator?.ChildrenCount >= 0 || entry.ChildrenCount >= 0, ref required, ref matched);
         CountMatch(node.HasManagedDescendantAncestor == (locator?.HasManagedDescendantAncestor ?? entry.HasManagedDescendantAncestor), true, ref required, ref matched);
 
-        var actions = locator?.ActionNames ?? entry.ActionNames;
+        var actions = locator?.ActionNames ?? entry.ActionNames ?? [];
         if (actions.Count > 0)
         {
             required++;
@@ -385,9 +386,16 @@ public sealed class JavaNodeResolverService
 
     private static bool BoundsAreCompatible(AccessibleNode node, JavaObjectRepositoryEntry entry, LocatorSuggestion? locator)
     {
-        if (locator is not null && locator.Bounds.Width > 0 && locator.Bounds.Height > 0)
-            return BoundsDistance(node, locator.Bounds) <= 40;
+        if (locator?.Bounds is { Width: > 0, Height: > 0 } bounds)
+            return BoundsDistance(node, bounds) <= 40;
+        if (entry.Width <= 0 || entry.Height <= 0)
+            return false;
         return BoundsDistance(node, entry) <= 40;
+    }
+
+    private static int BoundsDistance(AccessibleNode node, LocatorSuggestion locator)
+    {
+        return locator.Bounds is { } bounds ? BoundsDistance(node, bounds) : int.MaxValue;
     }
 
     private static void CountMatch(bool matches, bool hasRecordedValue, ref int required, ref int matched)
@@ -436,10 +444,13 @@ public sealed class JavaNodeResolverService
             else if (EqualsNormalized(node.States, locator.States)) score += 3;
             score += TextValueScore(node, locator);
 
-            var locatorBoundsDistance = BoundsDistance(node, locator.Bounds);
-            if (locatorBoundsDistance == 0 && locator.Bounds.Width > 0 && locator.Bounds.Height > 0) score += 8;
-            else if (locatorBoundsDistance <= 12) score += 5;
-            else if (locatorBoundsDistance <= 40) score += 2;
+            if (locator.Bounds is { Width: > 0, Height: > 0 } bounds)
+            {
+                var locatorBoundsDistance = BoundsDistance(node, bounds);
+                if (locatorBoundsDistance == 0) score += 8;
+                else if (locatorBoundsDistance <= 12) score += 5;
+                else if (locatorBoundsDistance <= 40) score += 2;
+            }
         }
 
         if (EqualsNormalized(node.Name, locator?.Name ?? step.ObjectName)) score += 18;

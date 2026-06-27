@@ -1153,44 +1153,53 @@ public sealed class JavaDriverService : IDisposable
         return steps.FirstOrDefault();
     }
 
-    private JavaObjectRepositoryEntry CreateRepositoryEntry(LocatorSuggestion locator, JavaWindowInfo window) => new()
+    private JavaObjectRepositoryEntry CreateRepositoryEntry(LocatorSuggestion locator, JavaWindowInfo window)
     {
-        ObjectKey = "inline_locator",
-        FriendlyName = string.IsNullOrWhiteSpace(locator.Name) ? locator.Role : locator.Name,
-        CapturedAtUtc = DateTime.UtcNow,
-        WindowKey = _repositoryService.CreateWindowKey(window),
-        WindowHwndDisplay = window.HwndDisplay,
-        WindowTitle = window.Title,
-        WindowClassName = window.ClassName,
-        WindowProcessId = window.ProcessId,
-        WindowVmId = window.VmId,
-        Engine = locator.Engine,
-        Locator = locator,
-        LocatorJson = JsonExportService.Serialize(locator),
-        Role = locator.Role,
-        RoleEnUs = locator.RoleEnUs,
-        Name = locator.Name,
-        VirtualAccessibleName = locator.VirtualAccessibleName,
-        Description = locator.Description,
-        States = locator.States,
-        StatesEnUs = locator.StatesEnUs,
-        Path = locator.Path,
-        IndexPath = locator.IndexPath,
-        XPath = locator.XPath,
-        IndexXPath = locator.IndexXPath,
-        SemanticXPath = locator.SemanticXPath,
-        ParentRole = locator.ParentRole,
-        ParentName = locator.ParentName,
-        IndexInParent = locator.IndexInParent,
-        ObjectDepth = locator.ObjectDepth,
-        ChildrenCount = locator.ChildrenCount,
-        X = locator.Bounds.X,
-        Y = locator.Bounds.Y,
-        Width = locator.Bounds.Width,
-        Height = locator.Bounds.Height,
-        HasManagedDescendantAncestor = locator.HasManagedDescendantAncestor,
-        ActionNames = locator.ActionNames.ToList()
-    };
+        var bounds = locator.Bounds ?? new ElementBounds(0, 0, 0, 0);
+        return new JavaObjectRepositoryEntry
+        {
+            ObjectKey = "inline_locator",
+            FriendlyName = FirstNonEmpty(locator.Name, locator.VirtualAccessibleName, locator.Description, locator.Role, "inline_locator"),
+            CapturedAtUtc = DateTime.UtcNow,
+            WindowKey = _repositoryService.CreateWindowKey(window),
+            WindowHwndDisplay = window.HwndDisplay,
+            WindowTitle = window.Title,
+            WindowClassName = window.ClassName,
+            WindowProcessId = window.ProcessId,
+            WindowVmId = window.VmId,
+            Engine = FirstNonEmpty(locator.Engine, "java-access-bridge"),
+            Locator = locator,
+            LocatorJson = JsonExportService.Serialize(locator),
+            Role = locator.Role ?? "",
+            RoleEnUs = locator.RoleEnUs ?? "",
+            Name = locator.Name ?? "",
+            VirtualAccessibleName = locator.VirtualAccessibleName ?? "",
+            Description = locator.Description ?? "",
+            States = locator.States ?? "",
+            StatesEnUs = locator.StatesEnUs ?? "",
+            Path = locator.Path ?? "",
+            IndexPath = locator.IndexPath ?? "",
+            XPath = locator.XPath ?? "",
+            IndexXPath = locator.IndexXPath ?? "",
+            SemanticXPath = locator.SemanticXPath ?? "",
+            ParentRole = locator.ParentRole ?? "",
+            ParentName = locator.ParentName ?? "",
+            IndexInParent = locator.IndexInParent,
+            ObjectDepth = locator.ObjectDepth,
+            ChildrenCount = locator.ChildrenCount,
+            X = bounds.X,
+            Y = bounds.Y,
+            Width = bounds.Width,
+            Height = bounds.Height,
+            HasManagedDescendantAncestor = locator.HasManagedDescendantAncestor,
+            ActionNames = locator.ActionNames?.ToList() ?? []
+        };
+    }
+
+    private static string FirstNonEmpty(params string?[] values)
+    {
+        return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
+    }
 
     private bool PhysicalClick(JavaWindowInfo window, AccessibleNode node, int count, JavaRecordedStep? step)
     {
