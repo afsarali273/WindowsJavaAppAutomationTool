@@ -3,10 +3,13 @@ package com.afsarali.jab.client;
 import com.afsarali.jab.client.model.*;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public final class JavaAutomation {
     private final JabApiClient api;
-    private String repositoryPath;
+    private final List<String> repositoryPaths = new ArrayList<>();
     private ResolutionPolicy resolutionPolicy = ResolutionPolicy.strict();
 
     private JavaAutomation(JabApiClient api) {
@@ -18,7 +21,27 @@ public final class JavaAutomation {
     }
 
     public JavaAutomation repository(String repositoryPath) {
-        this.repositoryPath = repositoryPath;
+        this.repositoryPaths.clear();
+        if (repositoryPath != null && !repositoryPath.isBlank()) this.repositoryPaths.add(repositoryPath);
+        return this;
+    }
+
+    public JavaAutomation repositories(String... repositoryPaths) {
+        return repositories(Arrays.asList(repositoryPaths));
+    }
+
+    public JavaAutomation repositories(List<String> repositoryPaths) {
+        this.repositoryPaths.clear();
+        if (repositoryPaths != null) {
+            repositoryPaths.stream()
+                    .filter(path -> path != null && !path.isBlank())
+                    .forEach(this.repositoryPaths::add);
+        }
+        return this;
+    }
+
+    public JavaAutomation addRepository(String repositoryPath) {
+        if (repositoryPath != null && !repositoryPath.isBlank()) this.repositoryPaths.add(repositoryPath);
         return this;
     }
 
@@ -38,7 +61,7 @@ public final class JavaAutomation {
     DriverResult run(JavaAction action, String objectKey, String text, JavaWindowSelector window) {
         JavaOneShotActionRequest request = JavaOneShotActionRequest.of(
                 action,
-                repositoryPath,
+                List.copyOf(repositoryPaths),
                 objectKey,
                 text,
                 window,
@@ -46,5 +69,12 @@ public final class JavaAutomation {
         DriverResult result = api.runOneShot(request);
         JavaDriver.ensureSuccess(result);
         return result;
+    }
+
+    DriverResult run(JavaAction action, String objectKey, String text, JavaWindowSelector window, RetryOptions retryOptions) {
+        return Wait.call(
+                () -> run(action, objectKey, text, window),
+                retryOptions,
+                "Timed out executing " + action.apiName() + " on Java object '" + objectKey + "'.");
     }
 }

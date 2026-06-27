@@ -23,7 +23,9 @@ public sealed record CreateSessionRequest(
     int? ProcessId = null,
     bool RefreshTree = true);
 
-public sealed record LoadRepositoryRequest(string Path);
+public sealed record LoadRepositoryRequest(
+    string? Path = null,
+    IReadOnlyList<string>? Paths = null);
 
 public sealed record JavaWindowSelector(
     string? Hwnd = null,
@@ -64,6 +66,7 @@ public sealed record JavaActionRequest(
 public sealed record JavaOneShotActionRequest(
     string Action,
     string? RepositoryPath = null,
+    IReadOnlyList<string>? RepositoryPaths = null,
     string? ObjectKey = null,
     LocatorSuggestion? Locator = null,
     string? Text = null,

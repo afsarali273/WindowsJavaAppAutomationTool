@@ -74,7 +74,11 @@ public final class JabApiClient {
     }
 
     public DriverResult loadRepository(String sessionId, String repositoryPath) {
-        return post("/api/java/sessions/" + encode(sessionId) + "/repository/load", new LoadRepositoryRequest(repositoryPath), DriverResult.class);
+        return post("/api/java/sessions/" + encode(sessionId) + "/repository/load", LoadRepositoryRequest.single(repositoryPath), DriverResult.class);
+    }
+
+    public DriverResult loadRepositories(String sessionId, List<String> repositoryPaths) {
+        return post("/api/java/sessions/" + encode(sessionId) + "/repository/load", LoadRepositoryRequest.multiple(repositoryPaths), DriverResult.class);
     }
 
     public DriverResult repository(String sessionId) {

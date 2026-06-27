@@ -22,8 +22,13 @@ try (JavaDriver driver = JavaDriver.attachByTitle(
         "Download",
         "C:/recordings/josm-download.jrecording.json")) {
 
+    driver.loadRepositories(
+        "C:/recordings/common-controls.jrecording.json",
+        "C:/recordings/josm-download.jrecording.json");
+
     driver.window(JavaWindowSelector.title("Download").className("SunAwtDialog"))
           .element("page_tab_bounding_box_2")
+          .waitUntilExists()
           .click();
 
     driver.element("button_ok_0").click();
@@ -34,11 +39,15 @@ try (JavaDriver driver = JavaDriver.attachByTitle(
 
 ```java
 JavaAutomation automation = JavaAutomation.connect(URI.create("http://localhost:5055"))
-    .repository("C:/recordings/josm-download.jrecording.json");
+    .repositories(
+        "C:/recordings/common-controls.jrecording.json",
+        "C:/recordings/josm-download.jrecording.json");
 
 automation.window(JavaWindowSelector.title("Download").className("SunAwtDialog"))
           .object("page_tab_bounding_box_2")
-          .click();
+          .click(RetryOptions.of(Duration.ofSeconds(10), Duration.ofMillis(250)));
 ```
 
 The second style is useful when scripts should re-attach on each action and naturally follow modals/popups by title, class name, process id, VM id, or repository window scope.
+
+When multiple repositories contain the same `objectKey`, the last repository in the list wins. Use this to layer a shared/common repository first and a screen-specific repository last.

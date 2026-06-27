@@ -156,21 +156,19 @@ public sealed class JavaDriverService : IDisposable
         lock (_sync)
         {
             if (!TryGetSession(sessionId, out var session, out var result)) return result;
-            if (string.IsNullOrWhiteSpace(request.Path) || !File.Exists(request.Path))
-                return Fail($"Repository/project file was not found: {request.Path}", sessionId);
+            var paths = NormalizeRepositoryPaths(request.Path, request.Paths);
+            if (paths.Count == 0)
+                return Fail("At least one repository/project path is required.", sessionId);
 
             try
             {
-                var project = _repositoryService.LoadProject(request.Path);
-                session.Repository.Clear();
-                session.Repository.AddRange(project.Repository);
-                session.Windows.Clear();
-                session.Windows.AddRange(project.Windows);
-                _logger.Log($"API repository loaded. SessionId={sessionId}, Path='{request.Path}', Objects={session.Repository.Count}, Windows={session.Windows.Count}.");
-                return Ok("Repository loaded.", sessionId, new
+                var projects = LoadRecordingProjects(paths);
+                ReplaceSessionRepositories(session, projects);
+                _logger.Log($"API repository loaded. SessionId={sessionId}, Paths={paths.Count}, Objects={session.Repository.Count}, Windows={session.Windows.Count}.");
+                return Ok(paths.Count == 1 ? "Repository loaded." : "Repositories loaded.", sessionId, new
                 {
-                    project.SessionName,
-                    project.ApplicationAlias,
+                    repositoryPaths = paths,
+                    repositoryCount = projects.Count,
                     windowCount = session.Windows.Count,
                     windows = session.Windows,
                     objectCount = session.Repository.Count,
@@ -232,15 +230,13 @@ public sealed class JavaDriverService : IDisposable
     {
         lock (_sync)
         {
-            JavaRecordingProject? project = null;
-            if (!string.IsNullOrWhiteSpace(request.RepositoryPath))
+            var repositoryPaths = NormalizeRepositoryPaths(request.RepositoryPath, request.RepositoryPaths);
+            List<JavaRecordingProject> projects = [];
+            if (repositoryPaths.Count > 0)
             {
-                if (!File.Exists(request.RepositoryPath))
-                    return Fail($"Repository/project file was not found: {request.RepositoryPath}");
-
                 try
                 {
-                    project = _repositoryService.LoadProject(request.RepositoryPath);
+                    projects = LoadRecordingProjects(repositoryPaths);
                 }
                 catch (Exception ex)
                 {
@@ -248,7 +244,7 @@ public sealed class JavaDriverService : IDisposable
                 }
             }
 
-            var window = FindInitialWindow(request, project);
+            var window = FindInitialWindow(request, projects);
             if (window is null)
                 return Fail("No matching Java window was found for one-shot action. Provide window title/hwnd/className/processId, or a repository object with window metadata.");
 
@@ -258,11 +254,7 @@ public sealed class JavaDriverService : IDisposable
                 Window = window
             };
 
-            if (project is not null)
-            {
-                session.Repository.AddRange(project.Repository);
-                session.Windows.AddRange(project.Windows);
-            }
+            ReplaceSessionRepositories(session, projects);
 
             var actionRequest = new JavaActionRequest(
                 request.Action,
@@ -291,6 +283,63 @@ public sealed class JavaDriverService : IDisposable
         }
     }
 
+    private List<string> NormalizeRepositoryPaths(string? path, IReadOnlyList<string>? paths)
+    {
+        var normalized = new List<string>();
+        if (!string.IsNullOrWhiteSpace(path)) normalized.Add(path.Trim());
+        if (paths is not null)
+        {
+            normalized.AddRange(paths.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()));
+        }
+
+        return normalized
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private List<JavaRecordingProject> LoadRecordingProjects(IReadOnlyList<string> paths)
+    {
+        var projects = new List<JavaRecordingProject>();
+        foreach (var path in paths)
+        {
+            if (!File.Exists(path))
+                throw new FileNotFoundException($"Repository/project file was not found: {path}", path);
+
+            projects.Add(_repositoryService.LoadProject(path));
+        }
+
+        return projects;
+    }
+
+    private static void ReplaceSessionRepositories(JavaDriverSession session, IReadOnlyList<JavaRecordingProject> projects)
+    {
+        session.Repository.Clear();
+        session.Windows.Clear();
+
+        var objectsByKey = new Dictionary<string, JavaObjectRepositoryEntry>(StringComparer.OrdinalIgnoreCase);
+        var windowsByKey = new Dictionary<string, JavaWindowLocator>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var project in projects)
+        {
+            foreach (var window in project.Windows)
+            {
+                var key = string.IsNullOrWhiteSpace(window.WindowKey)
+                    ? $"{window.HwndDisplay}|{window.Title}|{window.ClassName}|{window.ProcessId}|{window.VmId}"
+                    : window.WindowKey;
+                windowsByKey[key] = window;
+            }
+
+            foreach (var entry in project.Repository)
+            {
+                if (string.IsNullOrWhiteSpace(entry.ObjectKey)) continue;
+                objectsByKey[entry.ObjectKey] = entry;
+            }
+        }
+
+        session.Repository.AddRange(objectsByKey.Values);
+        session.Windows.AddRange(windowsByKey.Values);
+    }
+
     private JavaWindowInfo? FindWindow(CreateSessionRequest request)
     {
         var windows = GetWindows();
@@ -311,7 +360,7 @@ public sealed class JavaDriverService : IDisposable
         return windows.FirstOrDefault();
     }
 
-    private JavaWindowInfo? FindInitialWindow(JavaOneShotActionRequest request, JavaRecordingProject? project)
+    private JavaWindowInfo? FindInitialWindow(JavaOneShotActionRequest request, IReadOnlyList<JavaRecordingProject> projects)
     {
         var windows = GetWindows();
         if (request.Window is not null)
@@ -320,13 +369,15 @@ public sealed class JavaDriverService : IDisposable
             if (selected is not null) return selected;
         }
 
-        if (project is not null && !string.IsNullOrWhiteSpace(request.ObjectKey))
+        if (projects.Count > 0 && !string.IsNullOrWhiteSpace(request.ObjectKey))
         {
-            var entry = project.Repository.FirstOrDefault(x => string.Equals(x.ObjectKey, request.ObjectKey, StringComparison.OrdinalIgnoreCase));
+            var entry = projects
+                .SelectMany(project => project.Repository)
+                .LastOrDefault(x => string.Equals(x.ObjectKey, request.ObjectKey, StringComparison.OrdinalIgnoreCase));
             if (entry is not null)
             {
                 var scope = !string.IsNullOrWhiteSpace(entry.WindowKey)
-                    ? project.Windows.FirstOrDefault(x => string.Equals(x.WindowKey, entry.WindowKey, StringComparison.OrdinalIgnoreCase))
+                    ? projects.SelectMany(project => project.Windows).LastOrDefault(x => string.Equals(x.WindowKey, entry.WindowKey, StringComparison.OrdinalIgnoreCase))
                     : null;
                 if (scope is not null)
                 {
@@ -345,13 +396,10 @@ public sealed class JavaDriverService : IDisposable
             }
         }
 
-        if (project?.Windows.Count > 0)
+        foreach (var scope in projects.SelectMany(project => project.Windows))
         {
-            foreach (var scope in project.Windows)
-            {
-                var scoped = FindWindow(windows, scope);
-                if (scoped is not null) return scoped;
-            }
+            var scoped = FindWindow(windows, scope);
+            if (scoped is not null) return scoped;
         }
 
         return windows.FirstOrDefault();

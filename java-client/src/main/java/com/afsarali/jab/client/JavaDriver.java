@@ -3,6 +3,8 @@ package com.afsarali.jab.client;
 import com.afsarali.jab.client.model.*;
 
 import java.net.URI;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
@@ -61,6 +63,15 @@ public final class JavaDriver implements AutoCloseable {
         return this;
     }
 
+    public JavaDriver loadRepositories(String... repositoryPaths) {
+        return loadRepositories(Arrays.asList(repositoryPaths));
+    }
+
+    public JavaDriver loadRepositories(List<String> repositoryPaths) {
+        ensureSuccess(api.loadRepositories(sessionId, repositoryPaths));
+        return this;
+    }
+
     public JavaDriver resolutionPolicy(ResolutionPolicy resolutionPolicy) {
         this.resolutionPolicy = resolutionPolicy;
         return this;
@@ -80,11 +91,47 @@ public final class JavaDriver implements AutoCloseable {
         return new JavaElement(this, objectKey, activeWindow);
     }
 
+    public boolean exists(String objectKey) {
+        try {
+            resolve(objectKey, activeWindow);
+            return true;
+        } catch (ApiException ex) {
+            return false;
+        }
+    }
+
+    public JavaDriver waitUntilExists(String objectKey) {
+        return waitUntilExists(objectKey, RetryOptions.defaults());
+    }
+
+    public JavaDriver waitUntilExists(String objectKey, Duration timeout, Duration pollInterval) {
+        return waitUntilExists(objectKey, RetryOptions.of(timeout, pollInterval));
+    }
+
+    public JavaDriver waitUntilExists(String objectKey, RetryOptions options) {
+        Wait.until(() -> exists(objectKey), options, "Timed out waiting for Java object '" + objectKey + "'.");
+        return this;
+    }
+
+    DriverResult resolve(String objectKey, JavaWindowSelector window) {
+        ResolveElementRequest request = new ResolveElementRequest(objectKey, null, window, resolutionPolicy, true, false);
+        DriverResult result = api.resolveElement(sessionId, request);
+        ensureSuccess(result);
+        return result;
+    }
+
     DriverResult execute(JavaAction action, String objectKey, String text, JavaWindowSelector window) {
         JavaActionRequest request = JavaActionRequest.of(action, objectKey, text, window, resolutionPolicy);
         DriverResult result = api.executeAction(sessionId, request);
         ensureSuccess(result);
         return result;
+    }
+
+    DriverResult execute(JavaAction action, String objectKey, String text, JavaWindowSelector window, RetryOptions retryOptions) {
+        return Wait.call(
+                () -> execute(action, objectKey, text, window),
+                retryOptions,
+                "Timed out executing " + action.apiName() + " on Java object '" + objectKey + "'.");
     }
 
     static void ensureSuccess(DriverResult result) {
