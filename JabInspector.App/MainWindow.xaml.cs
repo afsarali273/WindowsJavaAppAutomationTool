@@ -1427,35 +1427,6 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
                 if (entry is not null) _viewModel.Log($"Created repository file with selected element as {entry.ObjectKey}: {dialog.FileName}");
                 break;
             }
-            case AddToRepositoryTarget.CustomBlank:
-            {
-                var suggestedName = !string.IsNullOrWhiteSpace(_viewModel.RecordingSessionName)
-                                    && !string.Equals(_viewModel.RecordingSessionName, "No active recording session", StringComparison.OrdinalIgnoreCase)
-                    ? _viewModel.RecordingSessionName
-                    : "JavaRepository";
-                var suggestedAlias = !string.IsNullOrWhiteSpace(_viewModel.RecordingApplicationAlias)
-                    ? _viewModel.RecordingApplicationAlias
-                    : (_viewModel.CurrentWindow?.Title ?? "JavaApplication");
-                var metadataDialog = new CustomRepositoryTemplateWindow(suggestedName, suggestedAlias) { Owner = this };
-                if (metadataDialog.ShowDialog() != true) return;
-
-                var dialog = new Microsoft.Win32.SaveFileDialog
-                {
-                    Title = "Create custom blank repository",
-                    Filter = "Java recording project (*.jrecording.json)|*.jrecording.json|JSON files (*.json)|*.json",
-                    FileName = $"{SanitizeFileName(metadataDialog.RepositoryName)}.jrecording.json",
-                    DefaultExt = ".jrecording.json",
-                    InitialDirectory = _viewModel.RepositoryStorageDirectory
-                };
-                if (dialog.ShowDialog(this) != true) return;
-
-                if (_viewModel.CreateBlankRepositoryTemplate(dialog.FileName, metadataDialog.RepositoryName, metadataDialog.ApplicationAlias))
-                {
-                    _viewModel.Log($"Created blank custom repository: {dialog.FileName}");
-                    OpenObjectRepositoryManager();
-                }
-                break;
-            }
         }
     }
 
@@ -1498,13 +1469,6 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         _viewModel.Log($"Loaded recording project from {dialog.FileName}.");
         OpenRecordingStudio();
         UpdateRecordingBadge();
-    }
-
-    private static string SanitizeFileName(string value)
-    {
-        var invalid = Path.GetInvalidFileNameChars();
-        var filtered = new string(value.Trim().Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray());
-        return string.IsNullOrWhiteSpace(filtered) ? "JavaRepository" : filtered;
     }
 
     private async void PlayRecording_Click(object sender, RoutedEventArgs e)

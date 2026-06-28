@@ -6,8 +6,7 @@ public enum AddToRepositoryTarget
 {
     Current,
     ExistingFile,
-    NewFile,
-    CustomBlank
+    NewFile
 }
 
 public partial class AddToRepositoryTargetWindow : Window
@@ -26,8 +25,6 @@ public partial class AddToRepositoryTargetWindow : Window
     private void Existing_Click(object sender, RoutedEventArgs e) => Complete(AddToRepositoryTarget.ExistingFile);
 
     private void New_Click(object sender, RoutedEventArgs e) => Complete(AddToRepositoryTarget.NewFile);
-
-    private void CustomBlank_Click(object sender, RoutedEventArgs e) => Complete(AddToRepositoryTarget.CustomBlank);
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {

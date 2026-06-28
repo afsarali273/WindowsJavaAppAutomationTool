@@ -48,12 +48,6 @@
             <TextBlock Text="Create a new .jrecording.json containing this object." Foreground="{StaticResource MutedBrush}" FontSize="10.5"/>
           </StackPanel>
         </Button>
-        <Button Click="CustomBlank_Click" HorizontalContentAlignment="Left" Padding="12,9">
-          <StackPanel>
-            <TextBlock Text="Create custom blank repository" FontWeight="SemiBold"/>
-            <TextBlock Text="Provide a custom name, choose the path, and generate a blank repository template." Foreground="{StaticResource MutedBrush}" FontSize="10.5" TextWrapping="Wrap"/>
-          </StackPanel>
-        </Button>
       </StackPanel>
     </ScrollViewer>
 

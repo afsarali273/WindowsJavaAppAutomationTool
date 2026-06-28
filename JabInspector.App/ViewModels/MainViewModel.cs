@@ -920,47 +920,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         return entry;
     }
 
-    public bool CreateBlankRepositoryTemplate(string path, string repositoryName, string applicationAlias)
-    {
-        _logger.Debug($"Blank repository template requested. Path='{path}', Name='{repositoryName}', Alias='{applicationAlias}'.");
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            RecordingStatus = "Choose a valid path for the repository template.";
-            return false;
-        }
-
-        var normalizedName = string.IsNullOrWhiteSpace(repositoryName)
-            ? "JavaRepository"
-            : repositoryName.Trim();
-        var normalizedAlias = string.IsNullOrWhiteSpace(applicationAlias)
-            ? (!string.IsNullOrWhiteSpace(RecordingApplicationAlias) ? RecordingApplicationAlias : "JavaApplication")
-            : applicationAlias.Trim();
-
-        var project = new JavaRecordingProject
-        {
-            SchemaVersion = 2,
-            SessionName = normalizedName,
-            ApplicationAlias = normalizedAlias,
-            CreatedAtUtc = DateTime.UtcNow,
-            WindowTitle = "",
-            WindowClassName = ""
-        };
-
-        _javaRepository.SaveProject(path, project);
-        RecordingProjectPath = path;
-        RecordingSessionName = normalizedName;
-        RecordingApplicationAlias = normalizedAlias;
-        RepositoryEntries.Clear();
-        RecordedSteps.Clear();
-        RecordingWindowScopes.Clear();
-        SelectedRepositoryEntry = null;
-        SelectedRecordedStep = null;
-        RecordingStatus = $"Created blank repository template at {path}.";
-        RefreshRecordingSurface();
-        _logger.Log($"Blank repository template created. Path='{path}', Name='{normalizedName}', Alias='{normalizedAlias}'.");
-        return true;
-    }
-
     public JavaRecordedStep? RecordJavaAction(JavaRecordedActionKind actionKind, string? inputText = null, int? recordedScreenX = null, int? recordedScreenY = null, int? windowOffsetX = null, int? windowOffsetY = null)
     {
         _logger.Debug($"Record step requested. RecordingActive={IsRecordingActive}, Paused={IsRecordingPaused}, JavaMode={IsJavaMode}, HasSelectedNode={SelectedNode is not null}, Action={actionKind}, InputLength={(inputText ?? "").Length}.");
