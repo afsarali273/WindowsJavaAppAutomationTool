@@ -1308,7 +1308,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     {
         if (_objectRepositoryWindow is null || !_objectRepositoryWindow.IsLoaded)
         {
-            _objectRepositoryWindow = new ObjectRepositoryWindow(_viewModel) { Owner = this };
+            _objectRepositoryWindow = new ObjectRepositoryWindow(_viewModel, this) { Owner = this };
             _objectRepositoryWindow.Closed += (_, _) => _objectRepositoryWindow = null;
             _objectRepositoryWindow.Show();
         }
@@ -1522,6 +1522,22 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         if (_viewModel.SelectedNode is null) return;
         if (!TryGetHighlightBounds(_viewModel.SelectedNode, out _, out var bounds)) return;
         HighlightOverlay.Show(bounds, TimeSpan.FromSeconds(2.2));
+    }
+
+    public void HighlightRepositorySelection()
+    {
+        var node = _viewModel.ResolveSelectedRepositoryEntry(out var message);
+        if (node is null)
+        {
+            _viewModel.Log($"Repository highlight failed: {message}");
+            return;
+        }
+
+        _viewModel.SelectedNode = node;
+        SelectNodeInHierarchy(node);
+        ActivateHierarchyNode(node);
+        DetailsTabs.SelectedItem = PropertiesTab;
+        _viewModel.Log($"Repository highlight resolved and selected {node.DisplayName}. {message}");
     }
 
     public void UpdateRecordingBadge()

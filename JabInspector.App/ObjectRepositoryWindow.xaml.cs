@@ -10,11 +10,13 @@ namespace JabInspector.App;
 public partial class ObjectRepositoryWindow : Window
 {
     private readonly MainViewModel _viewModel;
+    private readonly MainWindow _ownerWindow;
 
-    public ObjectRepositoryWindow(MainViewModel viewModel)
+    public ObjectRepositoryWindow(MainViewModel viewModel, MainWindow ownerWindow)
     {
         InitializeComponent();
         _viewModel = viewModel;
+        _ownerWindow = ownerWindow;
         DataContext = viewModel;
         Loaded += (_, _) => RefreshEditor();
         viewModel.PropertyChanged += ViewModel_PropertyChanged;
@@ -58,6 +60,11 @@ public partial class ObjectRepositoryWindow : Window
 
         _viewModel.Log($"Object Repository Manager: added/refreshed {entry.ObjectKey} from current inspector selection.");
         RefreshEditor();
+    }
+
+    private void Highlight_Click(object sender, RoutedEventArgs e)
+    {
+        _ownerWindow.HighlightRepositorySelection();
     }
 
     private void RefreshFromInspector_Click(object sender, RoutedEventArgs e)

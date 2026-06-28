@@ -41,7 +41,8 @@
                      Margin="0,3,0,0"/>
         </StackPanel>
         <WrapPanel HorizontalAlignment="Right" VerticalAlignment="Center">
-          <Button Click="AddSelected_Click" Content="＋ Add inspected" ToolTip="Add currently selected inspector node to repository"/>
+          <Button Click="AddSelected_Click" Content="+ Add inspected" ToolTip="Add currently selected inspector node to repository"/>
+          <Button Click="Highlight_Click" Content="Highlight" ToolTip="Resolve and highlight selected repository object in the target application"/>
           <Button Click="Load_Click" Content="Open"/>
           <Button Click="Save_Click" Content="Save" Style="{StaticResource PrimaryButton}" Margin="0"/>
         </WrapPanel>

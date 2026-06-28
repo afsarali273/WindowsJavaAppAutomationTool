@@ -1111,6 +1111,33 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         else RecordingRepositoryPreview = _javaRepository.BuildPropertiesPreview(SelectedRepositoryEntry);
     }
 
+    public AccessibleNode? ResolveSelectedRepositoryEntry(out string message, ResolutionPolicy? policy = null)
+    {
+        message = "";
+        if (!IsJavaMode || Root is null)
+        {
+            message = "Attach to a Java window before resolving repository objects.";
+            return null;
+        }
+
+        if (SelectedRepositoryEntry is null)
+        {
+            message = "Select a repository object first.";
+            return null;
+        }
+
+        var effectivePolicy = (policy ?? ResolutionPolicy.Default).Sanitize();
+        var resolution = _javaResolver.ResolveDetailed(Root, SelectedRepositoryEntry, null, effectivePolicy);
+        if (!resolution.Success || resolution.Node is null)
+        {
+            message = resolution.Message;
+            return null;
+        }
+
+        message = $"Resolved {SelectedRepositoryEntry.ObjectKey} using {resolution.StrategyName}.";
+        return resolution.Node;
+    }
+
     private void RefreshRepositoryEntry(JavaObjectRepositoryEntry entry)
     {
         var index = RepositoryEntries.IndexOf(entry);
