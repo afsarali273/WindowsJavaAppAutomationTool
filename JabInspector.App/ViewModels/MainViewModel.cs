@@ -834,6 +834,34 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         return entry;
     }
 
+    public JavaObjectRepositoryEntry? RefreshSelectedRepositoryEntryFromSelectedNode()
+    {
+        if (SelectedRepositoryEntry is null)
+        {
+            RecordingStatus = "Select a repository object before refreshing it from the inspected element.";
+            return null;
+        }
+
+        if (!IsJavaMode || CurrentWindow is null || SelectedNode is null)
+        {
+            RecordingStatus = "Select a Java accessibility node before refreshing the repository object.";
+            return null;
+        }
+
+        RefreshBounds(SelectedNode);
+        var existing = SelectedRepositoryEntry;
+        var refreshed = _javaRepository.CreateEntry(CurrentWindow, SelectedNode, existing.ObjectKey, existing.FriendlyName);
+        var index = RepositoryEntries.IndexOf(existing);
+        if (index >= 0) RepositoryEntries[index] = refreshed;
+        else RepositoryEntries.Add(refreshed);
+        RememberRecordingWindowScope(CurrentWindow);
+        SelectedRepositoryEntry = refreshed;
+        RecordingStatus = $"Refreshed repository object {refreshed.ObjectKey} from selected inspector element.";
+        RefreshRecordingSurface();
+        _logger.Log($"Repository object refreshed from inspector selection. ObjectKey='{refreshed.ObjectKey}', Path='{refreshed.Path}', Role='{refreshed.Role}', Name='{refreshed.Name}'.");
+        return refreshed;
+    }
+
     public JavaRecordedStep? RecordJavaAction(JavaRecordedActionKind actionKind, string? inputText = null, int? recordedScreenX = null, int? recordedScreenY = null, int? windowOffsetX = null, int? windowOffsetY = null)
     {
         _logger.Debug($"Record step requested. RecordingActive={IsRecordingActive}, Paused={IsRecordingPaused}, JavaMode={IsJavaMode}, HasSelectedNode={SelectedNode is not null}, Action={actionKind}, InputLength={(inputText ?? "").Length}.");
@@ -984,6 +1012,122 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         return true;
     }
 
+    public bool RenameSelectedRepositoryEntry(string objectKey, string friendlyName)
+    {
+        if (SelectedRepositoryEntry is null)
+        {
+            RecordingStatus = "Select a repository object before renaming.";
+            return false;
+        }
+
+        var oldKey = SelectedRepositoryEntry.ObjectKey;
+        var requestedKey = string.IsNullOrWhiteSpace(objectKey)
+            ? oldKey
+            : objectKey.Trim();
+        if (!string.Equals(oldKey, requestedKey, StringComparison.OrdinalIgnoreCase)
+            && RepositoryEntries.Any(x => !ReferenceEquals(x, SelectedRepositoryEntry)
+                                          && string.Equals(x.ObjectKey, requestedKey, StringComparison.OrdinalIgnoreCase)))
+        {
+            RecordingStatus = $"Repository object key '{requestedKey}' already exists.";
+            return false;
+        }
+
+        SelectedRepositoryEntry.ObjectKey = requestedKey;
+        SelectedRepositoryEntry.FriendlyName = string.IsNullOrWhiteSpace(friendlyName)
+            ? SelectedRepositoryEntry.FriendlyName
+            : friendlyName.Trim();
+
+        if (!string.Equals(oldKey, requestedKey, StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var step in RecordedSteps.Where(step => string.Equals(step.ObjectKey, oldKey, StringComparison.OrdinalIgnoreCase)))
+            {
+                step.ObjectKey = requestedKey;
+                step.StepName = $"{step.ActionKind} {requestedKey}";
+            }
+        }
+
+        RefreshRepositoryEntry(SelectedRepositoryEntry);
+        RecordingStatus = $"Repository object renamed to {SelectedRepositoryEntry.ObjectKey}.";
+        RefreshRecordingSurface();
+        _logger.Log($"Repository object renamed. OldKey='{oldKey}', NewKey='{SelectedRepositoryEntry.ObjectKey}', FriendlyName='{SelectedRepositoryEntry.FriendlyName}'.");
+        return true;
+    }
+
+    public bool ApplySelectedRepositoryPropertyEdits()
+    {
+        if (SelectedRepositoryEntry is null)
+        {
+            RecordingStatus = "Select a repository object before applying property edits.";
+            return false;
+        }
+
+        _javaRepository.ApplyPropertyEdits(SelectedRepositoryEntry);
+        RefreshRepositoryEntry(SelectedRepositoryEntry);
+        RecordingStatus = $"Applied property edits to {SelectedRepositoryEntry.ObjectKey}.";
+        RefreshRecordingSurface();
+        _logger.Log($"Repository property edits applied. ObjectKey='{SelectedRepositoryEntry.ObjectKey}', Properties={SelectedRepositoryEntry.Properties.Count}, LocatorJsonLength={SelectedRepositoryEntry.LocatorJson.Length}.");
+        return true;
+    }
+
+    public bool AddPropertyToSelectedRepositoryEntry(string name = "custom.property", string value = "")
+    {
+        if (SelectedRepositoryEntry is null)
+        {
+            RecordingStatus = "Select a repository object before adding a property.";
+            return false;
+        }
+
+        var baseName = string.IsNullOrWhiteSpace(name) ? "custom.property" : name.Trim();
+        var candidate = baseName;
+        for (var i = 2; SelectedRepositoryEntry.Properties.Any(x => string.Equals(x.Name, candidate, StringComparison.OrdinalIgnoreCase)); i++)
+        {
+            candidate = $"{baseName}.{i}";
+        }
+
+        SelectedRepositoryEntry.Properties.Add(new JavaRepositoryProperty { Name = candidate, Value = value, IsPrimary = false });
+        RefreshRepositoryEntry(SelectedRepositoryEntry);
+        RecordingStatus = $"Added property '{candidate}' to {SelectedRepositoryEntry.ObjectKey}.";
+        return true;
+    }
+
+    public bool DeletePropertyFromSelectedRepositoryEntry(JavaRepositoryProperty? property)
+    {
+        if (SelectedRepositoryEntry is null || property is null)
+        {
+            RecordingStatus = "Select a repository property before deleting.";
+            return false;
+        }
+
+        SelectedRepositoryEntry.Properties.Remove(property);
+        _javaRepository.ApplyPropertyEdits(SelectedRepositoryEntry);
+        RefreshRepositoryEntry(SelectedRepositoryEntry);
+        RecordingStatus = $"Deleted property '{property.Name}' from {SelectedRepositoryEntry.ObjectKey}.";
+        return true;
+    }
+
+    public void RefreshSelectedRepositoryPreview()
+    {
+        if (SelectedRepositoryEntry is null) RecordingRepositoryPreview = "Select a recorded object to inspect its repository properties.";
+        else RecordingRepositoryPreview = _javaRepository.BuildPropertiesPreview(SelectedRepositoryEntry);
+    }
+
+    private void RefreshRepositoryEntry(JavaObjectRepositoryEntry entry)
+    {
+        var index = RepositoryEntries.IndexOf(entry);
+        if (index >= 0)
+        {
+            RepositoryEntries.RemoveAt(index);
+            RepositoryEntries.Insert(index, entry);
+            SelectedRepositoryEntry = entry;
+        }
+        else
+        {
+            SelectedRepositoryEntry = entry;
+        }
+
+        RefreshSelectedRepositoryPreview();
+    }
+
     public string GetDefaultRecordingProjectFileName()
     {
         if (!string.IsNullOrWhiteSpace(RecordingProjectPath))
@@ -1004,9 +1148,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool SaveRecordingProject(string? path = null)
     {
         _logger.Debug($"Save recording project requested. HasWindow={CurrentWindow is not null}, RepositoryCount={RepositoryEntries.Count}, StepCount={RecordedSteps.Count}, RequestedPath='{path ?? ""}'.");
-        if (!IsJavaMode || CurrentWindow is null)
+        if (!IsJavaMode)
         {
-            RecordingStatus = "Java recording projects can only be saved from an attached Java session.";
+            RecordingStatus = "Java recording projects can only be saved in Java mode.";
             _logger.Log($"Save recording project rejected. Status='{RecordingStatus}'.");
             return false;
         }
@@ -1018,10 +1162,20 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
 
         var savePath = string.IsNullOrWhiteSpace(path) ? RecordingProjectPath : path!;
-        var project = _javaRepository.CreateProject(
-            string.IsNullOrWhiteSpace(RecordingSessionName) ? "JavaRecording" : RecordingSessionName,
-            string.IsNullOrWhiteSpace(RecordingApplicationAlias) ? CurrentWindow.Title : RecordingApplicationAlias,
-            CurrentWindow);
+        var project = CurrentWindow is not null
+            ? _javaRepository.CreateProject(
+                string.IsNullOrWhiteSpace(RecordingSessionName) ? "JavaRecording" : RecordingSessionName,
+                string.IsNullOrWhiteSpace(RecordingApplicationAlias) ? CurrentWindow.Title : RecordingApplicationAlias,
+                CurrentWindow)
+            : new JavaRecordingProject
+            {
+                SchemaVersion = 2,
+                SessionName = string.IsNullOrWhiteSpace(RecordingSessionName) ? "JavaRepository" : RecordingSessionName,
+                ApplicationAlias = string.IsNullOrWhiteSpace(RecordingApplicationAlias) ? "JavaApplication" : RecordingApplicationAlias,
+                CreatedAtUtc = DateTime.UtcNow,
+                WindowTitle = RecordingWindowScopes.FirstOrDefault()?.Title ?? RepositoryEntries.FirstOrDefault()?.WindowTitle ?? "",
+                WindowClassName = RecordingWindowScopes.FirstOrDefault()?.ClassName ?? RepositoryEntries.FirstOrDefault()?.WindowClassName ?? ""
+            };
         project.Repository = RepositoryEntries.ToList();
         project.Steps = RecordedSteps.ToList();
         project.Windows = RecordingWindowScopes.ToList();

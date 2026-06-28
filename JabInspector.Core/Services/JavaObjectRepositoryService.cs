@@ -240,6 +240,94 @@ public sealed class JavaObjectRepositoryService
         return builder.ToString().TrimEnd();
     }
 
+    public void ApplyPropertyEdits(JavaObjectRepositoryEntry entry)
+    {
+        entry.Properties ??= [];
+
+        entry.WindowKey = GetProperty(entry, "window.key", entry.WindowKey);
+        entry.WindowTitle = GetProperty(entry, "window.title", entry.WindowTitle);
+        entry.WindowClassName = GetProperty(entry, "window.className", entry.WindowClassName);
+        entry.WindowHwndDisplay = GetProperty(entry, "window.hwnd", entry.WindowHwndDisplay);
+        entry.WindowProcessId = GetIntProperty(entry, "window.processId", entry.WindowProcessId);
+        entry.WindowVmId = GetIntProperty(entry, "window.vmId", entry.WindowVmId);
+        entry.Engine = GetProperty(entry, "engine", entry.Engine);
+        entry.Role = GetProperty(entry, "role", entry.Role);
+        entry.RoleEnUs = GetProperty(entry, "role.enUs", entry.RoleEnUs);
+        entry.Name = GetProperty(entry, "name", entry.Name);
+        entry.VirtualAccessibleName = GetProperty(entry, "virtualAccessibleName", entry.VirtualAccessibleName);
+        entry.Description = GetProperty(entry, "description", entry.Description);
+        entry.States = GetProperty(entry, "states", entry.States);
+        entry.StatesEnUs = GetProperty(entry, "states.enUs", entry.StatesEnUs);
+        entry.Path = GetProperty(entry, "path", entry.Path);
+        entry.IndexPath = GetProperty(entry, "indexPath", entry.IndexPath);
+        entry.XPath = GetProperty(entry, "xpath", entry.XPath);
+        entry.IndexXPath = GetProperty(entry, "indexXPath", entry.IndexXPath);
+        entry.SemanticXPath = GetProperty(entry, "semanticXPath", entry.SemanticXPath);
+        entry.ParentRole = GetProperty(entry, "parent.role", entry.ParentRole);
+        entry.ParentName = GetProperty(entry, "parent.name", entry.ParentName);
+        entry.IndexInParent = GetIntProperty(entry, "indexInParent", entry.IndexInParent);
+        entry.ObjectDepth = GetIntProperty(entry, "objectDepth", entry.ObjectDepth);
+        entry.ChildrenCount = GetIntProperty(entry, "childrenCount", entry.ChildrenCount);
+        entry.HasManagedDescendantAncestor = GetBoolProperty(entry, "volatile.managedDescendantAncestor", entry.HasManagedDescendantAncestor);
+
+        var bounds = GetProperty(entry, "bounds", "");
+        if (TryParseBounds(bounds, out var x, out var y, out var width, out var height))
+        {
+            entry.X = x;
+            entry.Y = y;
+            entry.Width = width;
+            entry.Height = height;
+        }
+
+        var actionNames = GetProperty(entry, "actions", "");
+        if (!string.IsNullOrWhiteSpace(actionNames))
+        {
+            entry.ActionNames = actionNames
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        var existing = entry.Locator ?? TryDeserializeLocator(entry.LocatorJson);
+        entry.Locator = new LocatorSuggestion(
+            string.IsNullOrWhiteSpace(entry.Engine) ? "java-access-bridge" : entry.Engine,
+            entry.Role,
+            entry.RoleEnUs,
+            entry.Name,
+            entry.VirtualAccessibleName,
+            entry.Description,
+            entry.States,
+            entry.StatesEnUs,
+            entry.IndexInParent,
+            entry.ObjectDepth,
+            entry.ChildrenCount,
+            entry.Path,
+            entry.IndexPath,
+            entry.XPath,
+            entry.IndexXPath,
+            entry.SemanticXPath,
+            entry.ParentRole,
+            entry.ParentName,
+            entry.HasManagedDescendantAncestor,
+            entry.ActionNames,
+            GetProperty(entry, "text.preview", existing?.TextPreview ?? ""),
+            GetProperty(entry, "text.previewSource", existing?.TextPreviewSource ?? ""),
+            GetIntProperty(entry, "text.charCount", existing?.TextCharCount ?? -1),
+            GetIntProperty(entry, "text.caretIndex", existing?.TextCaretIndex ?? -1),
+            GetIntProperty(entry, "text.indexAtPoint", existing?.TextIndexAtPoint ?? -1),
+            GetProperty(entry, "text.selected", existing?.TextSelected ?? ""),
+            GetProperty(entry, "text.word", existing?.TextWord ?? ""),
+            GetProperty(entry, "text.sentence", existing?.TextSentence ?? ""),
+            GetProperty(entry, "value.current", existing?.CurrentValue ?? ""),
+            GetProperty(entry, "value.minimum", existing?.MinimumValue ?? ""),
+            GetProperty(entry, "value.maximum", existing?.MaximumValue ?? ""),
+            new ElementBounds(entry.X, entry.Y, entry.Width, entry.Height));
+        entry.LocatorJson = JsonExportService.Serialize(entry.Locator);
+
+        EnsureWindowKeyProperty(entry);
+    }
+
     public string BuildStepPreview(JavaRecordedStep step)
     {
         var builder = new StringBuilder();
@@ -440,6 +528,35 @@ public sealed class JavaObjectRepositoryService
         }
 
         entry.Properties.Insert(0, Property("window.key", entry.WindowKey, true));
+    }
+
+    private static string GetProperty(JavaObjectRepositoryEntry entry, string name, string fallback)
+    {
+        var value = entry.Properties.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.Value;
+        return value ?? fallback;
+    }
+
+    private static int GetIntProperty(JavaObjectRepositoryEntry entry, string name, int fallback)
+    {
+        var value = GetProperty(entry, name, "");
+        return int.TryParse(value, out var parsed) ? parsed : fallback;
+    }
+
+    private static bool GetBoolProperty(JavaObjectRepositoryEntry entry, string name, bool fallback)
+    {
+        var value = GetProperty(entry, name, "");
+        return bool.TryParse(value, out var parsed) ? parsed : fallback;
+    }
+
+    private static bool TryParseBounds(string value, out int x, out int y, out int width, out int height)
+    {
+        x = y = width = height = 0;
+        var parts = value.Split(',', StringSplitOptions.TrimEntries);
+        return parts.Length == 4
+               && int.TryParse(parts[0], out x)
+               && int.TryParse(parts[1], out y)
+               && int.TryParse(parts[2], out width)
+               && int.TryParse(parts[3], out height);
     }
 
     private static LocatorSuggestion? TryDeserializeLocator(string json)

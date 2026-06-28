@@ -1,0 +1,182 @@
+<Window x:Class="JabInspector.App.ObjectRepositoryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:model="clr-namespace:JabInspector.Core.Models;assembly=JabInspector.Core"
+        Title="Object Repository Manager"
+        Width="980"
+        Height="660"
+        MinWidth="760"
+        MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource PageBrush}"
+        FontFamily="Segoe UI">
+  <Window.Resources>
+    <Style x:Key="PanelBorder" TargetType="Border">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="8"/>
+    </Style>
+    <Style x:Key="SectionTitle" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="10"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+    </Style>
+  </Window.Resources>
+
+  <Grid Margin="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <Border Background="#0F172A" CornerRadius="10" Padding="12" Margin="0,0,0,10">
+      <Grid>
+        <StackPanel>
+          <TextBlock Text="Object Repository Manager" Foreground="White" FontWeight="Bold" FontSize="15"/>
+          <TextBlock Text="Add inspected Java elements, edit locator properties, and save/load repository projects."
+                     Foreground="#94A3B8"
+                     FontSize="11"
+                     Margin="0,3,0,0"/>
+        </StackPanel>
+        <WrapPanel HorizontalAlignment="Right" VerticalAlignment="Center">
+          <Button Click="AddSelected_Click" Content="＋ Add inspected" ToolTip="Add currently selected inspector node to repository"/>
+          <Button Click="Load_Click" Content="Open"/>
+          <Button Click="Save_Click" Content="Save" Style="{StaticResource PrimaryButton}" Margin="0"/>
+        </WrapPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="330"/>
+        <ColumnDefinition Width="10"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+
+      <Border Grid.Column="0" Style="{StaticResource PanelBorder}">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+          <Border Padding="12,10" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid>
+              <TextBlock Style="{StaticResource SectionTitle}" Text="OBJECTS"/>
+              <Border HorizontalAlignment="Right" Background="{StaticResource AccentSoftBrush}" CornerRadius="8" Padding="6,1">
+                <TextBlock Text="{Binding RecordingObjectCount}" Foreground="{StaticResource AccentBrush}" FontSize="10" FontWeight="SemiBold"/>
+              </Border>
+            </Grid>
+          </Border>
+          <ListBox Grid.Row="1"
+                   ItemsSource="{Binding RepositoryEntries}"
+                   SelectedItem="{Binding SelectedRepositoryEntry}"
+                   BorderThickness="0"
+                   Background="Transparent"
+                   Padding="8"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemTemplate>
+              <DataTemplate DataType="{x:Type model:JavaObjectRepositoryEntry}">
+                <Border BorderBrush="#E4EAF1" BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,0,0,7">
+                  <StackPanel>
+                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="12" TextWrapping="Wrap"/>
+                    <TextBlock Foreground="{StaticResource MutedBrush}" FontSize="10" Margin="0,4,0,0">
+                      <Run Text="{Binding Role}"/>
+                      <Run Text=" · "/>
+                      <Run Text="{Binding WindowTitle}"/>
+                    </TextBlock>
+                    <TextBlock Text="{Binding Path}" Foreground="#8A96A7" FontFamily="Consolas" FontSize="9.5" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+      </Border>
+
+      <Border Grid.Column="2" Style="{StaticResource PanelBorder}">
+        <Grid Margin="12">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="150"/>
+          </Grid.RowDefinitions>
+
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="12"/>
+              <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+              <TextBlock Style="{StaticResource SectionTitle}" Text="OBJECT KEY"/>
+              <TextBox x:Name="ObjectKeyText" Margin="0,6,0,0" FontFamily="Consolas" FontSize="11.5"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+              <TextBlock Style="{StaticResource SectionTitle}" Text="FRIENDLY NAME"/>
+              <TextBox x:Name="FriendlyNameText" Margin="0,6,0,0" FontSize="11.5"/>
+            </StackPanel>
+          </Grid>
+
+          <WrapPanel Grid.Row="1" Margin="0,12,0,10">
+            <Button Click="ApplyName_Click" Content="Apply name/key" Style="{StaticResource PrimaryButton}"/>
+            <Button Click="RefreshFromInspector_Click" Content="Refresh from selected element"/>
+            <Button Click="AddProperty_Click" Content="Add property"/>
+            <Button Click="DeleteProperty_Click" Content="Delete property"/>
+            <Button Click="ApplyProperties_Click" Content="Apply property edits"/>
+            <Button Click="DeleteObject_Click" Content="Delete object" Margin="0"/>
+          </WrapPanel>
+
+          <DataGrid x:Name="PropertiesGrid"
+                    Grid.Row="2"
+                    ItemsSource="{Binding SelectedRepositoryEntry.Properties}"
+                    AutoGenerateColumns="False"
+                    CanUserAddRows="False"
+                    CanUserDeleteRows="False"
+                    HeadersVisibility="Column"
+                    GridLinesVisibility="Horizontal"
+                    RowHeaderWidth="0"
+                    SelectionMode="Single"
+                    FontSize="11"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    Background="#FBFCFE">
+            <DataGrid.Columns>
+              <DataGridCheckBoxColumn Header="Primary" Binding="{Binding IsPrimary, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="70"/>
+              <DataGridTextColumn Header="Name" Binding="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="190"/>
+              <DataGridTextColumn Header="Value" Binding="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+            </DataGrid.Columns>
+          </DataGrid>
+
+          <Grid Grid.Row="3" Margin="0,10,0,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <TextBlock Style="{StaticResource SectionTitle}" Text="LOCATOR / PROPERTIES PREVIEW"/>
+            <TextBox Grid.Row="1"
+                     Margin="0,6,0,0"
+                     Text="{Binding RecordingRepositoryPreview, Mode=OneWay}"
+                     IsReadOnly="True"
+                     AcceptsReturn="True"
+                     TextWrapping="NoWrap"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Auto"
+                     FontFamily="Consolas"
+                     FontSize="10"
+                     Background="#111827"
+                     Foreground="#67E8F9"
+                     BorderBrush="#334155"
+                     Padding="8"/>
+          </Grid>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <Grid Grid.Row="2" Margin="0,10,0,0">
+      <TextBlock Text="{Binding RecordingStatus}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"/>
+      <Button Content="Close" Width="92" HorizontalAlignment="Right" Click="Close_Click"/>
+    </Grid>
+  </Grid>
+</Window>

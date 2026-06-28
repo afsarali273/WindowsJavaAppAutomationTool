@@ -20,6 +20,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     private readonly System.Windows.Threading.DispatcherTimer _hoverTimer;
     private readonly System.Windows.Threading.DispatcherTimer _recordingMonitorTimer;
     private RecordingStudioWindow? _recordingStudioWindow;
+    private ObjectRepositoryWindow? _objectRepositoryWindow;
     private RecordingBadgeOverlay? _recordingBadgeOverlay;
     private bool _hoverInspecting;
     private bool _pickerActive;
@@ -60,6 +61,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
             HighlightOverlay.HidePersistent();
             _recordingBadgeOverlay?.Detach();
             _recordingStudioWindow?.Close();
+            _objectRepositoryWindow?.Close();
             _viewModel.Dispose();
         };
     }
@@ -1295,6 +1297,25 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     private void OpenRecording_Click(object sender, RoutedEventArgs e)
     {
         OpenRecordingStudio();
+    }
+
+    private void OpenObjectRepository_Click(object sender, RoutedEventArgs e)
+    {
+        OpenObjectRepositoryManager();
+    }
+
+    private void OpenObjectRepositoryManager()
+    {
+        if (_objectRepositoryWindow is null || !_objectRepositoryWindow.IsLoaded)
+        {
+            _objectRepositoryWindow = new ObjectRepositoryWindow(_viewModel) { Owner = this };
+            _objectRepositoryWindow.Closed += (_, _) => _objectRepositoryWindow = null;
+            _objectRepositoryWindow.Show();
+        }
+        else
+        {
+            _objectRepositoryWindow.Activate();
+        }
     }
 
     private void OpenRecordingStudio()
