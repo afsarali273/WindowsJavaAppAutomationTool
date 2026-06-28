@@ -298,6 +298,20 @@
                   </StackPanel>
                 </Border>
 
+                <Border Background="#F4F8FB" CornerRadius="5" Padding="7" Margin="0,0,0,8" Visibility="{Binding JavaSelectionVisibility}">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*"/>
+                      <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                      <TextBlock Text="OBJECT REPOSITORY" Foreground="{StaticResource AccentBrush}" FontSize="9" FontWeight="Bold"/>
+                      <TextBlock Text="Save this inspected element as a reusable repository object." Foreground="#37536B" FontSize="10.5" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Click="AddPropertySelectionToRepository_Click" Style="{StaticResource PrimaryButton}" Content="+ Add object" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                  </Grid>
+                </Border>
+
                 <TextBlock Style="{StaticResource SectionTitle}" Text="IDENTITY" Margin="0,0,0,5"/>
                 <Grid>
                   <Grid.ColumnDefinitions>

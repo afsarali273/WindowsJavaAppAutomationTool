@@ -862,6 +862,61 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         return refreshed;
     }
 
+    public JavaObjectRepositoryEntry? AddSelectedNodeToRepositoryFile(string path, bool createNew)
+    {
+        _logger.Debug($"Repository file capture requested. Path='{path}', CreateNew={createNew}, JavaMode={IsJavaMode}, HasWindow={CurrentWindow is not null}, HasSelectedNode={SelectedNode is not null}.");
+        if (!IsJavaMode || CurrentWindow is null || SelectedNode is null)
+        {
+            RecordingStatus = "Select a Java accessibility node before adding it to a repository file.";
+            return null;
+        }
+
+        RefreshBounds(SelectedNode);
+
+        JavaRecordingProject project;
+        if (!createNew && File.Exists(path))
+        {
+            project = _javaRepository.LoadProject(path);
+        }
+        else
+        {
+            var sessionName = Path.GetFileNameWithoutExtension(path);
+            if (sessionName.EndsWith(".jrecording", StringComparison.OrdinalIgnoreCase))
+                sessionName = Path.GetFileNameWithoutExtension(sessionName);
+            project = _javaRepository.CreateProject(
+                string.IsNullOrWhiteSpace(sessionName) ? "JavaRepository" : sessionName,
+                string.IsNullOrWhiteSpace(CurrentWindow.Title) ? "JavaApplication" : CurrentWindow.Title,
+                CurrentWindow);
+        }
+
+        var existing = project.Repository.FirstOrDefault(x =>
+            string.Equals(x.Path, SelectedNode.Path, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(x.Name, SelectedNode.Name, StringComparison.Ordinal));
+
+        JavaObjectRepositoryEntry entry;
+        if (existing is not null)
+        {
+            entry = _javaRepository.CreateEntry(CurrentWindow, SelectedNode, existing.ObjectKey, existing.FriendlyName);
+            var index = project.Repository.IndexOf(existing);
+            project.Repository[index] = entry;
+        }
+        else
+        {
+            var preferredName = $"{SelectedNode.Role}_{SelectedNode.Name}_{SelectedNode.IndexInParent}";
+            var key = _javaRepository.CreateUniqueObjectKey(preferredName, project.Repository);
+            entry = _javaRepository.CreateEntry(CurrentWindow, SelectedNode, key, SelectedNode.DisplayName);
+            project.Repository.Add(entry);
+        }
+
+        var currentWindowScope = _javaRepository.CreateWindowLocator(CurrentWindow, Root);
+        var existingWindow = project.Windows.FirstOrDefault(x => string.Equals(x.WindowKey, currentWindowScope.WindowKey, StringComparison.OrdinalIgnoreCase));
+        if (existingWindow is null) project.Windows.Add(currentWindowScope);
+        _javaRepository.SaveProject(path, project);
+        RecordingStatus = $"Saved repository object {entry.ObjectKey} to {path}.";
+        _logger.Log($"Repository object saved to file. ObjectKey='{entry.ObjectKey}', Path='{path}', CreateNew={createNew}.");
+        return entry;
+    }
+
     public JavaRecordedStep? RecordJavaAction(JavaRecordedActionKind actionKind, string? inputText = null, int? recordedScreenX = null, int? recordedScreenY = null, int? windowOffsetX = null, int? windowOffsetY = null)
     {
         _logger.Debug($"Record step requested. RecordingActive={IsRecordingActive}, Paused={IsRecordingPaused}, JavaMode={IsJavaMode}, HasSelectedNode={SelectedNode is not null}, Action={actionKind}, InputLength={(inputText ?? "").Length}.");

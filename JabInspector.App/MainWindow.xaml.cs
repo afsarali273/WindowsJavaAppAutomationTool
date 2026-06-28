@@ -1377,6 +1377,57 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         else _viewModel.Log($"Captured repository object {entry.ObjectKey} for playback.");
     }
 
+    private void AddPropertySelectionToRepository_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_viewModel.IsJavaMode || _viewModel.SelectedNode is null)
+        {
+            _viewModel.Log("Select a Java element before adding it to an object repository.");
+            return;
+        }
+
+        var targetDialog = new AddToRepositoryTargetWindow { Owner = this };
+        if (targetDialog.ShowDialog() != true || targetDialog.SelectedTarget is null) return;
+
+        switch (targetDialog.SelectedTarget.Value)
+        {
+            case AddToRepositoryTarget.Current:
+            {
+                var entry = _viewModel.AddSelectedNodeToRepository();
+                if (entry is null) return;
+                _viewModel.Log($"Added selected element to current object repository as {entry.ObjectKey}.");
+                OpenObjectRepositoryManager();
+                break;
+            }
+            case AddToRepositoryTarget.ExistingFile:
+            {
+                var dialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Choose existing object repository",
+                    Filter = "Java recording project (*.jrecording.json)|*.jrecording.json|JSON files (*.json)|*.json",
+                    CheckFileExists = true
+                };
+                if (dialog.ShowDialog(this) != true) return;
+                var entry = _viewModel.AddSelectedNodeToRepositoryFile(dialog.FileName, createNew: false);
+                if (entry is not null) _viewModel.Log($"Added selected element to repository file as {entry.ObjectKey}: {dialog.FileName}");
+                break;
+            }
+            case AddToRepositoryTarget.NewFile:
+            {
+                var dialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = "Create object repository",
+                    Filter = "Java recording project (*.jrecording.json)|*.jrecording.json|JSON files (*.json)|*.json",
+                    FileName = _viewModel.GetDefaultRecordingProjectFileName(),
+                    DefaultExt = ".jrecording.json"
+                };
+                if (dialog.ShowDialog(this) != true) return;
+                var entry = _viewModel.AddSelectedNodeToRepositoryFile(dialog.FileName, createNew: true);
+                if (entry is not null) _viewModel.Log($"Created repository file with selected element as {entry.ObjectKey}: {dialog.FileName}");
+                break;
+            }
+        }
+    }
+
     private void ToggleRecordingPause_Click(object sender, RoutedEventArgs e)
     {
         _viewModel.ToggleJavaRecordingPause();
