@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Add to Object Repository"
         Width="460"
-        Height="260"
-        ResizeMode="NoResize"
+        Height="360"
+        MinHeight="320"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource PageBrush}"
         FontFamily="Segoe UI">
@@ -28,26 +28,34 @@
                  Margin="0,6,0,0"/>
     </StackPanel>
 
-    <StackPanel Grid.Row="1" Margin="0,18,0,0">
-      <Button Click="Current_Click" HorizontalContentAlignment="Left" Margin="0,0,0,8" Padding="12,9">
-        <StackPanel>
-          <TextBlock Text="Use current repository" FontWeight="SemiBold"/>
-          <TextBlock x:Name="CurrentRepositoryText" Foreground="{StaticResource MutedBrush}" FontSize="10.5" TextWrapping="Wrap"/>
-        </StackPanel>
-      </Button>
-      <Button Click="Existing_Click" HorizontalContentAlignment="Left" Margin="0,0,0,8" Padding="12,9">
-        <StackPanel>
-          <TextBlock Text="Choose existing repository file" FontWeight="SemiBold"/>
-          <TextBlock Text="Add directly into an existing .jrecording.json file." Foreground="{StaticResource MutedBrush}" FontSize="10.5"/>
-        </StackPanel>
-      </Button>
-      <Button Click="New_Click" HorizontalContentAlignment="Left" Padding="12,9">
-        <StackPanel>
-          <TextBlock Text="Create new repository file" FontWeight="SemiBold"/>
-          <TextBlock Text="Create a new .jrecording.json containing this object." Foreground="{StaticResource MutedBrush}" FontSize="10.5"/>
-        </StackPanel>
-      </Button>
-    </StackPanel>
+    <ScrollViewer Grid.Row="1" Margin="0,18,0,0" VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+        <Button Click="Current_Click" HorizontalContentAlignment="Left" Margin="0,0,0,8" Padding="12,9">
+          <StackPanel>
+            <TextBlock Text="Use current repository" FontWeight="SemiBold"/>
+            <TextBlock x:Name="CurrentRepositoryText" Foreground="{StaticResource MutedBrush}" FontSize="10.5" TextWrapping="Wrap"/>
+          </StackPanel>
+        </Button>
+        <Button Click="Existing_Click" HorizontalContentAlignment="Left" Margin="0,0,0,8" Padding="12,9">
+          <StackPanel>
+            <TextBlock Text="Choose existing repository file" FontWeight="SemiBold"/>
+            <TextBlock Text="Add directly into an existing .jrecording.json file." Foreground="{StaticResource MutedBrush}" FontSize="10.5"/>
+          </StackPanel>
+        </Button>
+        <Button Click="New_Click" HorizontalContentAlignment="Left" Margin="0,0,0,8" Padding="12,9">
+          <StackPanel>
+            <TextBlock Text="Create new repository file" FontWeight="SemiBold"/>
+            <TextBlock Text="Create a new .jrecording.json containing this object." Foreground="{StaticResource MutedBrush}" FontSize="10.5"/>
+          </StackPanel>
+        </Button>
+        <Button Click="CustomBlank_Click" HorizontalContentAlignment="Left" Padding="12,9">
+          <StackPanel>
+            <TextBlock Text="Create custom blank repository" FontWeight="SemiBold"/>
+            <TextBlock Text="Provide a custom name, choose the path, and generate a blank repository template." Foreground="{StaticResource MutedBrush}" FontSize="10.5" TextWrapping="Wrap"/>
+          </StackPanel>
+        </Button>
+      </StackPanel>
+    </ScrollViewer>
 
     <Button Grid.Row="2" Content="Cancel" Width="90" HorizontalAlignment="Right" Click="Cancel_Click"/>
   </Grid>
