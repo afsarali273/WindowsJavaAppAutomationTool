@@ -5,6 +5,7 @@ namespace JabInspector.Core.Services;
 public interface IJavaActionExecutionHost
 {
     bool Focus(AccessibleNode node, out string message);
+    bool CloseWindow(AccessibleNode? node, out string message);
     bool InvokeDefaultAction(AccessibleNode node, out string message);
     bool SetText(AccessibleNode node, string text, out string message);
     string GetText(AccessibleNode node, out string message);

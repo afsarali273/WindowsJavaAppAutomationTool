@@ -5,7 +5,9 @@ public enum JavaRecordedActionKind
     Focus,
     Click,
     DoubleClick,
+    CloseWindow,
     SetText,
     TypeText,
-    GetText
+    GetText,
+    AssertVisible
 }

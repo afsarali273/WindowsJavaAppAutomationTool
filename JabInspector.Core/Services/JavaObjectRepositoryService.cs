@@ -188,6 +188,41 @@ public sealed class JavaObjectRepositoryService
         };
     }
 
+    public JavaRecordedStep CreateWindowActionStep(
+        JavaWindowInfo window,
+        JavaRecordedActionKind actionKind,
+        int sequence,
+        string? inputText,
+        int? recordedScreenX,
+        int? recordedScreenY,
+        int? windowOffsetX,
+        int? windowOffsetY)
+    {
+        var objectKey = $"{actionKind.ToString().ToLowerInvariant()}_{SanitizeToken(string.IsNullOrWhiteSpace(window.Title) ? window.ClassName : window.Title)}";
+        return new JavaRecordedStep
+        {
+            Sequence = sequence,
+            StepName = $"{actionKind} {window.Title}",
+            ActionKind = actionKind,
+            ObjectKey = objectKey,
+            InputText = inputText ?? "",
+            CapturedAtUtc = DateTime.UtcNow,
+            WindowKey = CreateWindowKey(window),
+            WindowHwndDisplay = window.HwndDisplay,
+            WindowTitle = window.Title,
+            WindowClassName = window.ClassName,
+            WindowProcessId = window.ProcessId,
+            WindowVmId = window.VmId,
+            RecordedScreenX = recordedScreenX,
+            RecordedScreenY = recordedScreenY,
+            WindowOffsetX = windowOffsetX,
+            WindowOffsetY = windowOffsetY,
+            ObjectRole = "window",
+            ObjectName = window.Title,
+            ObjectDescription = actionKind == JavaRecordedActionKind.CloseWindow ? "Native window close button" : "Window action"
+        };
+    }
+
     public JavaRecordedStep PromoteClickToDoubleClick(JavaRecordedStep step)
     {
         return new JavaRecordedStep
@@ -390,6 +425,18 @@ public sealed class JavaObjectRepositoryService
         var json = JsonSerializer.Serialize(project, JsonExportService.Options);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, json);
+    }
+
+    private static string SanitizeToken(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var character in value)
+        {
+            builder.Append(char.IsLetterOrDigit(character) ? char.ToLowerInvariant(character) : '_');
+        }
+
+        var sanitized = builder.ToString().Trim('_');
+        return string.IsNullOrWhiteSpace(sanitized) ? "window" : sanitized;
     }
 
     public JavaRecordingProject LoadProject(string path)

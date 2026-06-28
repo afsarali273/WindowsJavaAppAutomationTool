@@ -19,9 +19,11 @@ public sealed class JavaActionExecutionService(JavaVirtualKeypadService? virtual
             JavaRecordedActionKind.Focus => ExecuteFocus(node, host),
             JavaRecordedActionKind.Click => ExecuteClick(node, host),
             JavaRecordedActionKind.DoubleClick => ExecutePhysicalClick(node, 2, host),
+            JavaRecordedActionKind.CloseWindow => ExecuteCloseWindow(node, host),
             JavaRecordedActionKind.SetText => ExecuteSetText(node, inputText, host),
             JavaRecordedActionKind.TypeText => ExecuteTypeText(node, inputText, host),
             JavaRecordedActionKind.GetText => ExecuteGetText(node, host),
+            JavaRecordedActionKind.AssertVisible => ExecuteAssertVisible(node),
             _ => new JavaActionExecutionResult(false, $"Unsupported Java action '{actionKind}'.")
         };
     }
@@ -46,6 +48,12 @@ public sealed class JavaActionExecutionService(JavaVirtualKeypadService? virtual
     private static JavaActionExecutionResult ExecutePhysicalClick(AccessibleNode node, int count, IJavaActionExecutionHost host)
     {
         var success = host.PhysicalClick(node, count, out var message);
+        return new JavaActionExecutionResult(success, message);
+    }
+
+    private static JavaActionExecutionResult ExecuteCloseWindow(AccessibleNode node, IJavaActionExecutionHost host)
+    {
+        var success = host.CloseWindow(node, out var message);
         return new JavaActionExecutionResult(success, message);
     }
 
@@ -93,4 +101,16 @@ public sealed class JavaActionExecutionService(JavaVirtualKeypadService? virtual
         var text = host.GetText(node, out var message);
         return new JavaActionExecutionResult(true, message, text);
     }
+
+    private static JavaActionExecutionResult ExecuteAssertVisible(AccessibleNode node)
+    {
+        var visible = HasState(node, "visible") && HasState(node, "showing") && node.HasValidBounds;
+        return visible
+            ? new JavaActionExecutionResult(true, $"Visibility assertion passed for {node.DisplayName}.")
+            : new JavaActionExecutionResult(false, $"Visibility assertion failed for {node.DisplayName}. States='{node.States}', Bounds=({node.X},{node.Y},{node.Width},{node.Height}).");
+    }
+
+    private static bool HasState(AccessibleNode node, string value) =>
+        node.States.Contains(value, StringComparison.OrdinalIgnoreCase)
+        || node.StatesEnUs.Contains(value, StringComparison.OrdinalIgnoreCase);
 }

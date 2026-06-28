@@ -17,6 +17,16 @@ public final class JavaWindowScope {
         return new JavaObject(automation, selector, objectKey);
     }
 
+    public JavaWindowScope closeWindow() {
+        automation.run(com.afsarali.jab.client.model.JavaAction.CLOSE_WINDOW, null, null, "", selector);
+        return this;
+    }
+
+    public JavaWindowScope closeWindow(RetryOptions retryOptions) {
+        automation.run(com.afsarali.jab.client.model.JavaAction.CLOSE_WINDOW, null, null, "", selector, retryOptions);
+        return this;
+    }
+
     public JavaWindowScope waitUntilVisible() {
         automation.waitForWindow(selector);
         return this;
@@ -35,35 +45,35 @@ public final class JavaWindowScope {
         return object(locator);
     }
 
-    public List<JavaElementSnapshot> findElements(String objectKey) {
-        return automation.findElements(objectKey, null, null, selector);
+    public List<JavaElementHandle> findElements(String objectKey) {
+        return automation.findElements(objectKey, selector);
     }
 
-    public List<JavaElementSnapshot> findElements(LocatorSuggestion locator) {
-        return automation.findElements(locator, null, null, selector);
+    public List<JavaElementHandle> findElements(LocatorSuggestion locator) {
+        return automation.findElements(locator, selector);
     }
 
-    public List<JavaElementSnapshot> findElements(String objectKey, Integer minimumScore, Integer maxResults) {
+    public List<JavaElementHandle> findElements(String objectKey, Integer minimumScore, Integer maxResults) {
         return automation.findElements(objectKey, minimumScore, maxResults, selector);
     }
 
-    public List<JavaElementSnapshot> findElements(LocatorSuggestion locator, Integer minimumScore, Integer maxResults) {
+    public List<JavaElementHandle> findElements(LocatorSuggestion locator, Integer minimumScore, Integer maxResults) {
         return automation.findElements(locator, minimumScore, maxResults, selector);
     }
 
-    public List<JavaElementSnapshot> findChildElements(String parentObjectKey) {
-        return automation.findChildElements(parentObjectKey, null, null, false, selector);
+    public List<JavaElementHandle> findChildElements(String parentObjectKey) {
+        return automation.findChildElements(parentObjectKey, selector);
     }
 
-    public List<JavaElementSnapshot> findChildElements(LocatorSuggestion parentLocator) {
-        return automation.findChildElements(parentLocator, null, null, false, selector);
+    public List<JavaElementHandle> findChildElements(LocatorSuggestion parentLocator) {
+        return automation.findChildElements(parentLocator, selector);
     }
 
-    public List<JavaElementSnapshot> findChildElements(String parentObjectKey, Integer maxDepth, Integer maxResults, boolean includeSelf) {
+    public List<JavaElementHandle> findChildElements(String parentObjectKey, Integer maxDepth, Integer maxResults, boolean includeSelf) {
         return automation.findChildElements(parentObjectKey, maxDepth, maxResults, includeSelf, selector);
     }
 
-    public List<JavaElementSnapshot> findChildElements(LocatorSuggestion parentLocator, Integer maxDepth, Integer maxResults, boolean includeSelf) {
+    public List<JavaElementHandle> findChildElements(LocatorSuggestion parentLocator, Integer maxDepth, Integer maxResults, boolean includeSelf) {
         return automation.findChildElements(parentLocator, maxDepth, maxResults, includeSelf, selector);
     }
 }

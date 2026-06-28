@@ -87,22 +87,65 @@ Convenience methods include:
 Use `findElements` when a locator/object repository key may match more than one live element:
 
 ```java
-List<JavaElementSnapshot> tabs = automation
+List<JavaElementHandle> tabs = automation
+    .window(JavaWindowSelector.title("Download").className("SunAwtDialog"))
+    .findElements("page_tab_download_from_osm_0");
+
+for (JavaElementHandle tab : tabs) {
+    System.out.println(tab.label() + " score=" + tab.snapshot().score());
+}
+```
+
+The convenience overload uses defaults of `minimumScore=70` and `maxResults=20`. Use the explicit overload when you want to tune matching:
+
+```java
+List<JavaElementHandle> tabs = automation
     .window(JavaWindowSelector.title("Download").className("SunAwtDialog"))
     .findElements("page_tab_download_from_osm_0", 70, 20);
 
-for (JavaElementSnapshot tab : tabs) {
-    System.out.println(tab.displayName() + " score=" + tab.score());
-}
+tabs.stream().findFirst().ifPresent(tab -> {
+    System.out.println(tab.label());
+    tab.click();
+});
 ```
 
 Use `findChildElements` to return all descendants under a resolved parent object:
 
 ```java
-List<JavaElementSnapshot> descendants = automation
+List<JavaElementHandle> descendants = automation
+    .window(JavaWindowSelector.title("Download").className("SunAwtDialog"))
+    .object("download_dialog_root")
+    .findChildElements();
+```
+
+The convenience overload uses defaults of `maxDepth=10`, `maxResults=200`, and `includeSelf=false`. Use the explicit overload when you want tighter control:
+
+```java
+List<JavaElementHandle> descendants = automation
     .window(JavaWindowSelector.title("Download").className("SunAwtDialog"))
     .object("download_dialog_root")
     .findChildElements(10, 500, false);
 ```
 
 If no parent object is supplied through the low-level API, child search starts from the current window root.
+
+## Runnable example
+
+See this sample:
+
+- [FindElementsExample.java](C:/Users/Afsar/POC/JavaAutomation/java-client/src/main/java/com/afsarali/jab/client/examples/FindElementsExample.java)
+
+It demonstrates:
+
+- session-independent `automation.window(...).findElements(...)`
+- session-independent `automation.window(...).object(...).findChildElements(...)`
+- session-based `driver.window(...).findElements(...)`
+- session-based `driver.element(...).findChildElements(...)`
+
+Run it with:
+
+```powershell
+cd java-client
+mvn -q -DskipTests compile
+java -cp target/classes com.afsarali.jab.client.examples.FindElementsExample
+```

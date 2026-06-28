@@ -808,33 +808,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             _logger.Log($"Repository capture rejected. Status='{RecordingStatus}'.");
             return null;
         }
-        RefreshBounds(SelectedNode);
-
-        var existing = RepositoryEntries.FirstOrDefault(x => string.Equals(x.Path, SelectedNode.Path, StringComparison.OrdinalIgnoreCase) &&
-                                                             string.Equals(x.Name, SelectedNode.Name, StringComparison.Ordinal));
-        if (existing is not null)
-        {
-            var refreshed = _javaRepository.CreateEntry(CurrentWindow, SelectedNode, existing.ObjectKey, existing.FriendlyName);
-            var index = RepositoryEntries.IndexOf(existing);
-            RepositoryEntries[index] = refreshed;
-            RememberRecordingWindowScope(CurrentWindow);
-            SelectedRepositoryEntry = refreshed;
-            RecordingStatus = $"Repository refreshed {refreshed.ObjectKey}.";
-            RefreshRecordingSurface();
-            _logger.Log($"Repository capture refreshed existing object. ObjectKey='{refreshed.ObjectKey}', Path='{refreshed.Path}', Name='{refreshed.Name}', LocatorJsonLength={refreshed.LocatorJson.Length}.");
-            return refreshed;
-        }
-
-        var preferredName = friendlyName ?? $"{SelectedNode.Role}_{SelectedNode.Name}_{SelectedNode.IndexInParent}";
-        var key = _javaRepository.CreateUniqueObjectKey(preferredName, RepositoryEntries);
-        var entry = _javaRepository.CreateEntry(CurrentWindow, SelectedNode, key, friendlyName ?? SelectedNode.DisplayName);
-        RepositoryEntries.Add(entry);
-        RememberRecordingWindowScope(CurrentWindow);
-        SelectedRepositoryEntry = entry;
-        RecordingStatus = $"Captured repository object {entry.ObjectKey}.";
-        RefreshRecordingSurface();
-        _logger.Log($"Repository object captured. ObjectKey='{entry.ObjectKey}', FriendlyName='{entry.FriendlyName}', Path='{entry.Path}', Role='{entry.Role}', Name='{entry.Name}', ParentRole='{entry.ParentRole}', ParentName='{entry.ParentName}', LocatorJsonLength={entry.LocatorJson.Length}.");
-        return entry;
+        return CaptureNodeToRepository(CurrentWindow, SelectedNode, friendlyName, updateStatus: true);
     }
 
     public JavaObjectRepositoryEntry? RefreshSelectedRepositoryEntryFromSelectedNode()
@@ -955,6 +929,69 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         return step;
     }
 
+    public JavaRecordedStep? RecordJavaActionForNode(JavaRecordedActionKind actionKind, JavaWindowInfo window, AccessibleNode node, string? inputText = null, int? recordedScreenX = null, int? recordedScreenY = null, int? windowOffsetX = null, int? windowOffsetY = null)
+    {
+        _logger.Debug($"Record step for explicit node requested. RecordingActive={IsRecordingActive}, Paused={IsRecordingPaused}, JavaMode={IsJavaMode}, Window='{window.Title}', Node='{node.DisplayName}', Action={actionKind}, InputLength={(inputText ?? "").Length}.");
+        if (!IsRecordingActive || IsRecordingPaused || !IsJavaMode)
+        {
+            _logger.Debug("Record explicit-node step skipped because recording is inactive, paused, or mode is not Java.");
+            return null;
+        }
+
+        var entry = CaptureNodeToRepository(window, node, friendlyName: null, updateStatus: false);
+        if (entry is null)
+        {
+            _logger.Log("Record explicit-node step aborted because repository capture returned null.");
+            return null;
+        }
+
+        var step = _javaRepository.CreateRecordedStep(
+            entry,
+            actionKind,
+            RecordedSteps.Count + 1,
+            inputText,
+            window,
+            recordedScreenX,
+            recordedScreenY,
+            windowOffsetX,
+            windowOffsetY);
+        RecordedSteps.Add(step);
+        RememberRecordingWindowScope(window);
+        SelectedRepositoryEntry = entry;
+        SelectedRecordedStep = step;
+        RecordingStatus = $"Recorded step {step.Sequence}: {actionKind} on {entry.ObjectKey}.";
+        RefreshRecordingSurface();
+        _logger.Log($"Recorded explicit-node step created. Sequence={step.Sequence}, Action={step.ActionKind}, ObjectKey='{step.ObjectKey}', Window='{window.Title}', InputLength={step.InputText.Length}, TotalSteps={RecordedSteps.Count}.");
+        return step;
+    }
+
+    public JavaRecordedStep? RecordJavaWindowAction(JavaRecordedActionKind actionKind, JavaWindowInfo window, string? inputText = null, int? recordedScreenX = null, int? recordedScreenY = null, int? windowOffsetX = null, int? windowOffsetY = null)
+    {
+        _logger.Debug($"Record window action requested. RecordingActive={IsRecordingActive}, Paused={IsRecordingPaused}, JavaMode={IsJavaMode}, Window='{window.Title}', Action={actionKind}, InputLength={(inputText ?? "").Length}.");
+        if (!IsRecordingActive || IsRecordingPaused || !IsJavaMode)
+        {
+            _logger.Debug("Record window action skipped because recording is inactive, paused, or mode is not Java.");
+            return null;
+        }
+
+        var step = _javaRepository.CreateWindowActionStep(
+            window,
+            actionKind,
+            RecordedSteps.Count + 1,
+            inputText,
+            recordedScreenX,
+            recordedScreenY,
+            windowOffsetX,
+            windowOffsetY);
+        RecordedSteps.Add(step);
+        RememberRecordingWindowScope(window);
+        SelectedRecordedStep = step;
+        RecordingStatus = $"Recorded step {step.Sequence}: {actionKind} on window {window.Title}.";
+        RefreshRecordingSurface();
+        _logger.Log($"Recorded window action step created. Sequence={step.Sequence}, Action={step.ActionKind}, Window='{window.Title}', Hwnd={window.HwndDisplay}, TotalSteps={RecordedSteps.Count}.");
+        return step;
+    }
+
     public bool PromoteLastRecordedClickToDoubleClick()
     {
         _logger.Debug($"Promote last recorded click requested. RecordingActive={IsRecordingActive}, HasSelectedNode={SelectedNode is not null}, StepCount={RecordedSteps.Count}.");
@@ -988,6 +1025,45 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         return true;
     }
 
+    private JavaObjectRepositoryEntry? CaptureNodeToRepository(JavaWindowInfo window, AccessibleNode node, string? friendlyName, bool updateStatus)
+    {
+        RefreshBounds(node);
+
+        var existing = RepositoryEntries.FirstOrDefault(x => string.Equals(x.Path, node.Path, StringComparison.OrdinalIgnoreCase) &&
+                                                             string.Equals(x.Name, node.Name, StringComparison.Ordinal) &&
+                                                             string.Equals(x.WindowTitle, window.Title, StringComparison.Ordinal) &&
+                                                             string.Equals(x.WindowClassName, window.ClassName, StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            var refreshed = _javaRepository.CreateEntry(window, node, existing.ObjectKey, existing.FriendlyName);
+            var index = RepositoryEntries.IndexOf(existing);
+            RepositoryEntries[index] = refreshed;
+            RememberRecordingWindowScope(window);
+            SelectedRepositoryEntry = refreshed;
+            if (updateStatus)
+            {
+                RecordingStatus = $"Repository refreshed {refreshed.ObjectKey}.";
+                RefreshRecordingSurface();
+            }
+            _logger.Log($"Repository capture refreshed existing object. ObjectKey='{refreshed.ObjectKey}', Path='{refreshed.Path}', Name='{refreshed.Name}', Window='{window.Title}', LocatorJsonLength={refreshed.LocatorJson.Length}.");
+            return refreshed;
+        }
+
+        var preferredName = friendlyName ?? $"{node.Role}_{node.Name}_{node.IndexInParent}";
+        var key = _javaRepository.CreateUniqueObjectKey(preferredName, RepositoryEntries);
+        var entry = _javaRepository.CreateEntry(window, node, key, friendlyName ?? node.DisplayName);
+        RepositoryEntries.Add(entry);
+        RememberRecordingWindowScope(window);
+        SelectedRepositoryEntry = entry;
+        if (updateStatus)
+        {
+            RecordingStatus = $"Captured repository object {entry.ObjectKey}.";
+            RefreshRecordingSurface();
+        }
+        _logger.Log($"Repository object captured. ObjectKey='{entry.ObjectKey}', FriendlyName='{entry.FriendlyName}', Path='{entry.Path}', Role='{entry.Role}', Name='{entry.Name}', Window='{window.Title}', ParentRole='{entry.ParentRole}', ParentName='{entry.ParentName}', LocatorJsonLength={entry.LocatorJson.Length}.");
+        return entry;
+    }
+
     public bool DeleteSelectedRecordedStep()
     {
         if (SelectedRecordedStep is null)
@@ -1015,6 +1091,42 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         RecordingStatus = $"Deleted recorded step {targetSequence}. {RecordingStepCount} step(s) remain.";
         RefreshRecordingSurface();
         _logger.Log($"Deleted recorded step. PreviousSequence={targetSequence}, RemainingSteps={RecordingStepCount}.");
+        return true;
+    }
+
+    public bool MoveRecordedStep(JavaRecordedStep step, int targetIndex)
+    {
+        if (step is null)
+        {
+            RecordingStatus = "Select a recorded step before moving it.";
+            return false;
+        }
+
+        var currentIndex = RecordedSteps.IndexOf(step);
+        if (currentIndex < 0)
+        {
+            RecordingStatus = "The selected recorded step was not found.";
+            return false;
+        }
+
+        var boundedTargetIndex = Math.Max(0, Math.Min(targetIndex, RecordedSteps.Count - 1));
+        if (currentIndex == boundedTargetIndex) return false;
+
+        var ordered = RecordedSteps.ToList();
+        ordered.RemoveAt(currentIndex);
+        ordered.Insert(boundedTargetIndex, step);
+
+        RecordedSteps.Clear();
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            ordered[i].Sequence = i + 1;
+            RecordedSteps.Add(ordered[i]);
+        }
+
+        SelectedRecordedStep = step;
+        RecordingStatus = $"Moved step to position {step.Sequence}.";
+        RefreshRecordingSurface();
+        _logger.Log($"Recorded step moved. ObjectKey='{step.ObjectKey}', NewSequence={step.Sequence}, TargetIndex={boundedTargetIndex}, TotalSteps={RecordedSteps.Count}.");
         return true;
     }
 
@@ -1172,7 +1284,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public AccessibleNode? ResolveSelectedRepositoryEntry(out string message, ResolutionPolicy? policy = null)
     {
         message = "";
-        if (!IsJavaMode || Root is null)
+        if (!IsJavaMode)
         {
             message = "Attach to a Java window before resolving repository objects.";
             return null;
@@ -1181,6 +1293,17 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (SelectedRepositoryEntry is null)
         {
             message = "Select a repository object first.";
+            return null;
+        }
+
+        if (!TryAutoAttachJavaWindowForRepositoryEntry(SelectedRepositoryEntry, out message))
+        {
+            return null;
+        }
+
+        if (Root is null)
+        {
+            message = "Attach to a Java window before resolving repository objects.";
             return null;
         }
 
@@ -1194,6 +1317,50 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         message = $"Resolved {SelectedRepositoryEntry.ObjectKey} using {resolution.StrategyName}.";
         return resolution.Node;
+    }
+
+    public bool TryAutoAttachJavaWindowForRepositoryEntry(JavaObjectRepositoryEntry entry, out string message)
+    {
+        message = "";
+        if (CurrentWindow is not null
+            && (EntryMatchesWindow(entry, CurrentWindow)
+                || (TryFindRepositoryWindowScope(entry, out var currentScope)
+                    && currentScope is not null
+                    && WindowMatchesScope(currentScope, CurrentWindow)
+                    && ScopeProcessMatches(currentScope, CurrentWindow)))
+            && Root is not null)
+        {
+            return true;
+        }
+
+        JavaWindowInfo? match = null;
+        IReadOnlyList<JavaWindowInfo> lastWindows = [];
+        for (var attempt = 1; attempt <= 6; attempt++)
+        {
+            var service = new JavaWindowDiscoveryService(_bridge, _logger);
+            var windows = service.GetJavaWindows();
+            lastWindows = windows;
+            match = ResolveRepositoryWindowMatch(entry, windows);
+            if (match is not null) break;
+            if (attempt < 6) Thread.Sleep(220);
+        }
+
+        if (match is null)
+        {
+            var discovered = lastWindows.Count == 0
+                ? "(none)"
+                : string.Join(" | ", lastWindows.Select(x => $"{x.Title} [{x.HwndDisplay}] pid={x.ProcessId} vm={x.VmId} class={x.ClassName}"));
+            message = $"Could not find modal/window '{entry.WindowTitle}' for repository object '{entry.ObjectKey}'. Discovered Java windows: {discovered}";
+            _logger.Log(message);
+            return false;
+        }
+
+        var attached = TryAutoAttachJavaWindow(match.Hwnd, $"repository object {entry.ObjectKey}");
+        message = attached
+            ? $"Attached modal/window '{match.Title}' for repository object '{entry.ObjectKey}'."
+            : $"Failed to auto-attach modal/window '{match.Title}' for repository object '{entry.ObjectKey}'.";
+        if (!attached) _logger.Log(message);
+        return attached;
     }
 
     private void RefreshRepositoryEntry(JavaObjectRepositoryEntry entry)
@@ -1644,6 +1811,59 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             string.Equals(x.Title, step.WindowTitle, StringComparison.Ordinal)
             && string.Equals(x.ClassName, step.WindowClassName, StringComparison.Ordinal)
             && (step.WindowProcessId == 0 || x.ProcessId == 0 || x.ProcessId == step.WindowProcessId));
+    }
+
+    private bool TryFindRepositoryWindowScope(JavaObjectRepositoryEntry entry, out JavaWindowLocator? scope)
+    {
+        scope = null;
+        if (!string.IsNullOrWhiteSpace(entry.WindowKey))
+        {
+            scope = RecordingWindowScopes.FirstOrDefault(x => string.Equals(x.WindowKey, entry.WindowKey, StringComparison.OrdinalIgnoreCase));
+            if (scope is not null) return true;
+        }
+
+        scope = RecordingWindowScopes.FirstOrDefault(x =>
+            string.Equals(x.Title, entry.WindowTitle, StringComparison.Ordinal)
+            && string.Equals(x.ClassName, entry.WindowClassName, StringComparison.Ordinal)
+            && (entry.WindowProcessId == 0 || x.ProcessId == 0 || x.ProcessId == entry.WindowProcessId));
+        return scope is not null;
+    }
+
+    private JavaWindowInfo? ResolveRepositoryWindowMatch(JavaObjectRepositoryEntry entry, IReadOnlyList<JavaWindowInfo> windows)
+    {
+        if (TryFindRepositoryWindowScope(entry, out var scope) && scope is not null)
+        {
+            var scoped = windows.FirstOrDefault(x => WindowMatchesScope(scope, x) && ScopeProcessMatches(scope, x));
+            if (scoped is not null) return scoped;
+        }
+
+        return windows.FirstOrDefault(x => EntryMatchesWindow(entry, x))
+               ?? windows.FirstOrDefault(x =>
+                   x.ProcessId == entry.WindowProcessId
+                   && string.Equals(x.ClassName, entry.WindowClassName, StringComparison.Ordinal)
+                   && x.Title.Contains(entry.WindowTitle, StringComparison.OrdinalIgnoreCase))
+               ?? windows.FirstOrDefault(x =>
+                   x.ProcessId == entry.WindowProcessId
+                   && string.Equals(x.Title, entry.WindowTitle, StringComparison.OrdinalIgnoreCase))
+               ?? windows.FirstOrDefault(x =>
+                   entry.WindowVmId != 0
+                   && x.VmId == entry.WindowVmId
+                   && string.Equals(x.Title, entry.WindowTitle, StringComparison.OrdinalIgnoreCase))
+               ?? windows.FirstOrDefault(x =>
+                   !string.IsNullOrWhiteSpace(entry.WindowHwndDisplay)
+                   && string.Equals(x.HwndDisplay, entry.WindowHwndDisplay, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool EntryMatchesWindow(JavaObjectRepositoryEntry entry, JavaWindowInfo window)
+    {
+        if (!string.IsNullOrWhiteSpace(entry.WindowHwndDisplay)
+            && string.Equals(entry.WindowHwndDisplay, window.HwndDisplay, StringComparison.OrdinalIgnoreCase)) return true;
+        if (entry.WindowProcessId != 0 && entry.WindowProcessId != window.ProcessId) return false;
+        if (entry.WindowVmId != 0 && entry.WindowVmId != window.VmId) return false;
+        if (!string.IsNullOrWhiteSpace(entry.WindowClassName)
+            && !string.Equals(entry.WindowClassName, window.ClassName, StringComparison.OrdinalIgnoreCase)) return false;
+        return string.IsNullOrWhiteSpace(entry.WindowTitle)
+               || string.Equals(entry.WindowTitle, window.Title, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool WindowMatchesScope(JavaWindowLocator? scope, JavaWindowInfo window)

@@ -705,14 +705,30 @@ public sealed class JavaDriverService : IDisposable
         var routed = RouteSessionWindow(session, request.ObjectKey, request.Window, request.AutoSwitchWindow);
         if (!routed.Success) return routed;
 
+        if (!TryNormalizeAction(request.Action, out var action, out var actionError))
+            return Fail(actionError, session.Id);
+
+        if (action == JavaRecordedActionKind.CloseWindow)
+        {
+            var host = new ApiJavaActionHost(this, session.Window, request.PreferAccessibleAction, recordedStep: null);
+            var closed = host.CloseWindow(null, out var closeMessage);
+            if (!closed) return Fail($"Action '{request.Action}' failed for window '{session.Window.Title}': {closeMessage}", session.Id);
+
+            return Ok($"Action '{action}' executed.", session.Id, new
+            {
+                mode = isOneShot ? "one-shot" : "session",
+                session = ToSummary(session),
+                action,
+                window = JavaWindowDto.From(session.Window),
+                message = closeMessage
+            });
+        }
+
         if (request.RefreshTree || session.Root is null)
         {
             var refresh = RefreshSessionTree(session);
             if (!refresh.Success) return refresh;
         }
-
-        if (!TryNormalizeAction(request.Action, out var action, out var actionError))
-            return Fail(actionError, session.Id);
 
         var resolution = ResolveNodeWithRetry(session, request.ObjectKey, request.Locator, request.ResolutionPolicy, action);
         if (!resolution.Success || resolution.Node is null)
@@ -876,7 +892,7 @@ public sealed class JavaDriverService : IDisposable
     {
         if (selector is not null)
         {
-            var selected = FindRelatedWindow(session, selector);
+            var selected = FindRelatedWindow(session, selector, attempts: autoSwitch ? 6 : 1, retryDelayMs: autoSwitch ? 220 : 0);
             if (selected is null) return Fail("Requested Java window/modal was not found for this session.", session.Id);
             if (selected.Hwnd != session.Window.Hwnd) SwitchSessionWindow(session, selected);
             return Ok("Session routed to requested window.", session.Id, ToSummary(session));
@@ -885,36 +901,42 @@ public sealed class JavaDriverService : IDisposable
         if (!autoSwitch || string.IsNullOrWhiteSpace(objectKey)) return Ok("Window routing not required.", session.Id);
 
         var entry = session.Repository.FirstOrDefault(x => string.Equals(x.ObjectKey, objectKey, StringComparison.OrdinalIgnoreCase));
-        if (entry is null) return Ok("Repository object not loaded; window routing skipped.", session.Id);
+        var recordedStep = FindRecordedStep(session, objectKey, actionKind: null);
+        if (entry is null && recordedStep is null) return Ok("Repository object not loaded; window routing skipped.", session.Id);
 
-        var scope = !string.IsNullOrWhiteSpace(entry.WindowKey)
+        var scope = entry is not null && !string.IsNullOrWhiteSpace(entry.WindowKey)
             ? session.Windows.FirstOrDefault(x => string.Equals(x.WindowKey, entry.WindowKey, StringComparison.OrdinalIgnoreCase))
             : null;
+        var stepScope = FindRecordedWindowScope(session, recordedStep);
+
+        if (stepScope is not null && WindowMatchesScope(stepScope, session.Window) && ScopeProcessMatches(stepScope, session.Window))
+            return Ok("Session already uses recorded step window scope.", session.Id);
         if (scope is not null && WindowMatchesScope(scope, session.Window) && ScopeProcessMatches(scope, session.Window))
             return Ok("Session already uses recorded object window scope.", session.Id);
-        if (scope is null && EntryMatchesWindow(entry, session.Window)) return Ok("Session already uses recorded object window.", session.Id);
+        if (recordedStep is not null && RecordedStepMatchesWindow(recordedStep, session.Window))
+            return Ok("Session already uses recorded step window.", session.Id);
+        if (entry is not null && scope is null && EntryMatchesWindow(entry, session.Window))
+            return Ok("Session already uses recorded object window.", session.Id);
 
-        var recordedWindow = scope is not null
-            ? FindRelatedWindow(session, scope)
-            : FindRelatedWindow(session, new JavaWindowSelector(
-            Hwnd: entry.WindowHwndDisplay,
-            Title: entry.WindowTitle,
-            ClassName: entry.WindowClassName,
-            ProcessId: entry.WindowProcessId == 0 ? null : entry.WindowProcessId,
-            VmId: entry.WindowVmId == 0 ? null : entry.WindowVmId,
-            ExactTitle: true));
+        var recordedWindow = stepScope is not null
+            ? FindRelatedWindow(session, stepScope, attempts: 6, retryDelayMs: 220)
+            : scope is not null
+                ? FindRelatedWindow(session, scope, attempts: 6, retryDelayMs: 220)
+                : FindRelatedWindow(session, BuildRecordedWindowSelector(entry, recordedStep), attempts: 6, retryDelayMs: 220);
 
         if (recordedWindow is null)
-            return Fail($"Could not find recorded window/modal '{scope?.FriendlyName ?? entry.WindowTitle}' for object '{entry.ObjectKey}'.", session.Id, new
+            return Fail($"Could not find recorded window/modal '{stepScope?.FriendlyName ?? scope?.FriendlyName ?? recordedStep?.WindowTitle ?? entry?.WindowTitle}' for object '{objectKey}'.", session.Id, new
             {
-                entry.ObjectKey,
-                entry.WindowKey,
+                objectKey,
+                entry?.WindowKey,
+                recordedStepWindowKey = recordedStep?.WindowKey,
                 expectedWindow = scope,
+                expectedRecordedWindow = stepScope,
                 discoveredWindows = GetRelatedWindows(session).Select(JavaWindowDto.From).ToList()
             });
 
         SwitchSessionWindow(session, recordedWindow);
-        return Ok("Session auto-switched to recorded object window.", session.Id, ToSummary(session));
+        return Ok("Session auto-switched to recorded window/modal.", session.Id, ToSummary(session));
     }
 
     private IReadOnlyList<JavaWindowInfo> GetRelatedWindows(JavaDriverSession session)
@@ -930,16 +952,32 @@ public sealed class JavaDriverService : IDisposable
             .ToList();
     }
 
-    private JavaWindowInfo? FindRelatedWindow(JavaDriverSession session, JavaWindowSelector selector)
+    private JavaWindowInfo? FindRelatedWindow(JavaDriverSession session, JavaWindowSelector selector, int attempts = 1, int retryDelayMs = 0)
     {
-        var related = GetRelatedWindows(session);
-        return FindWindow(related, selector) ?? FindWindow(GetWindows(), selector);
+        JavaWindowInfo? match = null;
+        for (var attempt = 1; attempt <= Math.Max(1, attempts); attempt++)
+        {
+            var related = GetRelatedWindows(session);
+            match = FindWindow(related, selector) ?? FindWindow(GetWindows(), selector);
+            if (match is not null || attempt >= attempts) break;
+            if (retryDelayMs > 0) Thread.Sleep(retryDelayMs);
+        }
+
+        return match;
     }
 
-    private JavaWindowInfo? FindRelatedWindow(JavaDriverSession session, JavaWindowLocator scope)
+    private JavaWindowInfo? FindRelatedWindow(JavaDriverSession session, JavaWindowLocator scope, int attempts = 1, int retryDelayMs = 0)
     {
-        var related = GetRelatedWindows(session);
-        return FindWindow(related, scope) ?? FindWindow(GetWindows(), scope);
+        JavaWindowInfo? match = null;
+        for (var attempt = 1; attempt <= Math.Max(1, attempts); attempt++)
+        {
+            var related = GetRelatedWindows(session);
+            match = FindWindow(related, scope) ?? FindWindow(GetWindows(), scope);
+            if (match is not null || attempt >= attempts) break;
+            if (retryDelayMs > 0) Thread.Sleep(retryDelayMs);
+        }
+
+        return match;
     }
 
     private static JavaWindowInfo? FindWindow(IEnumerable<JavaWindowInfo> windows, JavaWindowSelector selector)
@@ -1000,6 +1038,44 @@ public sealed class JavaDriverService : IDisposable
             !string.Equals(entry.WindowClassName, window.ClassName, StringComparison.OrdinalIgnoreCase)) return false;
         return string.IsNullOrWhiteSpace(entry.WindowTitle) ||
                string.Equals(entry.WindowTitle, window.Title, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool RecordedStepMatchesWindow(JavaRecordedStep step, JavaWindowInfo window)
+    {
+        if (!string.IsNullOrWhiteSpace(step.WindowHwndDisplay) &&
+            string.Equals(step.WindowHwndDisplay, window.HwndDisplay, StringComparison.OrdinalIgnoreCase)) return true;
+        if (step.WindowProcessId != 0 && step.WindowProcessId != window.ProcessId) return false;
+        if (step.WindowVmId != 0 && step.WindowVmId != window.VmId) return false;
+        if (!string.IsNullOrWhiteSpace(step.WindowClassName) &&
+            !string.Equals(step.WindowClassName, window.ClassName, StringComparison.OrdinalIgnoreCase)) return false;
+        return string.IsNullOrWhiteSpace(step.WindowTitle) ||
+               string.Equals(step.WindowTitle, window.Title, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static JavaWindowSelector BuildRecordedWindowSelector(JavaObjectRepositoryEntry? entry, JavaRecordedStep? step)
+    {
+        return new JavaWindowSelector(
+            Hwnd: FirstNonEmpty(step?.WindowHwndDisplay, entry?.WindowHwndDisplay),
+            Title: FirstNonEmpty(step?.WindowTitle, entry?.WindowTitle),
+            ClassName: FirstNonEmpty(step?.WindowClassName, entry?.WindowClassName),
+            ProcessId: step?.WindowProcessId > 0 ? step.WindowProcessId : entry?.WindowProcessId > 0 ? entry.WindowProcessId : null,
+            VmId: step?.WindowVmId > 0 ? step.WindowVmId : entry?.WindowVmId > 0 ? entry.WindowVmId : null,
+            ExactTitle: true);
+    }
+
+    private JavaWindowLocator? FindRecordedWindowScope(JavaDriverSession session, JavaRecordedStep? step)
+    {
+        if (step is null) return null;
+        if (!string.IsNullOrWhiteSpace(step.WindowKey))
+        {
+            var byKey = session.Windows.FirstOrDefault(x => string.Equals(x.WindowKey, step.WindowKey, StringComparison.OrdinalIgnoreCase));
+            if (byKey is not null) return byKey;
+        }
+
+        return session.Windows.FirstOrDefault(x =>
+            string.Equals(x.Title, step.WindowTitle, StringComparison.Ordinal)
+            && string.Equals(x.ClassName, step.WindowClassName, StringComparison.Ordinal)
+            && (step.WindowProcessId == 0 || x.ProcessId == 0 || x.ProcessId == step.WindowProcessId));
     }
 
     private static bool WindowMatchesScope(JavaWindowLocator scope, JavaWindowInfo window)
@@ -1280,6 +1356,13 @@ public sealed class JavaDriverService : IDisposable
             return success;
         }
 
+        public bool CloseWindow(AccessibleNode? node, out string message)
+        {
+            var success = PostMessage(window.Hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
+            message = success ? $"Close requested for window '{window.Title}'." : $"Close request failed for window '{window.Title}'.";
+            return success;
+        }
+
         public bool InvokeDefaultAction(AccessibleNode node, out string message)
         {
             if (!allowSemanticFallback)
@@ -1349,14 +1432,16 @@ public sealed class JavaDriverService : IDisposable
             "focus" => JavaRecordedActionKind.Focus,
             "click" => JavaRecordedActionKind.Click,
             "doubleclick" or "dblclick" => JavaRecordedActionKind.DoubleClick,
+            "closewindow" or "close" or "windowclose" => JavaRecordedActionKind.CloseWindow,
             "settext" or "set" => JavaRecordedActionKind.SetText,
             "typetext" or "type" => JavaRecordedActionKind.TypeText,
             "gettext" or "text" => JavaRecordedActionKind.GetText,
+            "assertvisible" or "isvisible" or "visible" => JavaRecordedActionKind.AssertVisible,
             _ => NoMatch()
         };
 
         if (matched) return true;
-        error = $"Unsupported action '{action}'. Supported actions: focus, click, doubleClick, setText, typeText, getText.";
+        error = $"Unsupported action '{action}'. Supported actions: focus, click, doubleClick, closeWindow, setText, typeText, getText, assertVisible.";
         return false;
 
         JavaRecordedActionKind NoMatch()
@@ -1426,6 +1511,7 @@ public sealed class JavaDriverService : IDisposable
 
     private const uint MouseLeftDown = 0x0002;
     private const uint MouseLeftUp = 0x0004;
+    private const uint WmClose = 0x0010;
     private const uint KeyEventUnicode = 0x0004;
     private const uint KeyEventKeyUp = 0x0002;
 
@@ -1477,4 +1563,8 @@ public sealed class JavaDriverService : IDisposable
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint count, NativeInput[] inputs, int size);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 }

@@ -2,6 +2,8 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 using JabInspector.App.ViewModels;
 using JabInspector.Core.Models;
 using Microsoft.Win32;
@@ -10,6 +12,9 @@ namespace JabInspector.App;
 
 public partial class RecordingStudioWindow : Window
 {
+    private System.Windows.Point _recordedStepDragStartPoint;
+    private JavaRecordedStep? _draggedRecordedStep;
+
     private MainWindow OwnerWindow => (MainWindow)Owner;
     private MainViewModel ViewModel => (MainViewModel)DataContext;
 
@@ -192,10 +197,73 @@ public partial class RecordingStudioWindow : Window
         window.ShowDialog();
     }
 
+    private void RecordedStepsList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _recordedStepDragStartPoint = e.GetPosition(RecordedStepsList);
+        _draggedRecordedStep = FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject)?.DataContext as JavaRecordedStep;
+    }
+
+    private void RecordedStepsList_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _draggedRecordedStep is null) return;
+
+        var currentPosition = e.GetPosition(RecordedStepsList);
+        if (Math.Abs(currentPosition.X - _recordedStepDragStartPoint.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(currentPosition.Y - _recordedStepDragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        System.Windows.DragDrop.DoDragDrop(RecordedStepsList, new System.Windows.DataObject(typeof(JavaRecordedStep), _draggedRecordedStep), System.Windows.DragDropEffects.Move);
+    }
+
+    private void RecordedStepsList_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(typeof(JavaRecordedStep)) ? System.Windows.DragDropEffects.Move : System.Windows.DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void RecordedStepsList_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(typeof(JavaRecordedStep))) return;
+        if (e.Data.GetData(typeof(JavaRecordedStep)) is not JavaRecordedStep draggedStep) return;
+
+        var listBoxItem = FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
+        var targetStep = listBoxItem?.DataContext as JavaRecordedStep;
+        var targetIndex = targetStep is null
+            ? ViewModel.RecordedSteps.Count - 1
+            : ViewModel.RecordedSteps.IndexOf(targetStep);
+
+        if (ViewModel.MoveRecordedStep(draggedStep, targetIndex))
+        {
+            OwnerWindow.UpdateRecordingBadge();
+        }
+
+        _draggedRecordedStep = null;
+        e.Handled = true;
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current is not null)
+        {
+            if (current is T match) return match;
+            current = current switch
+            {
+                Visual or System.Windows.Media.Media3D.Visual3D => VisualTreeHelper.GetParent(current),
+                FrameworkContentElement content => content.Parent,
+                _ => LogicalTreeHelper.GetParent(current)
+            };
+        }
+
+        return null;
+    }
+
     private void Focus_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.Focus, "");
     private void Click_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.Click, "");
     private void DoubleClick_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.DoubleClick, "");
     private void SetText_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.SetText, RecorderTextInput.Text);
     private void TypeText_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.TypeText, RecorderTextInput.Text);
     private void GetText_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.GetText, "");
+    private void AssertVisible_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.AssertVisible, "");
 }

@@ -5,6 +5,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using JabInspector.Core.Diagnostics;
+using JabInspector.Core.Models;
 
 namespace JabInspector.App;
 
@@ -23,6 +24,7 @@ public partial class RecordingBadgeOverlay : Window
     public event EventHandler? PauseResumeRequested;
     public event EventHandler? StopRequested;
     public event EventHandler? StudioRequested;
+    public event EventHandler<RecordingBadgeActionRequestedEventArgs>? ActionRequested;
 
     public RecordingBadgeOverlay()
     {
@@ -62,6 +64,7 @@ public partial class RecordingBadgeOverlay : Window
         _targetHwnd = IntPtr.Zero;
         _lastKnownTargetRect = null;
         _targetRectMissCount = 0;
+        ActionsPopup.IsOpen = false;
     }
 
     private void UpdatePosition()
@@ -99,10 +102,11 @@ public partial class RecordingBadgeOverlay : Window
             return;
         }
 
+        ApplyResponsiveSize(rect);
         var width = (int)Math.Round(Width);
         var height = (int)Math.Round(Height);
         var x = _hasManualPosition ? _manualX : rect.Left + Math.Max(10, ((rect.Right - rect.Left) - width) / 2);
-        var y = _hasManualPosition ? _manualY : rect.Top + 14;
+        var y = _hasManualPosition ? _manualY : rect.Top + 10;
         ClampToVirtualScreen(ref x, ref y, width, height);
         if (_hasManualPosition)
         {
@@ -176,9 +180,39 @@ public partial class RecordingBadgeOverlay : Window
         ResumeTriangle.Visibility = paused ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    private void ApplyResponsiveSize(NativeRect targetRect)
+    {
+        if (_hasManualPosition) return;
+
+        var targetWidth = Math.Max(180, targetRect.Right - targetRect.Left);
+        var desiredWidth = Math.Clamp((int)Math.Round(targetWidth * 0.42), 280, 360);
+        if (Math.Abs(Width - desiredWidth) > 0.5)
+        {
+            Width = desiredWidth;
+        }
+    }
+
+    private void ActionsButton_Click(object sender, RoutedEventArgs e)
+    {
+        ActionsPopup.IsOpen = !ActionsPopup.IsOpen;
+    }
+
     private void PauseButton_Click(object sender, RoutedEventArgs e) => PauseResumeRequested?.Invoke(this, EventArgs.Empty);
     private void StopButton_Click(object sender, RoutedEventArgs e) => StopRequested?.Invoke(this, EventArgs.Empty);
     private void StudioButton_Click(object sender, RoutedEventArgs e) => StudioRequested?.Invoke(this, EventArgs.Empty);
+    private void ActionFocus_Click(object sender, RoutedEventArgs e) => RaiseAction(JavaRecordedActionKind.Focus);
+    private void ActionClick_Click(object sender, RoutedEventArgs e) => RaiseAction(JavaRecordedActionKind.Click);
+    private void ActionDoubleClick_Click(object sender, RoutedEventArgs e) => RaiseAction(JavaRecordedActionKind.DoubleClick);
+    private void ActionSetText_Click(object sender, RoutedEventArgs e) => RaiseAction(JavaRecordedActionKind.SetText);
+    private void ActionTypeText_Click(object sender, RoutedEventArgs e) => RaiseAction(JavaRecordedActionKind.TypeText);
+    private void ActionGetText_Click(object sender, RoutedEventArgs e) => RaiseAction(JavaRecordedActionKind.GetText);
+    private void ActionAssertVisible_Click(object sender, RoutedEventArgs e) => RaiseAction(JavaRecordedActionKind.AssertVisible);
+
+    private void RaiseAction(JavaRecordedActionKind actionKind)
+    {
+        ActionsPopup.IsOpen = false;
+        ActionRequested?.Invoke(this, new RecordingBadgeActionRequestedEventArgs(actionKind));
+    }
 
     public bool ContainsScreenPoint(int x, int y)
     {
@@ -249,4 +283,9 @@ public partial class RecordingBadgeOverlay : Window
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
     private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
+}
+
+public sealed class RecordingBadgeActionRequestedEventArgs(JavaRecordedActionKind actionKind) : EventArgs
+{
+    public JavaRecordedActionKind ActionKind { get; } = actionKind;
 }

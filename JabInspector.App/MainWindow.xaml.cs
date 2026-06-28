@@ -28,6 +28,9 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     private bool _recordingLeftButtonDown;
     private bool _recordingCaptureInProgress;
     private NativePoint _recordingMouseDownPoint;
+    private AccessibleNode? _recordingMouseDownNode;
+    private ElementBounds _recordingMouseDownBounds = new(0, 0, 0, 0);
+    private JavaWindowInfo? _recordingMouseDownWindow;
     private DateTime _lastPassiveClickAtUtc;
     private string _lastPassiveClickPath = "";
     private bool _playbackInProgress;
@@ -418,6 +421,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
             _recordingLeftButtonDown = true;
             GetCursorPos(out _recordingMouseDownPoint);
             _viewModel.Log($"[RECORDER] Mouse down detected at ({_recordingMouseDownPoint.X}, {_recordingMouseDownPoint.Y}). CurrentWindow={_viewModel.CurrentWindow.HwndDisplay}, Root='{_viewModel.Root.DisplayName}'.");
+            CapturePassiveRecordingSnapshot(_recordingMouseDownPoint);
             return;
         }
 
@@ -460,26 +464,56 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         if (_viewModel.IsRecordingPaused)
         {
             _viewModel.Log($"[RECORDER] Capture skipped because recording is paused. Point=({point.X}, {point.Y}).");
+            ClearPassiveRecordingSnapshot();
             return;
         }
 
         _viewModel.Log($"[RECORDER] Capture pipeline started for point ({point.X}, {point.Y}).");
         TryAutoAttachJavaWindowFromPoint(point, "passive click");
+        if (_viewModel.CurrentWindow is not null && IsPointInNativeCloseButtonRect(_viewModel.CurrentWindow, point))
+        {
+            if (TryRecordNativeWindowClose(_viewModel.CurrentWindow, point, "active window"))
+            {
+                ClearPassiveRecordingSnapshot();
+                return;
+            }
+        }
         if (_viewModel.CurrentWindow is null || _viewModel.Root is null)
         {
+            if (TryRecordPassiveClickFromMouseDownSnapshot(point))
+            {
+                ClearPassiveRecordingSnapshot();
+                return;
+            }
+
             _viewModel.Log("[RECORDER] Capture aborted because no Java window/root is attached after auto-attach probe.");
+            ClearPassiveRecordingSnapshot();
             return;
         }
 
         if (!IsPointWithinCurrentJavaWindow(point))
         {
+            if (TryRecordPassiveClickFromMouseDownSnapshot(point))
+            {
+                ClearPassiveRecordingSnapshot();
+                return;
+            }
+
             _viewModel.Log($"[RECORDER] Capture ignored because point ({point.X}, {point.Y}) is outside attached Java window {_viewModel.CurrentWindow.HwndDisplay}.");
+            ClearPassiveRecordingSnapshot();
             return;
         }
 
         if (!TryResolveJavaNodeAtScreenPoint(point, out var node, out var bounds) || node is null)
         {
+            if (TryRecordPassiveClickFromMouseDownSnapshot(point))
+            {
+                ClearPassiveRecordingSnapshot();
+                return;
+            }
+
             _viewModel.Log($"Passive recording could not resolve a Java node at ({point.X}, {point.Y}) using the hover hit-test path.");
+            ClearPassiveRecordingSnapshot();
             return;
         }
 
@@ -530,6 +564,121 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         {
             _viewModel.Log($"Passive recording did not create a step for '{node.DisplayName}'.");
         }
+
+        ClearPassiveRecordingSnapshot();
+    }
+
+    private void CapturePassiveRecordingSnapshot(NativePoint point)
+    {
+        ClearPassiveRecordingSnapshot();
+        TryAutoAttachJavaWindowFromPoint(point, "passive click pre-capture");
+        if (_viewModel.CurrentWindow is null || _viewModel.Root is null) return;
+        if (!IsPointWithinCurrentJavaWindow(point)) return;
+        if (!TryResolveJavaNodeAtScreenPoint(point, out var node, out var bounds) || node is null) return;
+
+        _recordingMouseDownNode = node;
+        _recordingMouseDownBounds = bounds;
+        _recordingMouseDownWindow = _viewModel.CurrentWindow;
+        _viewModel.Log($"[RECORDER] Mouse-down snapshot captured. Node='{node.DisplayName}', Window='{_recordingMouseDownWindow.Title}', Path='{node.Path}'.");
+    }
+
+    private bool TryRecordPassiveClickFromMouseDownSnapshot(NativePoint releasePoint)
+    {
+        if (_recordingMouseDownNode is null || _recordingMouseDownWindow is null)
+        {
+            _viewModel.Log("[RECORDER] Mouse-down snapshot fallback unavailable.");
+            return false;
+        }
+
+        var node = _recordingMouseDownNode;
+        var bounds = _recordingMouseDownBounds;
+        var window = _recordingMouseDownWindow;
+        _viewModel.Log($"[RECORDER] Using mouse-down snapshot fallback. Node='{node.DisplayName}', Window='{window.Title}', ReleasePoint=({releasePoint.X}, {releasePoint.Y}).");
+
+        if (IsPointInNativeCloseButtonRect(window, releasePoint))
+        {
+            return TryRecordNativeWindowClose(window, releasePoint, "mouse-down snapshot");
+        }
+
+        if (HasOnScreenBounds(bounds))
+        {
+            HighlightOverlay.Show(bounds, TimeSpan.FromSeconds(1.0));
+        }
+
+        int? windowOffsetX = null;
+        int? windowOffsetY = null;
+        if (GetWindowRect(window.Hwnd, out var stepRect))
+        {
+            windowOffsetX = releasePoint.X - stepRect.Left;
+            windowOffsetY = releasePoint.Y - stepRect.Top;
+        }
+
+        var step = _viewModel.RecordJavaActionForNode(
+            JavaRecordedActionKind.Click,
+            window,
+            node,
+            recordedScreenX: releasePoint.X,
+            recordedScreenY: releasePoint.Y,
+            windowOffsetX: windowOffsetX,
+            windowOffsetY: windowOffsetY);
+
+        if (step is null)
+        {
+            _viewModel.Log($"[RECORDER] Mouse-down snapshot fallback could not create a recorded step for '{node.DisplayName}'.");
+            return false;
+        }
+
+        _lastPassiveClickAtUtc = DateTime.UtcNow;
+        _lastPassiveClickPath = node.Path;
+        UpdateRecordingBadge();
+        _viewModel.Log($"[RECORDER] Mouse-down snapshot fallback recorded click step {step.Sequence} for '{node.DisplayName}'.");
+        return true;
+    }
+
+    private bool TryRecordNativeWindowClose(JavaWindowInfo window, NativePoint point, string source)
+    {
+        int? windowOffsetX = null;
+        int? windowOffsetY = null;
+        if (GetWindowRect(window.Hwnd, out var rect))
+        {
+            windowOffsetX = point.X - rect.Left;
+            windowOffsetY = point.Y - rect.Top;
+        }
+
+        var step = _viewModel.RecordJavaWindowAction(
+            JavaRecordedActionKind.CloseWindow,
+            window,
+            recordedScreenX: point.X,
+            recordedScreenY: point.Y,
+            windowOffsetX: windowOffsetX,
+            windowOffsetY: windowOffsetY);
+        if (step is null)
+        {
+            _viewModel.Log($"[RECORDER] Native window close recording failed for '{window.Title}' from {source}.");
+            return false;
+        }
+
+        UpdateRecordingBadge();
+        _viewModel.Log($"[RECORDER] Recorded native window close step {step.Sequence} for '{window.Title}' from {source}.");
+        return true;
+    }
+
+    private static bool IsPointInNativeCloseButtonRect(JavaWindowInfo window, NativePoint point)
+    {
+        if (!GetWindowRect(window.Hwnd, out var rect)) return false;
+        var buttonWidth = Math.Max(32, GetSystemMetrics(SmCxSize) + 12);
+        var buttonHeight = Math.Max(24, GetSystemMetrics(SmCySize) + 8);
+        var closeLeft = rect.Right - buttonWidth;
+        var closeTop = rect.Top;
+        var closeBottom = rect.Top + buttonHeight;
+        return point.X >= closeLeft && point.X < rect.Right && point.Y >= closeTop && point.Y < closeBottom;
+    }
+
+    private void ClearPassiveRecordingSnapshot()
+    {
+        _recordingMouseDownNode = null;
+        _recordingMouseDownWindow = null;
+        _recordingMouseDownBounds = new ElementBounds(0, 0, 0, 0);
     }
 
     private void StabilizePassiveRecordingCandidate(NativePoint point, ref AccessibleNode node, ref ElementBounds bounds)
@@ -582,20 +731,36 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
 
     private bool TryAutoAttachJavaWindowFromPoint(NativePoint point, string reason)
     {
-        if (IsPointInsideCurrentJavaWindowRect(point))
-        {
-            _viewModel.Log($"[RECORDER] Auto-attach probe skipped for '{reason}' because point is inside current Java window.");
-            return true;
-        }
-
         var candidateWindows = GetCandidateWindowHandlesFromPoint(point);
         _viewModel.Log($"[RECORDER] Auto-attach probe for '{reason}' found {candidateWindows.Count} candidate hwnd(s): {FormatHwndList(candidateWindows)}.");
-        if (candidateWindows.Count == 0) return false;
+        var insideCurrentRect = IsPointInsideCurrentJavaWindowRect(point);
+        if (candidateWindows.Count == 0)
+        {
+            if (insideCurrentRect)
+            {
+                _viewModel.Log($"[RECORDER] Auto-attach probe for '{reason}' found no hwnd candidates, but point is still inside current Java window.");
+                return true;
+            }
+
+            return false;
+        }
+
         if (_viewModel.CurrentWindow is not null && candidateWindows.Contains(_viewModel.CurrentWindow.Hwnd))
         {
-            _viewModel.Log($"[RECORDER] Auto-attach probe resolved to current Java window {_viewModel.CurrentWindow.HwndDisplay}.");
-            return true;
+            var topCandidate = candidateWindows[0];
+            if (topCandidate == _viewModel.CurrentWindow.Hwnd)
+            {
+                _viewModel.Log($"[RECORDER] Auto-attach probe resolved to current Java window {_viewModel.CurrentWindow.HwndDisplay}.");
+                return true;
+            }
+
+            _viewModel.Log($"[RECORDER] Auto-attach probe detected overlapping/owned hwnd 0x{topCandidate.ToInt64():X} while current Java window is {_viewModel.CurrentWindow.HwndDisplay}; attempting modal switch.");
         }
+        else if (insideCurrentRect)
+        {
+            _viewModel.Log($"[RECORDER] Auto-attach probe found a different hwnd while point is inside current Java window bounds; attempting modal switch for '{reason}'.");
+        }
+
         var now = DateTime.UtcNow;
         var probeKey = candidateWindows[0];
         if (probeKey == _lastAutoAttachProbeHwnd && now - _lastAutoAttachProbeAtUtc < TimeSpan.FromMilliseconds(600))
@@ -867,21 +1032,31 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     private bool ExecuteJavaRecordedAction(JavaRecordedActionKind actionKind, string inputText, bool captureStep)
     {
         _viewModel.Log($"ExecuteJavaRecordedAction invoked. Action={actionKind}, CaptureStep={captureStep}, InputLength={inputText.Length}, HasSelectedNode={_viewModel.SelectedNode is not null}, RecordingActive={_viewModel.IsRecordingActive}, Paused={_viewModel.IsRecordingPaused}.");
-        if (_viewModel.SelectedNode is null)
+        if (actionKind != JavaRecordedActionKind.CloseWindow && _viewModel.SelectedNode is null)
         {
             _viewModel.ReportAutomation("Select a Java element first.");
             _viewModel.Log("ExecuteJavaRecordedAction aborted because no Java node is selected.");
             return false;
         }
 
-        var result = _javaActions.Execute(actionKind, _viewModel.SelectedNode, inputText, this);
+        var actionNode = _viewModel.SelectedNode ?? _viewModel.Root;
+        if (actionNode is null)
+        {
+            _viewModel.ReportAutomation("Attach to a Java window first.");
+            _viewModel.Log("ExecuteJavaRecordedAction aborted because no Java root is available.");
+            return false;
+        }
+
+        var result = _javaActions.Execute(actionKind, actionNode, inputText, this);
         var success = result.Success;
         _viewModel.ReportAutomation(result.Text is null ? result.Message : $"{result.Message}{Environment.NewLine}{result.Text}");
 
         _viewModel.Log($"ExecuteJavaRecordedAction completed. Action={actionKind}, Success={success}, CaptureStep={captureStep}.");
         if (captureStep && success && !_viewModel.IsRecordingPaused)
         {
-            var recordedStep = _viewModel.RecordJavaAction(actionKind, inputText);
+            var recordedStep = actionKind == JavaRecordedActionKind.CloseWindow && _viewModel.CurrentWindow is not null
+                ? _viewModel.RecordJavaWindowAction(actionKind, _viewModel.CurrentWindow, inputText)
+                : _viewModel.RecordJavaAction(actionKind, inputText);
             _viewModel.Log(recordedStep is null
                 ? $"ExecuteJavaRecordedAction did not create a recorded step for action {actionKind}."
                 : $"ExecuteJavaRecordedAction recorded step {recordedStep.Sequence} for action {actionKind}.");
@@ -896,6 +1071,11 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
 
     private bool ExecutePlaybackAction(JavaRecordedStep step, JavaRecordedStep? nextStep)
     {
+        if (step.ActionKind == JavaRecordedActionKind.CloseWindow)
+        {
+            return ExecuteJavaRecordedAction(step.ActionKind, step.InputText, captureStep: false);
+        }
+
         var expectsTransition = _viewModel.DoesStepRequireWindowTransition(step, nextStep);
         if (!expectsTransition)
         {
@@ -915,6 +1095,22 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     {
         var success = _viewModel.FocusSelected();
         message = success ? "Focus requested successfully." : $"Focus request failed for {node.DisplayName}.";
+        return success;
+    }
+
+    bool IJavaActionExecutionHost.CloseWindow(AccessibleNode? node, out string message)
+    {
+        if (_viewModel.CurrentWindow is null)
+        {
+            message = "No active Java window is attached.";
+            return false;
+        }
+
+        var success = PostMessage(_viewModel.CurrentWindow.Hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
+        message = success
+            ? $"Close requested for window '{_viewModel.CurrentWindow.Title}'."
+            : $"Close request failed for window '{_viewModel.CurrentWindow.Title}'.";
+        _viewModel.Log(message);
         return success;
     }
 
@@ -1157,8 +1353,11 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     private const int SmYVirtualScreen = 77;
     private const int SmCxVirtualScreen = 78;
     private const int SmCyVirtualScreen = 79;
+    private const int SmCxSize = 30;
+    private const int SmCySize = 31;
     private const int VkLeftButton = 0x01;
     private const uint GaRoot = 2;
+    private const uint WmClose = 0x0010;
 
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int index);
@@ -1237,6 +1436,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetCursorPos(out NativePoint point);
     [DllImport("user32.dll", EntryPoint = "mouse_event")] private static extern void MouseEvent(uint flags, uint x, uint y, uint data, UIntPtr extraInfo);
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, NativeInput[] inputs, int size);
+    [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     private void Export_Click(object sender, RoutedEventArgs e)
     {
@@ -1516,19 +1716,27 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
                 }
                 UpdateRecordingBadge();
 
-                var node = _viewModel.ResolveRecordedStep(step, out var message, playbackResolutionPolicy);
-                if (node is null)
+                var message = "";
+                if (step.ActionKind != JavaRecordedActionKind.CloseWindow)
                 {
-                    lines.Add($"Step {step.Sequence}: FAILED - {message}");
-                    _viewModel.ReportPlayback(string.Join(Environment.NewLine, lines));
-                    _viewModel.Log($"Playback failed at step {step.Sequence}: {message}");
-                    return;
-                }
+                    var node = _viewModel.ResolveRecordedStep(step, out message, playbackResolutionPolicy);
+                    if (node is null)
+                    {
+                        lines.Add($"Step {step.Sequence}: FAILED - {message}");
+                        _viewModel.ReportPlayback(string.Join(Environment.NewLine, lines));
+                        _viewModel.Log($"Playback failed at step {step.Sequence}: {message}");
+                        return;
+                    }
 
-                _viewModel.SelectedNode = node;
-                SelectNodeInHierarchy(node);
-                ActivateHierarchyNode(node);
-                await Task.Delay(120);
+                    _viewModel.SelectedNode = node;
+                    SelectNodeInHierarchy(node);
+                    ActivateHierarchyNode(node);
+                    await Task.Delay(120);
+                }
+                else
+                {
+                    message = $"Window-level action routed to '{step.WindowTitle}'.";
+                }
 
                 var success = ExecutePlaybackAction(step, nextStep);
                 var outcome = success ? "OK" : "FAILED";
@@ -1621,10 +1829,48 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
             _recordingBadgeOverlay.PauseResumeRequested += RecordingBadgeOverlay_PauseResumeRequested;
             _recordingBadgeOverlay.StopRequested += RecordingBadgeOverlay_StopRequested;
             _recordingBadgeOverlay.StudioRequested += RecordingBadgeOverlay_StudioRequested;
+            _recordingBadgeOverlay.ActionRequested += RecordingBadgeOverlay_ActionRequested;
         }
         _recordingBadgeOverlay.UpdateBadgeText(_viewModel.RecordingBadgeText);
         _recordingBadgeOverlay.AttachToTarget(targetHwnd, _viewModel.RecordingBadgeText);
         var hwndDisplay = _viewModel.CurrentWindow?.HwndDisplay ?? $"0x{targetHwnd.ToInt64():X}";
         _viewModel.Log($"Recording badge updated. BadgeText='{_viewModel.RecordingBadgeText}', Hwnd={hwndDisplay}.");
+    }
+
+    private void RecordingBadgeOverlay_ActionRequested(object? sender, RecordingBadgeActionRequestedEventArgs e)
+    {
+        if (!_viewModel.IsRecordingActive)
+        {
+            _viewModel.Log("Recording badge action ignored because recording is not active.");
+            return;
+        }
+
+        if (_viewModel.SelectedNode is null)
+        {
+            _viewModel.ReportAutomation("Select or capture a Java element first, then use recorder actions.");
+            _viewModel.Log($"Recording badge action '{e.ActionKind}' ignored because no Java element is selected.");
+            return;
+        }
+
+        string input = "";
+        if (e.ActionKind is JavaRecordedActionKind.SetText or JavaRecordedActionKind.TypeText)
+        {
+            var title = e.ActionKind == JavaRecordedActionKind.SetText ? "Record Set Text" : "Record Type Text";
+            var description = e.ActionKind == JavaRecordedActionKind.SetText
+                ? "Enter the text value to set directly on the selected Java element."
+                : "Enter the text to type using the recorder typing strategy.";
+            var inputWindow = new RecordingActionInputWindow(title, description) { Owner = this };
+            if (inputWindow.ShowDialog() != true)
+            {
+                _viewModel.Log($"Recording badge action '{e.ActionKind}' canceled by user.");
+                return;
+            }
+
+            input = inputWindow.EnteredText;
+        }
+
+        _viewModel.Log($"Recording badge action requested. Action={e.ActionKind}, InputLength={input.Length}, SelectedNode='{_viewModel.SelectedNode.DisplayName}'.");
+        ExecuteJavaRecordedActionFromStudio(e.ActionKind, input);
+        if (_viewModel.IsRecordingActive) UpdateRecordingBadge();
     }
 }

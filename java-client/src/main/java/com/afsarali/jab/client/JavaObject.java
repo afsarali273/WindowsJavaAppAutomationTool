@@ -58,6 +58,16 @@ public final class JavaObject {
         return this;
     }
 
+    public JavaObject closeWindow() {
+        automation.run(JavaAction.CLOSE_WINDOW, objectKey, locator, "", window);
+        return this;
+    }
+
+    public JavaObject closeWindow(RetryOptions retryOptions) {
+        automation.run(JavaAction.CLOSE_WINDOW, objectKey, locator, "", window, retryOptions);
+        return this;
+    }
+
     public JavaObject setText(String text) {
         automation.run(JavaAction.SET_TEXT, objectKey, locator, text, window);
         return this;
@@ -145,11 +155,11 @@ public final class JavaObject {
         return this;
     }
 
-    public List<JavaElementSnapshot> findChildElements() {
+    public List<JavaElementHandle> findChildElements() {
         return automation.findChildElements(objectKey, locator, null, null, false, window);
     }
 
-    public List<JavaElementSnapshot> findChildElements(Integer maxDepth, Integer maxResults, boolean includeSelf) {
+    public List<JavaElementHandle> findChildElements(Integer maxDepth, Integer maxResults, boolean includeSelf) {
         return automation.findChildElements(objectKey, locator, maxDepth, maxResults, includeSelf, window);
     }
 

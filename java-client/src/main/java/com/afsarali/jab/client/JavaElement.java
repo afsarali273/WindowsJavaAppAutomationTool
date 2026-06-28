@@ -58,6 +58,16 @@ public final class JavaElement {
         return this;
     }
 
+    public JavaElement closeWindow() {
+        driver.execute(JavaAction.CLOSE_WINDOW, objectKey, locator, "", window);
+        return this;
+    }
+
+    public JavaElement closeWindow(RetryOptions retryOptions) {
+        driver.execute(JavaAction.CLOSE_WINDOW, objectKey, locator, "", window, retryOptions);
+        return this;
+    }
+
     public JavaElement setText(String text) {
         driver.execute(JavaAction.SET_TEXT, objectKey, locator, text, window);
         return this;
@@ -145,11 +155,11 @@ public final class JavaElement {
         return this;
     }
 
-    public List<JavaElementSnapshot> findChildElements() {
+    public List<JavaElementHandle> findChildElements() {
         return driver.findChildElements(objectKey, locator);
     }
 
-    public List<JavaElementSnapshot> findChildElements(Integer maxDepth, Integer maxResults, boolean includeSelf) {
+    public List<JavaElementHandle> findChildElements(Integer maxDepth, Integer maxResults, boolean includeSelf) {
         return driver.findChildElements(objectKey, locator, maxDepth, maxResults, includeSelf);
     }
 

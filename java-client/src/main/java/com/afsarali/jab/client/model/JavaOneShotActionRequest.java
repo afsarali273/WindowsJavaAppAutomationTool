@@ -102,4 +102,24 @@ public final class JavaOneShotActionRequest {
                 true,
                 false);
     }
+
+    public static JavaOneShotActionRequest ofWindow(
+            JavaAction action,
+            List<String> repositoryPaths,
+            JavaWindowSelector window,
+            ResolutionPolicy policy) {
+        return new JavaOneShotActionRequest(
+                action.apiName(),
+                null,
+                repositoryPaths,
+                null,
+                null,
+                "",
+                window,
+                policy,
+                true,
+                true,
+                true,
+                false);
+    }
 }

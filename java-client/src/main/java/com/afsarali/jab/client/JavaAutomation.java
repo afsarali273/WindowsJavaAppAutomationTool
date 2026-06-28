@@ -9,6 +9,12 @@ import java.util.Arrays;
 import java.util.List;
 
 public final class JavaAutomation {
+    private static final int DEFAULT_FIND_MINIMUM_SCORE = 70;
+    private static final int DEFAULT_FIND_MAX_RESULTS = 20;
+    private static final int DEFAULT_CHILD_MAX_DEPTH = 10;
+    private static final int DEFAULT_CHILD_MAX_RESULTS = 200;
+    private static final boolean DEFAULT_CHILD_INCLUDE_SELF = false;
+
     private final JabApiClient api;
     private final List<String> repositoryPaths = new ArrayList<>();
     private ResolutionPolicy resolutionPolicy = ResolutionPolicy.standard();
@@ -84,15 +90,35 @@ public final class JavaAutomation {
         return object(locator);
     }
 
-    public List<JavaElementSnapshot> findElements(String objectKey) {
-        return findElements(objectKey, null, null, null);
+    public List<JavaElementHandle> findElements(String objectKey) {
+        return findElements(objectKey, DEFAULT_FIND_MINIMUM_SCORE, DEFAULT_FIND_MAX_RESULTS, null);
     }
 
-    public List<JavaElementSnapshot> findElements(LocatorSuggestion locator) {
-        return findElements(locator, null, null, null);
+    public List<JavaElementHandle> findElements(LocatorSuggestion locator) {
+        return findElements(locator, DEFAULT_FIND_MINIMUM_SCORE, DEFAULT_FIND_MAX_RESULTS, null);
     }
 
-    public List<JavaElementSnapshot> findElements(String objectKey, Integer minimumScore, Integer maxResults, JavaWindowSelector window) {
+    public List<JavaElementHandle> findElements(String objectKey, JavaWindowSelector window) {
+        return findElements(objectKey, DEFAULT_FIND_MINIMUM_SCORE, DEFAULT_FIND_MAX_RESULTS, window);
+    }
+
+    public List<JavaElementHandle> findElements(LocatorSuggestion locator, JavaWindowSelector window) {
+        return findElements(locator, DEFAULT_FIND_MINIMUM_SCORE, DEFAULT_FIND_MAX_RESULTS, window);
+    }
+
+    public List<JavaElementHandle> findElements(String objectKey, Integer minimumScore, Integer maxResults, JavaWindowSelector window) {
+        return findElementSnapshots(objectKey, minimumScore, maxResults, window).stream()
+                .map(snapshot -> JavaElementHandle.from(this, window, snapshot))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    public List<JavaElementHandle> findElements(LocatorSuggestion locator, Integer minimumScore, Integer maxResults, JavaWindowSelector window) {
+        return findElementSnapshots(locator, minimumScore, maxResults, window).stream()
+                .map(snapshot -> JavaElementHandle.from(this, window, snapshot))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    List<JavaElementSnapshot> findElementSnapshots(String objectKey, Integer minimumScore, Integer maxResults, JavaWindowSelector window) {
         JavaFindElementsRequest request = JavaFindElementsRequest.oneShot(
                 List.copyOf(repositoryPaths),
                 objectKey,
@@ -106,7 +132,7 @@ public final class JavaAutomation {
         return JavaDriver.snapshots(result);
     }
 
-    public List<JavaElementSnapshot> findElements(LocatorSuggestion locator, Integer minimumScore, Integer maxResults, JavaWindowSelector window) {
+    List<JavaElementSnapshot> findElementSnapshots(LocatorSuggestion locator, Integer minimumScore, Integer maxResults, JavaWindowSelector window) {
         JavaFindElementsRequest request = JavaFindElementsRequest.oneShot(
                 List.copyOf(repositoryPaths),
                 null,
@@ -120,23 +146,37 @@ public final class JavaAutomation {
         return JavaDriver.snapshots(result);
     }
 
-    public List<JavaElementSnapshot> findChildElements(String parentObjectKey) {
-        return findChildElements(parentObjectKey, null, null, false, null);
+    public List<JavaElementHandle> findChildElements(String parentObjectKey) {
+        return findChildElements(parentObjectKey, DEFAULT_CHILD_MAX_DEPTH, DEFAULT_CHILD_MAX_RESULTS, DEFAULT_CHILD_INCLUDE_SELF, null);
     }
 
-    public List<JavaElementSnapshot> findChildElements(LocatorSuggestion parentLocator) {
-        return findChildElements(null, parentLocator, null, null, false, null);
+    public List<JavaElementHandle> findChildElements(LocatorSuggestion parentLocator) {
+        return findChildElements(null, parentLocator, DEFAULT_CHILD_MAX_DEPTH, DEFAULT_CHILD_MAX_RESULTS, DEFAULT_CHILD_INCLUDE_SELF, null);
     }
 
-    public List<JavaElementSnapshot> findChildElements(String parentObjectKey, Integer maxDepth, Integer maxResults, boolean includeSelf, JavaWindowSelector window) {
+    public List<JavaElementHandle> findChildElements(String parentObjectKey, JavaWindowSelector window) {
+        return findChildElements(parentObjectKey, DEFAULT_CHILD_MAX_DEPTH, DEFAULT_CHILD_MAX_RESULTS, DEFAULT_CHILD_INCLUDE_SELF, window);
+    }
+
+    public List<JavaElementHandle> findChildElements(LocatorSuggestion parentLocator, JavaWindowSelector window) {
+        return findChildElements(null, parentLocator, DEFAULT_CHILD_MAX_DEPTH, DEFAULT_CHILD_MAX_RESULTS, DEFAULT_CHILD_INCLUDE_SELF, window);
+    }
+
+    public List<JavaElementHandle> findChildElements(String parentObjectKey, Integer maxDepth, Integer maxResults, boolean includeSelf, JavaWindowSelector window) {
         return findChildElements(parentObjectKey, null, maxDepth, maxResults, includeSelf, window);
     }
 
-    public List<JavaElementSnapshot> findChildElements(LocatorSuggestion parentLocator, Integer maxDepth, Integer maxResults, boolean includeSelf, JavaWindowSelector window) {
+    public List<JavaElementHandle> findChildElements(LocatorSuggestion parentLocator, Integer maxDepth, Integer maxResults, boolean includeSelf, JavaWindowSelector window) {
         return findChildElements(null, parentLocator, maxDepth, maxResults, includeSelf, window);
     }
 
-    List<JavaElementSnapshot> findChildElements(String parentObjectKey, LocatorSuggestion parentLocator, Integer maxDepth, Integer maxResults, boolean includeSelf, JavaWindowSelector window) {
+    List<JavaElementHandle> findChildElements(String parentObjectKey, LocatorSuggestion parentLocator, Integer maxDepth, Integer maxResults, boolean includeSelf, JavaWindowSelector window) {
+        return findChildSnapshots(parentObjectKey, parentLocator, maxDepth, maxResults, includeSelf, window).stream()
+                .map(snapshot -> JavaElementHandle.from(this, window, snapshot))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    List<JavaElementSnapshot> findChildSnapshots(String parentObjectKey, LocatorSuggestion parentLocator, Integer maxDepth, Integer maxResults, boolean includeSelf, JavaWindowSelector window) {
         JavaFindChildElementsRequest request = JavaFindChildElementsRequest.oneShot(
                 List.copyOf(repositoryPaths),
                 parentObjectKey,
@@ -156,7 +196,13 @@ public final class JavaAutomation {
     }
 
     DriverResult run(JavaAction action, String objectKey, LocatorSuggestion locator, String text, JavaWindowSelector window) {
-        JavaOneShotActionRequest request = JavaOneShotActionRequest.of(
+        JavaOneShotActionRequest request = objectKey == null && locator == null
+                ? JavaOneShotActionRequest.ofWindow(
+                    action,
+                    List.copyOf(repositoryPaths),
+                    window,
+                    resolutionPolicy)
+                : JavaOneShotActionRequest.of(
                 action,
                 List.copyOf(repositoryPaths),
                 objectKey,

@@ -45,4 +45,8 @@ public final class JavaActionRequest {
     public static JavaActionRequest of(JavaAction action, LocatorSuggestion locator, String text, JavaWindowSelector window, ResolutionPolicy policy) {
         return new JavaActionRequest(action.apiName(), null, locator, text, window, policy, true, false, true);
     }
+
+    public static JavaActionRequest ofWindow(JavaAction action, JavaWindowSelector window, ResolutionPolicy policy) {
+        return new JavaActionRequest(action.apiName(), null, null, "", window, policy, true, false, true);
+    }
 }

@@ -1,7 +1,7 @@
 package com.afsarali.jab.client.examples;
 
 import com.afsarali.jab.client.JavaAutomation;
-import com.afsarali.jab.client.JavaElementSnapshot;
+import com.afsarali.jab.client.JavaElementHandle;
 import com.afsarali.jab.client.RetryOptions;
 import com.afsarali.jab.client.model.JavaWindowSelector;
 import com.afsarali.jab.client.model.ResolutionPolicy;
@@ -64,12 +64,12 @@ public final class StatelessUftStyleExample {
         automation.window(downloadDialog).object(AREAS_AROUND_PLACES_TAB).click(clickRetry);
         automation.window(downloadDialog).object(TILE_NUMBERS_TAB).click(clickRetry);
 
-        List<JavaElementSnapshot> tabCandidates = automation.window(downloadDialog)
+        List<JavaElementHandle> tabCandidates = automation.window(downloadDialog)
                 .findElements(BOOKMARKS_TAB, 70, 10);
         tabCandidates.forEach(candidate -> System.out.println(
-                candidate.displayName()
-                        + " | role=" + candidate.role()
-                        + " | name=" + candidate.name()
-                        + " | score=" + candidate.score()));
+                candidate.label()
+                        + " | role=" + candidate.snapshot().role()
+                        + " | name=" + candidate.snapshot().name()
+                        + " | score=" + candidate.snapshot().score()));
     }
 }
