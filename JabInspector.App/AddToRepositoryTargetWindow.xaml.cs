@@ -13,9 +13,11 @@ public partial class AddToRepositoryTargetWindow : Window
 {
     public AddToRepositoryTarget? SelectedTarget { get; private set; }
 
-    public AddToRepositoryTargetWindow()
+    public AddToRepositoryTargetWindow(string currentRepositorySummary, string repositoryHomeDirectory)
     {
         InitializeComponent();
+        CurrentRepositoryText.Text = currentRepositorySummary;
+        RepositoryHomeText.Text = $"Repository home: {repositoryHomeDirectory}";
     }
 
     private void Current_Click(object sender, RoutedEventArgs e) => Complete(AddToRepositoryTarget.Current);

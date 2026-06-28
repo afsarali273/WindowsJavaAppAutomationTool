@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using JabInspector.App.ViewModels;
 using JabInspector.Core.Models;
@@ -139,7 +140,8 @@ public partial class ObjectRepositoryWindow : Window
         {
             Title = "Open object repository / recording project",
             Filter = "Java recording project (*.jrecording.json)|*.jrecording.json|JSON files (*.json)|*.json",
-            CheckFileExists = true
+            CheckFileExists = true,
+            InitialDirectory = _viewModel.RepositoryStorageDirectory
         };
         if (dialog.ShowDialog(this) != true) return;
         _viewModel.LoadRecordingProject(dialog.FileName);
@@ -155,7 +157,10 @@ public partial class ObjectRepositoryWindow : Window
             Title = "Save object repository / recording project",
             Filter = "Java recording project (*.jrecording.json)|*.jrecording.json|JSON files (*.json)|*.json",
             FileName = fileName,
-            DefaultExt = ".jrecording.json"
+            DefaultExt = ".jrecording.json",
+            InitialDirectory = !string.IsNullOrWhiteSpace(_viewModel.RecordingProjectPath)
+                ? (Path.GetDirectoryName(_viewModel.RecordingProjectPath) ?? _viewModel.RepositoryStorageDirectory)
+                : _viewModel.RepositoryStorageDirectory
         };
         if (dialog.ShowDialog(this) != true) return;
         if (_viewModel.SaveRecordingProject(dialog.FileName))

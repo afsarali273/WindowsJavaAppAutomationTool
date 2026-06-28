@@ -1385,7 +1385,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
             return;
         }
 
-        var targetDialog = new AddToRepositoryTargetWindow { Owner = this };
+        var targetDialog = new AddToRepositoryTargetWindow(_viewModel.CurrentRepositorySummary, _viewModel.RepositoryStorageDirectory) { Owner = this };
         if (targetDialog.ShowDialog() != true || targetDialog.SelectedTarget is null) return;
 
         switch (targetDialog.SelectedTarget.Value)
@@ -1404,7 +1404,8 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
                 {
                     Title = "Choose existing object repository",
                     Filter = "Java recording project (*.jrecording.json)|*.jrecording.json|JSON files (*.json)|*.json",
-                    CheckFileExists = true
+                    CheckFileExists = true,
+                    InitialDirectory = _viewModel.RepositoryStorageDirectory
                 };
                 if (dialog.ShowDialog(this) != true) return;
                 var entry = _viewModel.AddSelectedNodeToRepositoryFile(dialog.FileName, createNew: false);
@@ -1418,7 +1419,8 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
                     Title = "Create object repository",
                     Filter = "Java recording project (*.jrecording.json)|*.jrecording.json|JSON files (*.json)|*.json",
                     FileName = _viewModel.GetDefaultRecordingProjectFileName(),
-                    DefaultExt = ".jrecording.json"
+                    DefaultExt = ".jrecording.json",
+                    InitialDirectory = _viewModel.RepositoryStorageDirectory
                 };
                 if (dialog.ShowDialog(this) != true) return;
                 var entry = _viewModel.AddSelectedNodeToRepositoryFile(dialog.FileName, createNew: true);
@@ -1441,7 +1443,10 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
             Title = "Save Java recording project",
             Filter = "Java recording project (*.jrecording.json)|*.jrecording.json|JSON files (*.json)|*.json",
             FileName = string.IsNullOrWhiteSpace(_viewModel.RecordingProjectPath) ? $"{_viewModel.RecordingSessionName}.jrecording.json" : Path.GetFileName(_viewModel.RecordingProjectPath),
-            DefaultExt = ".jrecording.json"
+            DefaultExt = ".jrecording.json",
+            InitialDirectory = !string.IsNullOrWhiteSpace(_viewModel.RecordingProjectPath)
+                ? (Path.GetDirectoryName(_viewModel.RecordingProjectPath) ?? _viewModel.RepositoryStorageDirectory)
+                : _viewModel.RepositoryStorageDirectory
         };
         if (dialog.ShowDialog(this) != true) return;
         if (_viewModel.SaveRecordingProject(dialog.FileName))
@@ -1456,7 +1461,8 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         {
             Title = "Load Java recording project",
             Filter = "Java recording project (*.jrecording.json)|*.jrecording.json|JSON files (*.json)|*.json",
-            CheckFileExists = true
+            CheckFileExists = true,
+            InitialDirectory = _viewModel.RepositoryStorageDirectory
         };
         if (dialog.ShowDialog(this) != true) return;
         _viewModel.LoadRecordingProject(dialog.FileName);

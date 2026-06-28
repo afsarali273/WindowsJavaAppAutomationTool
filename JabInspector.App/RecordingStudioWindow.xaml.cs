@@ -122,7 +122,7 @@ public partial class RecordingStudioWindow : Window
     {
         var initialDirectory = !string.IsNullOrWhiteSpace(ViewModel.RecordingProjectPath)
             ? Path.GetDirectoryName(ViewModel.RecordingProjectPath)
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "JabInspectorRecordings");
+            : ViewModel.RepositoryStorageDirectory;
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Title = "Save Java recording project / object repository",
@@ -140,7 +140,8 @@ public partial class RecordingStudioWindow : Window
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Load Java recording project",
-            Filter = "Java recording project (*.jrecording.json)|*.jrecording.json|JSON files (*.json)|*.json"
+            Filter = "Java recording project (*.jrecording.json)|*.jrecording.json|JSON files (*.json)|*.json",
+            InitialDirectory = ViewModel.RepositoryStorageDirectory
         };
         if (dialog.ShowDialog(this) != true) return;
         ViewModel.LoadRecordingProject(dialog.FileName);

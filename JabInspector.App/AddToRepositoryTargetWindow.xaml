@@ -21,13 +21,18 @@
                  Foreground="{StaticResource MutedBrush}"
                  TextWrapping="Wrap"
                  Margin="0,4,0,0"/>
+      <TextBlock x:Name="RepositoryHomeText"
+                 Foreground="#37536B"
+                 FontSize="10.5"
+                 TextWrapping="Wrap"
+                 Margin="0,6,0,0"/>
     </StackPanel>
 
     <StackPanel Grid.Row="1" Margin="0,18,0,0">
       <Button Click="Current_Click" HorizontalContentAlignment="Left" Margin="0,0,0,8" Padding="12,9">
         <StackPanel>
           <TextBlock Text="Use current repository" FontWeight="SemiBold"/>
-          <TextBlock Text="Add to the repository currently loaded in the inspector." Foreground="{StaticResource MutedBrush}" FontSize="10.5"/>
+          <TextBlock x:Name="CurrentRepositoryText" Foreground="{StaticResource MutedBrush}" FontSize="10.5" TextWrapping="Wrap"/>
         </StackPanel>
       </Button>
       <Button Click="Existing_Click" HorizontalContentAlignment="Left" Margin="0,0,0,8" Padding="12,9">

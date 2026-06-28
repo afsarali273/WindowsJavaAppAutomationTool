@@ -293,6 +293,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool CanUseJavaRecording => IsJavaMode && CurrentWindow is not null && Root is not null;
     public int RecordingStepCount => RecordedSteps.Count;
     public int RecordingObjectCount => RepositoryEntries.Count;
+    public string RepositoryStorageDirectory => EnsureRepositoryStorageDirectory();
+    public string CurrentRepositorySummary => string.IsNullOrWhiteSpace(RecordingProjectPath)
+        ? $"In-memory repository. Default save path: {Path.Combine(RepositoryStorageDirectory, GetDefaultRecordingProjectFileName())}"
+        : RecordingProjectPath;
     public string RecordingPauseButtonText => IsRecordingPaused ? "Resume" : "Pause";
     public string RecordingBadgeText => IsRecordingActive
         ? IsRecordingPaused ? $"PAUSED  {RecordingStepCount} STEP(S)" : $"REC  {RecordingStepCount} STEP(S)"
@@ -725,8 +729,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (!appendExisting || string.IsNullOrWhiteSpace(RecordingProjectPath))
         {
             RecordingProjectPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                "JabInspectorRecordings",
+                EnsureRepositoryStorageDirectory(),
                 GetDefaultRecordingProjectFileName());
         }
 
@@ -1773,6 +1776,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(RecordingBadgeText));
         OnPropertyChanged(nameof(RecordingPauseButtonText));
         OnPropertyChanged(nameof(IsRecordingPaused));
+        OnPropertyChanged(nameof(CurrentRepositorySummary));
+        OnPropertyChanged(nameof(RepositoryStorageDirectory));
+    }
+
+    private static string EnsureRepositoryStorageDirectory()
+    {
+        var path = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "JabInspector",
+            "ObjectRepositories");
+        Directory.CreateDirectory(path);
+        return path;
     }
 
     private static int CountNodes(AccessibleNode? root)
