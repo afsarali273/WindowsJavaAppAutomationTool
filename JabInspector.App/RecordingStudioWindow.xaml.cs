@@ -68,21 +68,6 @@ public partial class RecordingStudioWindow : Window
         }
     }
 
-    private void StopSession_Click(object sender, RoutedEventArgs e)
-    {
-        ViewModel.StopJavaRecordingSession();
-        OwnerWindow.UpdateRecordingBadge();
-        OwnerWindow.Show();
-        OwnerWindow.Activate();
-        Activate();
-    }
-
-    private void TogglePause_Click(object sender, RoutedEventArgs e)
-    {
-        ViewModel.ToggleJavaRecordingPause();
-        OwnerWindow.UpdateRecordingBadge();
-    }
-
     private void CaptureObject_Click(object sender, RoutedEventArgs e)
     {
         var entry = ViewModel.AddSelectedNodeToRepository();
@@ -188,6 +173,14 @@ public partial class RecordingStudioWindow : Window
         e.Handled = true;
     }
 
+    private void HighlightRecordedStep_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: JavaRecordedStep step }) return;
+        ViewModel.SelectedRecordedStep = step;
+        OwnerWindow.HighlightRecordedStep(step);
+        e.Handled = true;
+    }
+
     private void ShowLocatorDetails(string title, string subtitle, string details)
     {
         var window = new LocatorDetailsWindow(title, subtitle, details)
@@ -259,11 +252,4 @@ public partial class RecordingStudioWindow : Window
         return null;
     }
 
-    private void Focus_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.Focus, "");
-    private void Click_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.Click, "");
-    private void DoubleClick_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.DoubleClick, "");
-    private void SetText_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.SetText, RecorderTextInput.Text);
-    private void TypeText_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.TypeText, RecorderTextInput.Text);
-    private void GetText_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.GetText, "");
-    private void AssertVisible_Click(object sender, RoutedEventArgs e) => OwnerWindow.ExecuteJavaRecordedActionFromStudio(JavaRecordedActionKind.AssertVisible, "");
 }

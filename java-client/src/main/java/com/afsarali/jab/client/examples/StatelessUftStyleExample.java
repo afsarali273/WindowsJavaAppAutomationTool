@@ -71,5 +71,7 @@ public final class StatelessUftStyleExample {
                         + " | role=" + candidate.snapshot().role()
                         + " | name=" + candidate.snapshot().name()
                         + " | score=" + candidate.snapshot().score()));
+
+        automation.window(JavaWindowSelector.title("Download")).closeWindow();
     }
 }

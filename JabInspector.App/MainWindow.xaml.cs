@@ -31,6 +31,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     private AccessibleNode? _recordingMouseDownNode;
     private ElementBounds _recordingMouseDownBounds = new(0, 0, 0, 0);
     private JavaWindowInfo? _recordingMouseDownWindow;
+    private bool _recordingMouseDownOnNativeClose;
     private DateTime _lastPassiveClickAtUtc;
     private string _lastPassiveClickPath = "";
     private bool _playbackInProgress;
@@ -469,6 +470,16 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         }
 
         _viewModel.Log($"[RECORDER] Capture pipeline started for point ({point.X}, {point.Y}).");
+        if (_recordingMouseDownWindow is not null && _recordingMouseDownOnNativeClose)
+        {
+            _viewModel.Log($"[RECORDER] Native close was detected on mouse-down for window '{_recordingMouseDownWindow.Title}'. Recording CloseWindow immediately.");
+            if (TryRecordNativeWindowClose(_recordingMouseDownWindow, point, "mouse-down close latch"))
+            {
+                ClearPassiveRecordingSnapshot();
+                return;
+            }
+        }
+
         var candidateWindows = GetCandidateWindowHandlesFromPoint(point);
         if (ShouldPreferMouseDownSnapshot(candidateWindows))
         {
@@ -582,14 +593,15 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
 
     private bool ShouldPreferMouseDownSnapshot(IReadOnlyList<IntPtr> candidateWindows)
     {
-        if (_recordingMouseDownNode is null || _recordingMouseDownWindow is null) return false;
+        if (_recordingMouseDownWindow is null) return false;
         if (candidateWindows.Count == 0) return false;
 
         var topCandidate = candidateWindows[0];
         if (topCandidate == IntPtr.Zero) return false;
         if (topCandidate == _recordingMouseDownWindow.Hwnd) return false;
 
-        _viewModel.Log($"[RECORDER] Mouse-down snapshot will be preferred. MouseDownWindow={_recordingMouseDownWindow.HwndDisplay}, TopCandidate=0x{topCandidate.ToInt64():X}, Node='{_recordingMouseDownNode.DisplayName}'.");
+        var snapshotName = _recordingMouseDownNode?.DisplayName ?? "(native window chrome)";
+        _viewModel.Log($"[RECORDER] Mouse-down snapshot will be preferred. MouseDownWindow={_recordingMouseDownWindow.HwndDisplay}, TopCandidate=0x{topCandidate.ToInt64():X}, Node='{snapshotName}'.");
         return true;
     }
 
@@ -605,32 +617,47 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     {
         ClearPassiveRecordingSnapshot();
         TryAutoAttachJavaWindowFromPoint(point, "passive click pre-capture");
-        if (_viewModel.CurrentWindow is null || _viewModel.Root is null) return;
+        if (_viewModel.CurrentWindow is null) return;
+
+        // Keep the original window context even when the click lands on native title-bar chrome such as X.
+        _recordingMouseDownWindow = _viewModel.CurrentWindow;
+        _recordingMouseDownOnNativeClose = IsPointInNativeCloseButtonRect(_recordingMouseDownWindow, point);
+        if (_recordingMouseDownOnNativeClose)
+        {
+            _viewModel.Log($"[RECORDER] Mouse-down landed on native close chrome for window '{_recordingMouseDownWindow.Title}'.");
+        }
+
+        if (_viewModel.Root is null) return;
         if (!IsPointWithinCurrentJavaWindow(point)) return;
         if (!TryResolveJavaNodeAtScreenPoint(point, out var node, out var bounds) || node is null) return;
 
         _recordingMouseDownNode = node;
         _recordingMouseDownBounds = bounds;
-        _recordingMouseDownWindow = _viewModel.CurrentWindow;
         _viewModel.Log($"[RECORDER] Mouse-down snapshot captured. Node='{node.DisplayName}', Window='{_recordingMouseDownWindow.Title}', Path='{node.Path}'.");
     }
 
     private bool TryRecordPassiveClickFromMouseDownSnapshot(NativePoint releasePoint)
     {
-        if (_recordingMouseDownNode is null || _recordingMouseDownWindow is null)
+        if (_recordingMouseDownWindow is null)
         {
             _viewModel.Log("[RECORDER] Mouse-down snapshot fallback unavailable.");
             return false;
         }
 
+        var window = _recordingMouseDownWindow;
         var node = _recordingMouseDownNode;
         var bounds = _recordingMouseDownBounds;
-        var window = _recordingMouseDownWindow;
-        _viewModel.Log($"[RECORDER] Using mouse-down snapshot fallback. Node='{node.DisplayName}', Window='{window.Title}', ReleasePoint=({releasePoint.X}, {releasePoint.Y}).");
+        _viewModel.Log($"[RECORDER] Using mouse-down snapshot fallback. Node='{node?.DisplayName ?? "(native window chrome)"}', Window='{window.Title}', ReleasePoint=({releasePoint.X}, {releasePoint.Y}).");
 
-        if (IsPointInNativeCloseButtonRect(window, releasePoint))
+        if (_recordingMouseDownOnNativeClose || IsPointInNativeCloseButtonRect(window, releasePoint))
         {
             return TryRecordNativeWindowClose(window, releasePoint, "mouse-down snapshot");
+        }
+
+        if (node is null)
+        {
+            _viewModel.Log("[RECORDER] Mouse-down snapshot did not include a Java node and the release point was not on native close chrome.");
+            return false;
         }
 
         if (HasOnScreenBounds(bounds))
@@ -696,21 +723,28 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         return true;
     }
 
-    private static bool IsPointInNativeCloseButtonRect(JavaWindowInfo window, NativePoint point)
+    private static bool TryGetNativeCloseButtonBounds(JavaWindowInfo window, out ElementBounds bounds)
     {
+        bounds = new ElementBounds(0, 0, 0, 0);
         if (!GetWindowRect(window.Hwnd, out var rect)) return false;
         var buttonWidth = Math.Max(32, GetSystemMetrics(SmCxSize) + 12);
         var buttonHeight = Math.Max(24, GetSystemMetrics(SmCySize) + 8);
         var closeLeft = rect.Right - buttonWidth;
-        var closeTop = rect.Top;
-        var closeBottom = rect.Top + buttonHeight;
-        return point.X >= closeLeft && point.X < rect.Right && point.Y >= closeTop && point.Y < closeBottom;
+        bounds = new ElementBounds(closeLeft, rect.Top, buttonWidth, buttonHeight);
+        return true;
+    }
+
+    private static bool IsPointInNativeCloseButtonRect(JavaWindowInfo window, NativePoint point)
+    {
+        if (!TryGetNativeCloseButtonBounds(window, out var bounds)) return false;
+        return point.X >= bounds.X && point.X < bounds.X + bounds.Width && point.Y >= bounds.Y && point.Y < bounds.Y + bounds.Height;
     }
 
     private void ClearPassiveRecordingSnapshot()
     {
         _recordingMouseDownNode = null;
         _recordingMouseDownWindow = null;
+        _recordingMouseDownOnNativeClose = false;
         _recordingMouseDownBounds = new ElementBounds(0, 0, 0, 0);
     }
 
@@ -1861,6 +1895,41 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         ActivateHierarchyNode(node);
         DetailsTabs.SelectedItem = PropertiesTab;
         _viewModel.Log($"Repository highlight resolved and selected {node.DisplayName}. {message}");
+    }
+
+    public void HighlightRecordedStep(JavaRecordedStep step)
+    {
+        if (!_viewModel.TryAutoAttachJavaWindowForRecordedStep(step, out var attachMessage))
+        {
+            _viewModel.Log($"Recorded-step highlight failed: {attachMessage}");
+            return;
+        }
+
+        if (step.ActionKind == JavaRecordedActionKind.CloseWindow)
+        {
+            if (_viewModel.CurrentWindow is not null && TryGetNativeCloseButtonBounds(_viewModel.CurrentWindow, out var closeBounds))
+            {
+                HighlightOverlay.Show(closeBounds, TimeSpan.FromSeconds(2.2));
+                _viewModel.Log($"Recorded-step highlight resolved native close chrome for step {step.Sequence} on window '{_viewModel.CurrentWindow.Title}'.");
+                return;
+            }
+
+            _viewModel.Log($"Recorded-step highlight failed to resolve native close chrome for step {step.Sequence}. {attachMessage}");
+            return;
+        }
+
+        var node = _viewModel.ResolveRecordedStep(step, out var resolveMessage);
+        if (node is null)
+        {
+            _viewModel.Log($"Recorded-step highlight failed for step {step.Sequence}: {resolveMessage}");
+            return;
+        }
+
+        _viewModel.SelectedNode = node;
+        SelectNodeInHierarchy(node);
+        ActivateHierarchyNode(node);
+        DetailsTabs.SelectedItem = PropertiesTab;
+        _viewModel.Log($"Recorded-step highlight resolved {node.DisplayName} for step {step.Sequence}. {resolveMessage}");
     }
 
     public void UpdateRecordingBadge()
