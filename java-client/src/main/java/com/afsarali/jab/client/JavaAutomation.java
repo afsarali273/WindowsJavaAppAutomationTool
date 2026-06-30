@@ -78,6 +78,23 @@ public final class JavaAutomation {
         return JavaWindowWait.waitForWindow(api, selector, options);
     }
 
+    public JavaLaunchApplicationResult openApplication(JavaLaunchApplicationRequest request) {
+        DriverResult result = api.launchApplication(request);
+        JavaDriver.ensureSuccess(result);
+        return JavaLaunchApplicationResult.from(result.data());
+    }
+
+    public JavaLaunchApplicationResult openApplication(String applicationPath) {
+        return openApplication(JavaLaunchApplicationRequest.of(applicationPath));
+    }
+
+    public JavaLaunchApplicationResult openApplication(String applicationPath, JavaWindowSelector waitForWindow, Duration timeout, Duration pollInterval) {
+        return openApplication(JavaLaunchApplicationRequest.of(applicationPath)
+                .waitForWindow(waitForWindow)
+                .waitTimeout(timeout)
+                .waitPollInterval(pollInterval));
+    }
+
     public JavaObject object(String objectKey) {
         return new JavaObject(this, null, objectKey);
     }

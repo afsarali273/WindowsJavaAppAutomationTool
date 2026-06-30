@@ -39,7 +39,7 @@ public partial class RecordingStudioWindow : Window
         if (ViewModel.StartJavaRecordingSession(dialog.SessionName, dialog.ApplicationAlias))
         {
             OwnerWindow.UpdateRecordingBadge();
-            Activate();
+            OwnerWindow.BringCurrentJavaWindowToForeground("recording studio start");
         }
     }
 
@@ -64,7 +64,7 @@ public partial class RecordingStudioWindow : Window
         if (ViewModel.StartJavaRecordingSession(dialog.SessionName, dialog.ApplicationAlias, appendExisting: true))
         {
             OwnerWindow.UpdateRecordingBadge();
-            Activate();
+            OwnerWindow.BringCurrentJavaWindowToForeground("recording studio append");
         }
     }
 

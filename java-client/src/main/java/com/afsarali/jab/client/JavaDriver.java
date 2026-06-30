@@ -64,6 +64,43 @@ public final class JavaDriver implements AutoCloseable {
         return attach(apiBaseUri, CreateSessionRequest.byProcessId(processId), JavaWindowSelector.processId(processId), waitOptions);
     }
 
+    public static JavaDriver launchAndAttach(URI apiBaseUri, JavaLaunchApplicationRequest request, JavaWindowSelector selector) {
+        return launchAndAttach(apiBaseUri, request, selector, RetryOptions.defaults());
+    }
+
+    public static JavaDriver launchAndAttach(URI apiBaseUri, JavaLaunchApplicationRequest request) {
+        return launchAndAttach(apiBaseUri, request, RetryOptions.defaults());
+    }
+
+    public static JavaDriver launchAndAttach(URI apiBaseUri, JavaLaunchApplicationRequest request, RetryOptions waitOptions) {
+        JavaWindowSelector selector = Objects.requireNonNull(request.waitForWindow(),
+                "Launch request must include waitForWindow when no selector is provided.");
+        return launchAndAttach(apiBaseUri, request, selector, waitOptions);
+    }
+
+    public static JavaDriver launchAndAttach(URI apiBaseUri, JavaLaunchApplicationRequest request, JavaWindowSelector selector, RetryOptions waitOptions) {
+        JabApiClient api = new JabApiClient(apiBaseUri);
+        DriverResult launchResult = api.launchApplication(request);
+        ensureSuccess(launchResult);
+        JavaWindow window = JavaWindowWait.waitForWindow(api, selector, waitOptions);
+        JavaWindowSelector matched = JavaWindowWait.selectorFor(window);
+        DriverResult attachResult = api.createSession(CreateSessionRequest.byHwnd(window.hwnd()));
+        ensureSuccess(attachResult);
+        return new JavaDriver(api, Objects.requireNonNull(attachResult.sessionId(), "API did not return a session id."), matched);
+    }
+
+    public static JavaDriver launchAndAttach(URI apiBaseUri, JavaLaunchApplicationRequest request, JavaWindowSelector selector, String repositoryPath, RetryOptions waitOptions) {
+        JavaDriver driver = launchAndAttach(apiBaseUri, request, selector, waitOptions);
+        driver.loadRepository(repositoryPath);
+        return driver;
+    }
+
+    public static JavaDriver launchAndAttach(URI apiBaseUri, JavaLaunchApplicationRequest request, String repositoryPath, RetryOptions waitOptions) {
+        JavaDriver driver = launchAndAttach(apiBaseUri, request, waitOptions);
+        driver.loadRepository(repositoryPath);
+        return driver;
+    }
+
     public static JavaDriver attachToWindow(URI apiBaseUri, JavaWindowSelector selector, RetryOptions waitOptions) {
         JabApiClient api = new JabApiClient(apiBaseUri);
         JavaWindow window = JavaWindowWait.waitForWindow(api, selector, waitOptions);

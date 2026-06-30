@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using JabInspector.Core.Diagnostics;
@@ -63,6 +64,73 @@ public sealed class JavaDriverService : IDisposable
             _sessions[session.Id] = session;
             _logger.Log($"API session created. SessionId={session.Id}, Window='{window.Title}', Hwnd={window.HwndDisplay}.");
             return Ok("Session created.", session.Id, ToSummary(session));
+        }
+    }
+
+    public DriverResult OpenApplication(LaunchApplicationRequest request)
+    {
+        lock (_sync)
+        {
+            if (string.IsNullOrWhiteSpace(request.ApplicationPath))
+                return Fail("ApplicationPath is required.");
+
+            var fullPath = Path.GetFullPath(request.ApplicationPath.Trim());
+            if (!File.Exists(fullPath))
+                return Fail($"Application file was not found: {fullPath}");
+
+            var workingDirectory = string.IsNullOrWhiteSpace(request.WorkingDirectory)
+                ? Path.GetDirectoryName(fullPath) ?? Environment.CurrentDirectory
+                : Path.GetFullPath(request.WorkingDirectory.Trim());
+
+            if (!Directory.Exists(workingDirectory))
+                return Fail($"Working directory was not found: {workingDirectory}");
+
+            try
+            {
+                var launch = BuildLaunchStartInfo(fullPath, workingDirectory, request);
+                using var process = Process.Start(launch.StartInfo);
+                if (process is null)
+                    return Fail("The application process could not be started.");
+
+                var startedAtUtc = DateTime.UtcNow;
+                JavaWindowInfo? matchedWindow = null;
+
+                if (request.WaitForWindow is not null)
+                {
+                    var selector = BuildWaitSelector(request.WaitForWindow, process.Id, launch.CanScopeToLaunchedProcess);
+                    matchedWindow = WaitForWindow(selector, request.WaitTimeoutMs, request.WaitPollIntervalMs);
+                    if (matchedWindow is null)
+                    {
+                        return Fail(
+                            $"Application launched, but no matching Java window appeared within {NormalizeTimeoutMs(request.WaitTimeoutMs)} ms.",
+                            data: new JavaLaunchResultDto(
+                                fullPath,
+                                launch.StartInfo.FileName,
+                                launch.DisplayArguments,
+                                workingDirectory,
+                                process.Id,
+                                startedAtUtc,
+                                true,
+                                null));
+                    }
+                }
+
+                _logger.Log($"API application launched. Path='{fullPath}', ProcessId={process.Id}, WaitedForWindow={request.WaitForWindow is not null}.");
+
+                return Ok("Application launched.", data: new JavaLaunchResultDto(
+                    fullPath,
+                    launch.StartInfo.FileName,
+                    launch.DisplayArguments,
+                    workingDirectory,
+                    process.Id,
+                    startedAtUtc,
+                    request.WaitForWindow is not null,
+                    matchedWindow is null ? null : JavaWindowDto.From(matchedWindow)));
+            }
+            catch (Exception ex)
+            {
+                return Fail($"Could not launch application: {ex.Message}");
+            }
         }
     }
 
@@ -495,6 +563,154 @@ public sealed class JavaDriverService : IDisposable
         return windows.FirstOrDefault();
     }
 
+    private LaunchPlan BuildLaunchStartInfo(string applicationPath, string workingDirectory, LaunchApplicationRequest request)
+    {
+        var extension = Path.GetExtension(applicationPath);
+        var arguments = request.Arguments?.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToList() ?? [];
+        var argumentsText = request.ArgumentsText?.Trim();
+        var useShellExecute = request.UseShellExecute;
+        var createNoWindow = request.CreateNoWindow;
+
+        if (string.Equals(extension, ".jar", StringComparison.OrdinalIgnoreCase))
+        {
+            var javaExecutable = ResolveJavaExecutable(request.JavaExecutablePath);
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = javaExecutable,
+                WorkingDirectory = workingDirectory,
+                UseShellExecute = false,
+                CreateNoWindow = createNoWindow
+            };
+
+            startInfo.ArgumentList.Add("-jar");
+            startInfo.ArgumentList.Add(applicationPath);
+            foreach (var argument in arguments)
+                startInfo.ArgumentList.Add(argument);
+
+            if (!string.IsNullOrWhiteSpace(argumentsText))
+                startInfo.Arguments = $"-jar {QuoteForCommandLine(applicationPath)} {argumentsText}";
+
+            return new LaunchPlan(
+                startInfo,
+                BuildDisplayArguments(startInfo, argumentsText),
+                CanScopeToLaunchedProcess: true);
+        }
+
+        if (string.Equals(extension, ".bat", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(extension, ".cmd", StringComparison.OrdinalIgnoreCase))
+        {
+            var command = QuoteForCommandLine(applicationPath);
+            if (arguments.Count > 0)
+                command = $"{command} {string.Join(" ", arguments.Select(QuoteForCommandLine))}";
+            else if (!string.IsNullOrWhiteSpace(argumentsText))
+                command = $"{command} {argumentsText}";
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
+                WorkingDirectory = workingDirectory,
+                UseShellExecute = useShellExecute,
+                CreateNoWindow = createNoWindow,
+                Arguments = $"/c \"{command}\""
+            };
+
+            return new LaunchPlan(startInfo, startInfo.Arguments, CanScopeToLaunchedProcess: false);
+        }
+
+        var processStartInfo = new ProcessStartInfo
+        {
+            FileName = applicationPath,
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = useShellExecute,
+            CreateNoWindow = createNoWindow
+        };
+
+        if (arguments.Count > 0)
+        {
+            foreach (var argument in arguments)
+                processStartInfo.ArgumentList.Add(argument);
+        }
+        else if (!string.IsNullOrWhiteSpace(argumentsText))
+        {
+            processStartInfo.Arguments = argumentsText;
+        }
+
+        return new LaunchPlan(
+            processStartInfo,
+            BuildDisplayArguments(processStartInfo, argumentsText),
+            CanScopeToLaunchedProcess: true);
+    }
+
+    private string ResolveJavaExecutable(string? requestedJavaExecutablePath)
+    {
+        if (!string.IsNullOrWhiteSpace(requestedJavaExecutablePath))
+        {
+            var requested = Path.GetFullPath(requestedJavaExecutablePath.Trim());
+            if (!File.Exists(requested))
+                throw new FileNotFoundException($"Java executable was not found: {requested}", requested);
+            return requested;
+        }
+
+        var javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
+        if (!string.IsNullOrWhiteSpace(javaHome))
+        {
+            var javaw = Path.Combine(javaHome, "bin", "javaw.exe");
+            if (File.Exists(javaw)) return javaw;
+
+            var java = Path.Combine(javaHome, "bin", "java.exe");
+            if (File.Exists(java)) return java;
+        }
+
+        return "javaw.exe";
+    }
+
+    private JavaWindowSelector BuildWaitSelector(JavaWindowSelector selector, int launchedProcessId, bool canScopeToLaunchedProcess)
+    {
+        if (!canScopeToLaunchedProcess) return selector;
+        if (selector.ProcessId is not null || !string.IsNullOrWhiteSpace(selector.Hwnd)) return selector;
+        return selector with { ProcessId = launchedProcessId };
+    }
+
+    private JavaWindowInfo? WaitForWindow(JavaWindowSelector selector, int? timeoutMs, int? pollIntervalMs)
+    {
+        var timeout = NormalizeTimeoutMs(timeoutMs);
+        var poll = NormalizePollIntervalMs(pollIntervalMs);
+        var started = Environment.TickCount64;
+
+        while (Environment.TickCount64 - started <= timeout)
+        {
+            var windows = GetWindows();
+            var matched = FindWindow(windows, selector);
+            if (matched is not null) return matched;
+
+            Thread.Sleep(poll);
+        }
+
+        return null;
+    }
+
+    private static int NormalizeTimeoutMs(int? timeoutMs) => timeoutMs is > 0 ? timeoutMs.Value : 30000;
+
+    private static int NormalizePollIntervalMs(int? pollIntervalMs) => pollIntervalMs is > 0 ? pollIntervalMs.Value : 500;
+
+    private static string BuildDisplayArguments(ProcessStartInfo startInfo, string? rawArgumentsText)
+    {
+        if (!string.IsNullOrWhiteSpace(rawArgumentsText))
+            return rawArgumentsText;
+
+        if (startInfo.ArgumentList.Count == 0)
+            return startInfo.Arguments ?? "";
+
+        return string.Join(" ", startInfo.ArgumentList.Select(QuoteForCommandLine));
+    }
+
+    private static string QuoteForCommandLine(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return "\"\"";
+        if (!value.Any(char.IsWhiteSpace) && !value.Contains('"')) return value;
+        return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+    }
+
     private void LogApiDiscoveryDiagnostics()
     {
         if (_diagnosticsLogged) return;
@@ -564,6 +780,11 @@ public sealed class JavaDriverService : IDisposable
 
         return windows.FirstOrDefault();
     }
+
+    private sealed record LaunchPlan(
+        ProcessStartInfo StartInfo,
+        string DisplayArguments,
+        bool CanScopeToLaunchedProcess);
 
     private DriverResult ValidateElementCore(JavaDriverSession session, JavaValidationRequest request)
     {

@@ -23,6 +23,18 @@ public sealed record CreateSessionRequest(
     int? ProcessId = null,
     bool RefreshTree = true);
 
+public sealed record LaunchApplicationRequest(
+    string ApplicationPath,
+    IReadOnlyList<string>? Arguments = null,
+    string? ArgumentsText = null,
+    string? WorkingDirectory = null,
+    string? JavaExecutablePath = null,
+    JavaWindowSelector? WaitForWindow = null,
+    int? WaitTimeoutMs = null,
+    int? WaitPollIntervalMs = null,
+    bool UseShellExecute = false,
+    bool CreateNoWindow = false);
+
 public sealed record LoadRepositoryRequest(
     string? Path = null,
     IReadOnlyList<string>? Paths = null);
@@ -178,3 +190,13 @@ public sealed record JavaElementSnapshotDto(
     LocatorSuggestion Locator,
     IReadOnlyList<string> Actions,
     int Score);
+
+public sealed record JavaLaunchResultDto(
+    string ApplicationPath,
+    string LaunchTarget,
+    string LaunchArguments,
+    string WorkingDirectory,
+    int ProcessId,
+    DateTime StartedAtUtc,
+    bool WaitedForWindow,
+    JavaWindowDto? Window);

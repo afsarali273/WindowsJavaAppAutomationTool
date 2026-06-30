@@ -81,6 +81,7 @@ app.MapGet("/", () => Results.Ok(new
         health = "GET /api/health",
         settings = "GET /api/settings",
         windows = "GET /api/java/windows",
+        openApplication = "POST /api/java/applications/open",
         attach = "POST /api/java/sessions",
         sessionWindows = "GET /api/java/sessions/{sessionId}/windows",
         switchWindow = "POST /api/java/sessions/{sessionId}/window",
@@ -108,6 +109,14 @@ app.MapGet("/api/java/windows", (JavaDriverService driver) =>
 {
     var windows = driver.GetWindows();
     return Results.Ok(windows.Select(JavaWindowDto.From));
+});
+
+app.MapPost("/api/java/applications/open", (LaunchApplicationRequest request, JavaDriverService driver) =>
+{
+    var result = driver.OpenApplication(request);
+    return result.Success
+        ? Results.Ok(result)
+        : Results.BadRequest(result);
 });
 
 app.MapPost("/api/java/sessions", (CreateSessionRequest request, JavaDriverService driver) =>

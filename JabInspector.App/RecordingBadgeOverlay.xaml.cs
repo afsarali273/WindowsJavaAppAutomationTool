@@ -14,12 +14,17 @@ public partial class RecordingBadgeOverlay : Window
     private readonly DispatcherTimer _timer;
     private readonly InspectorLogger _logger = new();
     private IntPtr _targetHwnd;
+    private string _lastBadgeText = "";
     private NativeRect? _lastKnownTargetRect;
     private int _targetRectMissCount;
     private bool _isPaused;
     private bool _hasManualPosition;
     private int _manualX;
     private int _manualY;
+    private int _lastAppliedX = int.MinValue;
+    private int _lastAppliedY = int.MinValue;
+    private int _lastAppliedWidth = int.MinValue;
+    private int _lastAppliedHeight = int.MinValue;
 
     public event EventHandler? PauseResumeRequested;
     public event EventHandler? StopRequested;
@@ -40,13 +45,30 @@ public partial class RecordingBadgeOverlay : Window
 
     public void AttachToTarget(IntPtr hwnd, string text)
     {
-        _logger.Debug($"[RECORDER-OVERLAY] Attach requested. TargetHwnd=0x{hwnd.ToInt64():X}, Text='{text}', IsVisible={IsVisible}.");
+        var targetChanged = _targetHwnd != hwnd;
+        var textChanged = !string.Equals(_lastBadgeText, text, StringComparison.Ordinal);
+
+        _logger.Debug($"[RECORDER-OVERLAY] Attach requested. TargetHwnd=0x{hwnd.ToInt64():X}, Text='{text}', IsVisible={IsVisible}, TargetChanged={targetChanged}, TextChanged={textChanged}.");
+
         _targetHwnd = hwnd;
-        UpdateBadgeText(text);
-        if (!IsVisible) Show();
-        ApplyToolWindowStyle();
-        UpdatePosition();
-        _timer.Start();
+        if (textChanged)
+        {
+            UpdateBadgeText(text);
+            _lastBadgeText = text;
+        }
+
+        if (!IsVisible)
+        {
+            Show();
+            ApplyToolWindowStyle();
+        }
+        else if (targetChanged)
+        {
+            ApplyToolWindowStyle();
+        }
+
+        if (!_timer.IsEnabled) _timer.Start();
+        if (targetChanged || textChanged || !IsVisible) UpdatePosition(force: true);
     }
 
     public void UpdateBadgeText(string text)
@@ -62,12 +84,17 @@ public partial class RecordingBadgeOverlay : Window
         _timer.Stop();
         Hide();
         _targetHwnd = IntPtr.Zero;
+        _lastBadgeText = "";
         _lastKnownTargetRect = null;
         _targetRectMissCount = 0;
+        _lastAppliedX = int.MinValue;
+        _lastAppliedY = int.MinValue;
+        _lastAppliedWidth = int.MinValue;
+        _lastAppliedHeight = int.MinValue;
         ActionsPopup.IsOpen = false;
     }
 
-    private void UpdatePosition()
+    private void UpdatePosition(bool force = false)
     {
         if (_targetHwnd == IntPtr.Zero || !GetWindowRect(_targetHwnd, out var rect) || !IsUsableRect(rect))
         {
@@ -113,8 +140,22 @@ public partial class RecordingBadgeOverlay : Window
             _manualX = x;
             _manualY = y;
         }
-        SetWindowPos(hwnd, HwndTopmost, x, y, width, height, SwpNoActivate | SwpShowWindow);
-        _logger.Debug($"[RECORDER-OVERLAY] Positioned overlay. OverlayHwnd=0x{hwnd.ToInt64():X}, TargetRect=({rect.Left},{rect.Top},{rect.Right},{rect.Bottom}), OverlayRect=({x},{y},{(int)Math.Round(Width)},{(int)Math.Round(Height)}).");
+
+        if (!force &&
+            x == _lastAppliedX &&
+            y == _lastAppliedY &&
+            width == _lastAppliedWidth &&
+            height == _lastAppliedHeight)
+        {
+            return;
+        }
+
+        SetWindowPos(hwnd, HwndTopmost, x, y, width, height, SwpNoActivate | SwpNoOwnerZOrder);
+        _lastAppliedX = x;
+        _lastAppliedY = y;
+        _lastAppliedWidth = width;
+        _lastAppliedHeight = height;
+        _logger.Debug($"[RECORDER-OVERLAY] Positioned overlay. OverlayHwnd=0x{hwnd.ToInt64():X}, TargetRect=({rect.Left},{rect.Top},{rect.Right},{rect.Bottom}), OverlayRect=({x},{y},{width},{height}), Force={force}.");
     }
 
     private void BadgeSurface_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -268,7 +309,7 @@ public partial class RecordingBadgeOverlay : Window
     private static readonly IntPtr WsExToolWindow = new(0x00000080);
     private static readonly IntPtr WsExNoActivate = new(0x08000000);
     private const uint SwpNoActivate = 0x0010;
-    private const uint SwpShowWindow = 0x0040;
+    private const uint SwpNoOwnerZOrder = 0x0200;
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

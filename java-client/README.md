@@ -82,6 +82,32 @@ Convenience methods include:
 - `hasText()`
 - `hasText("expected text")`
 
+## Opening applications
+
+The API and Java client can launch Java apps before attaching to them. Supported startup paths include `.jar`, `.bat` / `.cmd`, and direct executables such as `.exe`.
+
+```java
+JavaLaunchApplicationRequest launch = JavaLaunchApplicationRequest
+    .jar("C:/apps/freeplane/freeplane.jar")
+    .arguments("--someFlag")
+    .workingDirectory("C:/apps/freeplane")
+    .waitForWindow(JavaWindowSelector.title("Freeplane"))
+    .waitTimeout(Duration.ofSeconds(30))
+    .waitPollInterval(Duration.ofMillis(500));
+
+JavaLaunchApplicationResult result = JavaAutomation.connect(URI.create("http://localhost:5055"))
+    .openApplication(launch);
+```
+
+For session-style automation, you can launch and attach in one step:
+
+```java
+JavaDriver driver = JavaDriver.launchAndAttach(
+    URI.create("http://localhost:5055"),
+    launch,
+    RetryOptions.of(Duration.ofSeconds(30), Duration.ofMillis(500)));
+```
+
 ## Finding multiple elements
 
 Use `findElements` when a locator/object repository key may match more than one live element:

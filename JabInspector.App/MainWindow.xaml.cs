@@ -469,6 +469,18 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         }
 
         _viewModel.Log($"[RECORDER] Capture pipeline started for point ({point.X}, {point.Y}).");
+        var candidateWindows = GetCandidateWindowHandlesFromPoint(point);
+        if (ShouldPreferMouseDownSnapshot(candidateWindows))
+        {
+            _viewModel.Log($"[RECORDER] Preferring mouse-down snapshot because the top candidate hwnd changed after the click. Candidates={FormatHwndList(candidateWindows)}.");
+            if (TryRecordPassiveClickFromMouseDownSnapshot(point))
+            {
+                SchedulePostClickAutoAttach(point, "post-click modal switch");
+                ClearPassiveRecordingSnapshot();
+                return;
+            }
+        }
+
         TryAutoAttachJavaWindowFromPoint(point, "passive click");
         if (_viewModel.CurrentWindow is not null && IsPointInNativeCloseButtonRect(_viewModel.CurrentWindow, point))
         {
@@ -566,6 +578,27 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         }
 
         ClearPassiveRecordingSnapshot();
+    }
+
+    private bool ShouldPreferMouseDownSnapshot(IReadOnlyList<IntPtr> candidateWindows)
+    {
+        if (_recordingMouseDownNode is null || _recordingMouseDownWindow is null) return false;
+        if (candidateWindows.Count == 0) return false;
+
+        var topCandidate = candidateWindows[0];
+        if (topCandidate == IntPtr.Zero) return false;
+        if (topCandidate == _recordingMouseDownWindow.Hwnd) return false;
+
+        _viewModel.Log($"[RECORDER] Mouse-down snapshot will be preferred. MouseDownWindow={_recordingMouseDownWindow.HwndDisplay}, TopCandidate=0x{topCandidate.ToInt64():X}, Node='{_recordingMouseDownNode.DisplayName}'.");
+        return true;
+    }
+
+    private async void SchedulePostClickAutoAttach(NativePoint point, string reason)
+    {
+        await Task.Delay(140);
+        if (!_viewModel.IsRecordingActive || _viewModel.IsRecordingPaused) return;
+
+        TryAutoAttachJavaWindowFromPoint(point, reason);
     }
 
     private void CapturePassiveRecordingSnapshot(NativePoint point)
@@ -1567,7 +1600,32 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
             _viewModel.Log($"Started Java recording session '{dialog.SessionName}'.");
             OpenRecordingStudio();
             UpdateRecordingBadge();
+            BringCurrentJavaWindowToForeground("start recording");
         }
+    }
+
+    public void BringCurrentJavaWindowToForeground(string reason)
+    {
+        if (_viewModel.CurrentWindow is null)
+        {
+            _viewModel.Log($"Foreground request skipped for '{reason}' because no Java window is attached.");
+            return;
+        }
+
+        var hwnd = _viewModel.CurrentWindow.Hwnd;
+        if (hwnd == IntPtr.Zero)
+        {
+            _viewModel.Log($"Foreground request skipped for '{reason}' because the target window handle is zero.");
+            return;
+        }
+
+        if (IsIconic(hwnd))
+        {
+            ShowWindow(hwnd, SwRestore);
+        }
+
+        SetForegroundWindow(hwnd);
+        _viewModel.Log($"Brought Java window '{_viewModel.CurrentWindow.Title}' to foreground for '{reason}'.");
     }
 
     private void AddSelectedObject_Click(object sender, RoutedEventArgs e)
@@ -1873,4 +1931,14 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         ExecuteJavaRecordedActionFromStudio(e.ActionKind, input);
         if (_viewModel.IsRecordingActive) UpdateRecordingBadge();
     }
+
+    private const int SwRestore = 9;
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsIconic(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(IntPtr hwnd, int nCmdShow);
 }

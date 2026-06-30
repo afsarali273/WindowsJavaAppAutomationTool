@@ -45,6 +45,10 @@ public final class JabApiClient {
         return get("/api/java/windows", new TypeReference<>() {});
     }
 
+    public DriverResult launchApplication(JavaLaunchApplicationRequest request) {
+        return post("/api/java/applications/open", request, DriverResult.class);
+    }
+
     public DriverResult createSession(CreateSessionRequest request) {
         return post("/api/java/sessions", request, DriverResult.class);
     }
