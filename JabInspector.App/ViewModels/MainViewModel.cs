@@ -894,6 +894,62 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         return entry;
     }
 
+    public JavaObjectRepositoryEntry? AddRepositoryEntryToRepositoryFile(JavaObjectRepositoryEntry sourceEntry, string path, bool createNew)
+    {
+        _logger.Debug($"Repository entry export requested. ObjectKey='{sourceEntry.ObjectKey}', Path='{path}', CreateNew={createNew}.");
+
+        JavaRecordingProject project;
+        if (!createNew && File.Exists(path))
+        {
+            project = _javaRepository.LoadProject(path);
+        }
+        else
+        {
+            var sessionName = Path.GetFileNameWithoutExtension(path);
+            if (sessionName.EndsWith(".jrecording", StringComparison.OrdinalIgnoreCase))
+                sessionName = Path.GetFileNameWithoutExtension(sessionName);
+            project = new JavaRecordingProject
+            {
+                SchemaVersion = 2,
+                SessionName = string.IsNullOrWhiteSpace(sessionName) ? "JavaRepository" : sessionName,
+                ApplicationAlias = string.IsNullOrWhiteSpace(sourceEntry.WindowTitle) ? "JavaApplication" : sourceEntry.WindowTitle,
+                CreatedAtUtc = DateTime.UtcNow,
+                WindowTitle = sourceEntry.WindowTitle,
+                WindowClassName = sourceEntry.WindowClassName
+            };
+        }
+
+        var existing = project.Repository.FirstOrDefault(x =>
+            string.Equals(x.ObjectKey, sourceEntry.ObjectKey, StringComparison.OrdinalIgnoreCase)
+            || (string.Equals(x.Path, sourceEntry.Path, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(x.Name, sourceEntry.Name, StringComparison.Ordinal)
+                && string.Equals(x.WindowTitle, sourceEntry.WindowTitle, StringComparison.Ordinal)));
+
+        var objectKey = existing?.ObjectKey
+                        ?? (!project.Repository.Any(x => string.Equals(x.ObjectKey, sourceEntry.ObjectKey, StringComparison.OrdinalIgnoreCase))
+                            ? sourceEntry.ObjectKey
+                            : _javaRepository.CreateUniqueObjectKey(sourceEntry.ObjectKey, project.Repository));
+        var entry = _javaRepository.CloneEntry(sourceEntry, objectKey, sourceEntry.FriendlyName);
+
+        if (existing is not null)
+        {
+            var index = project.Repository.IndexOf(existing);
+            project.Repository[index] = entry;
+        }
+        else
+        {
+            project.Repository.Add(entry);
+        }
+
+        var windowScope = _javaRepository.CreateWindowLocator(entry);
+        var existingWindow = project.Windows.FirstOrDefault(x => string.Equals(x.WindowKey, windowScope.WindowKey, StringComparison.OrdinalIgnoreCase));
+        if (existingWindow is null) project.Windows.Add(windowScope);
+        _javaRepository.SaveProject(path, project);
+        RecordingStatus = $"Saved repository object {entry.ObjectKey} to {path}.";
+        _logger.Log($"Repository entry exported to file. ObjectKey='{entry.ObjectKey}', Path='{path}', CreateNew={createNew}.");
+        return entry;
+    }
+
     public JavaRecordedStep? RecordJavaAction(JavaRecordedActionKind actionKind, string? inputText = null, int? recordedScreenX = null, int? recordedScreenY = null, int? windowOffsetX = null, int? windowOffsetY = null)
     {
         _logger.Debug($"Record step requested. RecordingActive={IsRecordingActive}, Paused={IsRecordingPaused}, JavaMode={IsJavaMode}, HasSelectedNode={SelectedNode is not null}, Action={actionKind}, InputLength={(inputText ?? "").Length}.");

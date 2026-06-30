@@ -511,6 +511,18 @@ public sealed class JavaObjectRepositoryService
         return $"{seed}_{Guid.NewGuid():N}";
     }
 
+    public JavaObjectRepositoryEntry CloneEntry(JavaObjectRepositoryEntry source, string? objectKey = null, string? friendlyName = null)
+    {
+        var json = JsonSerializer.Serialize(source, JsonExportService.Options);
+        var clone = JsonSerializer.Deserialize<JavaObjectRepositoryEntry>(json, JsonExportService.Options) ?? new JavaObjectRepositoryEntry();
+        if (!string.IsNullOrWhiteSpace(objectKey)) clone.ObjectKey = objectKey.Trim();
+        if (!string.IsNullOrWhiteSpace(friendlyName)) clone.FriendlyName = friendlyName.Trim();
+        clone.CapturedAtUtc = DateTime.UtcNow;
+        return clone;
+    }
+
+    public JavaWindowLocator CreateWindowLocator(JavaObjectRepositoryEntry entry) => CreateWindowLocatorFromEntry(entry);
+
     private static JavaRepositoryProperty Property(string name, string value, bool primary) => new()
     {
         Name = name,

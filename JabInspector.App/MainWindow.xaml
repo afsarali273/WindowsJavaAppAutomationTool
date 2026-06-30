@@ -20,11 +20,11 @@
       <Setter Property="CornerRadius" Value="6"/>
     </Style>
     <Style x:Key="ToolButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Width" Value="30"/>
-      <Setter Property="Height" Value="28"/>
+      <Setter Property="Width" Value="34"/>
+      <Setter Property="Height" Value="32"/>
       <Setter Property="Padding" Value="0"/>
       <Setter Property="Margin" Value="0,0,4,0"/>
-      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontSize" Value="14"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
     <Style x:Key="ToolPrimaryButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
@@ -132,7 +132,7 @@
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/>
       <RowDefinition Height="*"/>
-      <RowDefinition Height="108"/>
+      <RowDefinition x:Name="DiagnosticsRow" Height="108"/>
       <RowDefinition Height="24"/>
     </Grid.RowDefinitions>
 
@@ -169,23 +169,52 @@
                       Margin="0,0,5,0"
                       FontSize="11"
                       VerticalContentAlignment="Center"/>
-            <Button Command="{Binding RefreshWindowsCommand}" Content="⟳" Style="{StaticResource ToolButton}" ToolTip="{Binding RefreshButtonLabel}"/>
-            <Button Name="PickerButton" PreviewMouseLeftButtonDown="PickerButton_PreviewMouseLeftButtonDown" PreviewMouseLeftButtonUp="PickerButton_PreviewMouseLeftButtonUp" Content="⊕" Style="{StaticResource ToolButton}" ToolTip="Drag to pick and inspect an element from the target application"/>
-            <Button Click="Highlight_Click" Content="▣" Style="{StaticResource ToolButton}" ToolTip="Highlight selected element"/>
-            <Button Command="{Binding CopyLocatorCommand}" Content="⧉" Style="{StaticResource ToolButton}" ToolTip="Copy locator JSON"/>
-            <Button Click="Export_Click" Content="⇩" Style="{StaticResource ToolButton}" ToolTip="Export tree JSON"/>
-            <Button Click="OpenObjectRepository_Click" Content="▤" Style="{StaticResource ToolButton}" ToolTip="Open object repository manager"/>
-            <Button Click="OpenRecording_Click" Content="●" Style="{StaticResource ToolButton}" ToolTip="Open recorder studio"/>
+            <Button Command="{Binding RefreshWindowsCommand}" Style="{StaticResource ToolButton}" ToolTip="{Binding RefreshButtonLabel}">
+              <Viewbox Width="16" Height="16">
+                <Path Fill="#0F766E" Stretch="Uniform" Data="M12,4A8,8 0 0 1 19.4,9H16.8A5.5,5.5 0 1 0 17.1,13H19.2A8,8 0 1 1 12,4M18,3V7H14"/>
+              </Viewbox>
+            </Button>
+            <Button Name="PickerButton" PreviewMouseLeftButtonDown="PickerButton_PreviewMouseLeftButtonDown" PreviewMouseLeftButtonUp="PickerButton_PreviewMouseLeftButtonUp" Style="{StaticResource ToolButton}" ToolTip="Drag to pick and inspect an element from the target application">
+              <Viewbox Width="16" Height="16">
+                <Path Fill="#C2410C" Stretch="Uniform" Data="M10,2A1,1 0 0 1 11,3V9H17A1,1 0 0 1 17,11H11V17A1,1 0 0 1 9,17V11H3A1,1 0 0 1 3,9H9V3A1,1 0 0 1 10,2M19.7,19.7L15.8,15.8"/>
+              </Viewbox>
+            </Button>
+            <Button Click="Highlight_Click" Style="{StaticResource ToolButton}" ToolTip="Highlight selected element">
+              <Viewbox Width="16" Height="16">
+                <Path Fill="#DC2626" Stretch="Uniform" Data="M12,3A9,9 0 1 0 21,12A9,9 0 0 0 12,3M12,6A6,6 0 1 1 6,12A6,6 0 0 1 12,6M11,1H13V4H11M11,20H13V23H11M1,11H4V13H1M20,11H23V13H20"/>
+              </Viewbox>
+            </Button>
+            <Button Command="{Binding CopyLocatorCommand}" Style="{StaticResource ToolButton}" ToolTip="Copy locator JSON">
+              <Viewbox Width="16" Height="16">
+                <Path Fill="#4F46E5" Stretch="Uniform" Data="M16,1H6A2,2 0 0 0 4,3V15H6V3H16M19,5H10A2,2 0 0 0 8,7V21A2,2 0 0 0 10,23H19A2,2 0 0 0 21,21V7A2,2 0 0 0 19,5Z"/>
+              </Viewbox>
+            </Button>
+            <Button Click="Export_Click" Style="{StaticResource ToolButton}" ToolTip="Export tree JSON">
+              <Viewbox Width="16" Height="16">
+                <Path Fill="#0369A1" Stretch="Uniform" Data="M5,20H19V22H5M11,3H13V12H16L12,17L8,12H11V3Z"/>
+              </Viewbox>
+            </Button>
+            <Button Click="OpenObjectRepository_Click" Style="{StaticResource ToolButton}" ToolTip="Open object repository manager">
+              <Viewbox Width="16" Height="16">
+                <Path Fill="#15803D" Stretch="Uniform" Data="M4,5A2,2 0 0 1 6,3H10L12,5H18A2,2 0 0 1 20,7V18A2,2 0 0 1 18,20H6A2,2 0 0 1 4,18V5M7,9H17V11H7M7,13H14V15H7"/>
+              </Viewbox>
+            </Button>
           </WrapPanel>
         </Border>
 
         <StackPanel Grid.Column="3" Orientation="Horizontal">
-          <Button Click="Settings_Click" Content="⚙" Style="{StaticResource ToolButton}" ToolTip="Settings"/>
+          <Button Click="Settings_Click" Style="{StaticResource ToolButton}" ToolTip="Settings">
+            <Viewbox Width="16" Height="16">
+              <Path Fill="#475569" Stretch="Uniform" Data="M19.4,13A7.9,7.9 0 0 0 19.5,12A7.9,7.9 0 0 0 19.4,11L21.5,9.4A0.5,0.5 0 0 0 21.6,8.7L19.6,5.3A0.5,0.5 0 0 0 19,5.1L16.5,6.1A7.6,7.6 0 0 0 14.7,5L14.3,2.3A0.5,0.5 0 0 0 13.8,2H10.2A0.5,0.5 0 0 0 9.7,2.3L9.3,5A7.6,7.6 0 0 0 7.5,6.1L5,5.1A0.5,0.5 0 0 0 4.4,5.3L2.4,8.7A0.5,0.5 0 0 0 2.5,9.4L4.6,11A7.9,7.9 0 0 0 4.5,12A7.9,7.9 0 0 0 4.6,13L2.5,14.6A0.5,0.5 0 0 0 2.4,15.3L4.4,18.7A0.5,0.5 0 0 0 5,18.9L7.5,17.9A7.6,7.6 0 0 0 9.3,19L9.7,21.7A0.5,0.5 0 0 0 10.2,22H13.8A0.5,0.5 0 0 0 14.3,21.7L14.7,19A7.6,7.6 0 0 0 16.5,17.9L19,18.9A0.5,0.5 0 0 0 19.6,18.7L21.6,15.3A0.5,0.5 0 0 0 21.5,14.6L19.4,13M12,15.2A3.2,3.2 0 1 1 15.2,12A3.2,3.2 0 0 1 12,15.2Z"/>
+            </Viewbox>
+          </Button>
         </StackPanel>
       </Grid>
     </Border>
 
-    <Grid Grid.Row="1" Margin="6,6,6,4">
+    <TabControl x:Name="WorkspaceTabs" Grid.Row="1" Margin="6,6,6,4" BorderThickness="0" Background="Transparent" SelectionChanged="WorkspaceTabs_SelectionChanged">
+      <TabItem x:Name="InspectorWorkspaceTab" Header="  INSPECTOR  ">
+    <Grid>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="300"/>
         <ColumnDefinition Width="6"/>
@@ -652,8 +681,215 @@
         </TabControl>
       </Border>
     </Grid>
+      </TabItem>
 
-    <Border Grid.Row="2" Margin="12,0,12,8" Style="{StaticResource PanelBorder}">
+      <TabItem x:Name="RecorderWorkspaceTab" Header="  RECORDER  ">
+        <Grid Margin="2">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="118"/>
+          </Grid.RowDefinitions>
+
+          <Border Grid.Row="0" Background="#1E293B" BorderBrush="#0F172A" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,8">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <StackPanel>
+                <TextBlock Text="{Binding RecordingSessionName}" Foreground="White" FontWeight="SemiBold" FontSize="12.5" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding RecordingStatus}" Foreground="#CBD5E1" FontSize="10.5" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding RecordingProjectPath}" Foreground="#94A3B8" FontFamily="Consolas" FontSize="9.5" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                <Button Click="StartRecordingSession_Click" Style="{StaticResource ToolPrimaryButton}" ToolTip="Start new recording">
+                  <TextBlock Text="●"/>
+                </Button>
+                <Button Click="AppendRecordingSession_Click" Style="{StaticResource ToolButton}" ToolTip="Add steps to current recording">
+                  <TextBlock Text="+"/>
+                </Button>
+                <Button Click="PlayRecording_Click" Style="{StaticResource ToolButton}" ToolTip="Playback recorded steps">
+                  <TextBlock Text="▶"/>
+                </Button>
+                <Button Click="GenerateJavaCode_Click" Style="{StaticResource ToolButton}" ToolTip="Generate Java code from recorded steps">
+                  <Path Width="15" Height="15" Fill="#2563EB" Stretch="Uniform" Data="M8.7,16.3 4.4,12 8.7,7.7 7.3,6.3 1.6,12 7.3,17.7z M15.3,16.3 19.6,12 15.3,7.7 16.7,6.3 22.4,12 16.7,17.7z M13.1,4.4 9.1,20 10.9,20.5 14.9,4.9z"/>
+                </Button>
+                <Button Click="RecorderMoreActions_Click" Style="{StaticResource ToolButton}" ToolTip="More recording actions" Margin="0">
+                  <Button.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="Add selected object" Click="AddSelectedObject_Click"/>
+                      <MenuItem Header="Save project as..." Click="SaveRecording_Click"/>
+                      <MenuItem Header="Load project" Click="LoadRecording_Click"/>
+                    </ContextMenu>
+                  </Button.ContextMenu>
+                  <TextBlock Text="⋯"/>
+                </Button>
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="300" MinWidth="240"/>
+              <ColumnDefinition Width="6"/>
+              <ColumnDefinition Width="*" MinWidth="360"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource PanelBorder}">
+              <Grid>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Border Padding="8,6" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                  <Grid>
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="OBJECT REPOSITORY" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                      <Button Click="AddSelectedObject_Click" Style="{StaticResource ToolButton}" ToolTip="Add selected inspected element">
+                        <TextBlock Text="+"/>
+                      </Button>
+                      <Button Click="RecorderDeleteRepositoryObject_Click" Style="{StaticResource ToolButton}" ToolTip="Delete selected repository object" Margin="0">
+                        <TextBlock Text="×"/>
+                      </Button>
+                    </StackPanel>
+                  </Grid>
+                </Border>
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding RepositoryEntries}"
+                         SelectedItem="{Binding SelectedRepositoryEntry}"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         Padding="6"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <Border Padding="6" BorderBrush="#E3E8EF" BorderThickness="0,0,0,1">
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                          </Grid.ColumnDefinitions>
+                          <StackPanel>
+                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="11.5" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Description, StringFormat=Desc: {0}}" Foreground="{StaticResource MutedBrush}" FontSize="9.5" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Path}" Foreground="#8A96A7" FontFamily="Consolas" FontSize="9.5" TextTrimming="CharacterEllipsis"/>
+                          </StackPanel>
+                          <Button Grid.Column="1"
+                                  Click="RecorderRepositoryDetails_Click"
+                                  Style="{StaticResource ToolButton}"
+                                  ToolTip="Show repository locator details"
+                                  Margin="8,0,0,0">
+                            <TextBlock Text="i"/>
+                          </Button>
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="6" Background="Transparent" HorizontalAlignment="Stretch"/>
+
+            <Border Grid.Column="2" Style="{StaticResource PanelBorder}">
+              <Grid>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Border Padding="8,6" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                  <Grid>
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="RECORDED TIMELINE" VerticalAlignment="Center"/>
+                    <Button HorizontalAlignment="Right" Click="RecorderDeleteStep_Click" Style="{StaticResource ToolButton}" ToolTip="Delete selected step" Margin="0">
+                      <TextBlock Text="×"/>
+                    </Button>
+                  </Grid>
+                </Border>
+                <ListBox x:Name="RecorderStepsList"
+                         Grid.Row="1"
+                         ItemsSource="{Binding RecordedSteps}"
+                         SelectedItem="{Binding SelectedRecordedStep}"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         Padding="6"
+                         AllowDrop="True"
+                         PreviewMouseLeftButtonDown="RecorderStepsList_PreviewMouseLeftButtonDown"
+                         MouseMove="RecorderStepsList_MouseMove"
+                         DragOver="RecorderStepsList_DragOver"
+                         Drop="RecorderStepsList_Drop"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <Border Padding="8" BorderBrush="#E3E8EF" BorderThickness="0,0,0,1">
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                          </Grid.ColumnDefinitions>
+                          <Border Width="24" Height="24" CornerRadius="12" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" VerticalAlignment="Top">
+                            <TextBlock Text="{Binding Sequence}" Foreground="#2563EB" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                          </Border>
+                          <StackPanel Grid.Column="1">
+                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="11.5" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding ObjectDescription, StringFormat=Desc: {0}}" Foreground="{StaticResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap"/>
+                            <TextBlock Foreground="#8A96A7" FontSize="9.5" Margin="0,3,0,0">
+                              <Run Text="{Binding CapturedAtUtc, StringFormat={}{0:HH:mm:ss}}"/>
+                              <Run Text=" | "/>
+                              <Run Text="{Binding WindowTitle}"/>
+                              <Run Text=" | depth "/>
+                              <Run Text="{Binding ObjectDepth}"/>
+                            </TextBlock>
+                          </StackPanel>
+                          <Border Grid.Column="2" Background="#EFF6FF" BorderBrush="#DBEAFE" BorderThickness="1" CornerRadius="10" Padding="8,3" Margin="8,0,0,0" VerticalAlignment="Top">
+                            <TextBlock Text="{Binding ActionKind}" Foreground="#2563EB" FontSize="9.5" FontWeight="SemiBold"/>
+                          </Border>
+                          <Button Grid.Column="3" Click="RecorderHighlightRecordedStep_Click" Style="{StaticResource ToolButton}" ToolTip="Highlight recorded element" Margin="8,0,0,0">
+                            <TextBlock Text="◎"/>
+                          </Button>
+                          <Button Grid.Column="4" Click="RecorderStepDetails_Click" Style="{StaticResource ToolButton}" ToolTip="Show step locator details" Margin="4,0,0,0">
+                            <TextBlock Text="i"/>
+                          </Button>
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </Grid>
+            </Border>
+          </Grid>
+
+          <Border Grid.Row="2" Margin="0,8,0,0" Style="{StaticResource PanelBorder}">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+              </Grid.RowDefinitions>
+              <Border Padding="8,5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                <TextBlock Style="{StaticResource SectionTitle}" Text="PLAYBACK CONSOLE"/>
+              </Border>
+              <TextBox Grid.Row="1"
+                       Text="{Binding PlaybackOutput, Mode=OneWay}"
+                       IsReadOnly="True"
+                       AcceptsReturn="True"
+                       TextWrapping="Wrap"
+                       VerticalScrollBarVisibility="Auto"
+                       FontFamily="Consolas"
+                       FontSize="10.5"
+                       Background="#FBFCFE"
+                       Foreground="#475467"
+                       BorderThickness="0"
+                       Padding="8"/>
+            </Grid>
+          </Border>
+        </Grid>
+      </TabItem>
+    </TabControl>
+
+    <Border x:Name="DiagnosticsPanel" Grid.Row="2" Margin="12,0,12,8" Style="{StaticResource PanelBorder}">
       <Grid>
         <Grid.RowDefinitions>
           <RowDefinition Height="34"/>

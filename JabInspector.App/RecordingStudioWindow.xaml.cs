@@ -155,10 +155,14 @@ public partial class RecordingStudioWindow : Window
     {
         if (sender is not FrameworkElement { DataContext: JavaObjectRepositoryEntry entry }) return;
         ViewModel.SelectedRepositoryEntry = entry;
-        ShowLocatorDetails(
+        var window = CreateLocatorDetailsWindow(
             $"Repository Object: {entry.DisplayName}",
             "Object repository locator and accessibility metadata",
             ViewModel.RecordingRepositoryPreview);
+        window.EnableRepositoryActions(
+            () => OwnerWindow.HighlightRepositoryEntry(entry),
+            () => OwnerWindow.ExportRepositoryEntry(entry));
+        window.ShowDialog();
         e.Handled = true;
     }
 
@@ -183,12 +187,14 @@ public partial class RecordingStudioWindow : Window
 
     private void ShowLocatorDetails(string title, string subtitle, string details)
     {
-        var window = new LocatorDetailsWindow(title, subtitle, details)
-        {
-            Owner = this
-        };
+        var window = CreateLocatorDetailsWindow(title, subtitle, details);
         window.ShowDialog();
     }
+
+    private LocatorDetailsWindow CreateLocatorDetailsWindow(string title, string subtitle, string details) => new(title, subtitle, details)
+    {
+        Owner = this
+    };
 
     private void RecordedStepsList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

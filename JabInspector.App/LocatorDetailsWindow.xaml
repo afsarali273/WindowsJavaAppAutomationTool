@@ -22,20 +22,46 @@
           <TextBlock x:Name="TitleText" Text="Locator Details" Foreground="White" FontWeight="Bold" FontSize="14"/>
           <TextBlock x:Name="SubtitleText" Text="Playback metadata and locator properties" Foreground="#94A3B8" FontSize="11" Margin="0,3,0,0"/>
         </StackPanel>
-        <Button HorizontalAlignment="Right"
-                VerticalAlignment="Center"
-                Click="Copy_Click"
-                Padding="10,5"
-                MinHeight="28"
-                Background="#1E293B"
-                BorderBrush="#475569"
-                Foreground="White"
-                ToolTip="Copy details to clipboard">
-          <StackPanel Orientation="Horizontal">
-            <Path Width="12" Height="12" Fill="White" Stretch="Uniform" Data="M16,1H4C2.9,1,2,1.9,2,3v12h2V3h12V1z M19,5H8C6.9,5,6,5.9,6,7v14c0,1.1,0.9,2,2,2h11c1.1,0,2-0.9,2-2V7C21,5.9,20.1,5,19,5z"/>
-            <TextBlock Text="Copy" Margin="6,0,0,0"/>
-          </StackPanel>
-        </Button>
+        <StackPanel HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal">
+          <Button x:Name="HighlightButton"
+                  Click="Highlight_Click"
+                  Width="32"
+                  Height="32"
+                  Margin="0,0,8,0"
+                  Background="#1E293B"
+                  BorderBrush="#475569"
+                  Foreground="White"
+                  Visibility="Collapsed"
+                  ToolTip="Highlight this object on the application">
+            <Path Width="13" Height="13" Fill="White" Stretch="Uniform" Data="M12,2A10,10 0 1 0 22,12A10,10 0 0 0 12,2ZM12,4A8,8 0 1 1 4,12A8,8 0 0 1 12,4ZM12,7A5,5 0 1 0 17,12A5,5 0 0 0 12,7ZM11,1H13V4H11ZM11,20H13V23H11ZM1,11H4V13H1ZM20,11H23V13H20Z"/>
+          </Button>
+          <Button x:Name="AddToRepositoryButton"
+                  Click="AddToRepository_Click"
+                  Width="32"
+                  Height="32"
+                  Margin="0,0,8,0"
+                  Background="#1E293B"
+                  BorderBrush="#475569"
+                  Foreground="White"
+                  Visibility="Collapsed"
+                  ToolTip="Save this object into another object repository">
+            <Path Width="13" Height="13" Fill="White" Stretch="Uniform" Data="M19,11H13V5h-2v6H5v2h6v6h2v-6h6z"/>
+          </Button>
+          <Button Click="Copy_Click"
+                  Padding="10,5"
+                  MinHeight="28"
+                  Background="#1E293B"
+                  BorderBrush="#475569"
+                  Foreground="White"
+                  ToolTip="Copy details to clipboard">
+            <StackPanel Orientation="Horizontal">
+              <Path Width="12" Height="12" Fill="White" Stretch="Uniform" Data="M16,1H4C2.9,1,2,1.9,2,3v12h2V3h12V1z M19,5H8C6.9,5,6,5.9,6,7v14c0,1.1,0.9,2,2,2h11c1.1,0,2-0.9,2-2V7C21,5.9,20.1,5,19,5z"/>
+              <TextBlock Text="Copy" Margin="6,0,0,0"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
       </Grid>
     </Border>
 

@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using JabInspector.App.ViewModels;
 using JabInspector.Core.Models;
 using JabInspector.Core.Services;
@@ -17,11 +18,13 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
 {
     private readonly MainViewModel _viewModel = new();
     private readonly JavaActionExecutionService _javaActions = new();
+    private readonly JavaClientCodeGenerationService _javaCodeGenerator = new();
     private readonly System.Windows.Threading.DispatcherTimer _hoverTimer;
     private readonly System.Windows.Threading.DispatcherTimer _recordingMonitorTimer;
-    private RecordingStudioWindow? _recordingStudioWindow;
     private ObjectRepositoryWindow? _objectRepositoryWindow;
     private RecordingBadgeOverlay? _recordingBadgeOverlay;
+    private System.Windows.Point _recordedStepDragStartPoint;
+    private JavaRecordedStep? _draggedRecordedStep;
     private bool _hoverInspecting;
     private bool _pickerActive;
     private readonly System.Windows.Threading.DispatcherTimer _pickerTimer;
@@ -64,10 +67,10 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
             _recordingMonitorTimer.Stop();
             HighlightOverlay.HidePersistent();
             _recordingBadgeOverlay?.Detach();
-            _recordingStudioWindow?.Close();
             _objectRepositoryWindow?.Close();
             _viewModel.Dispose();
         };
+        Loaded += (_, _) => UpdateWorkspaceChrome();
     }
 
     private void MainWindow_SourceInitialized(object? sender, EventArgs e)
@@ -995,6 +998,19 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         _viewModel.RefreshSupportedActions();
     }
 
+    private void WorkspaceTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || e.Source != WorkspaceTabs) return;
+        UpdateWorkspaceChrome();
+    }
+
+    private void UpdateWorkspaceChrome()
+    {
+        var recorderActive = ReferenceEquals(WorkspaceTabs.SelectedItem, RecorderWorkspaceTab);
+        DiagnosticsPanel.Visibility = recorderActive ? Visibility.Collapsed : Visibility.Visible;
+        DiagnosticsRow.Height = recorderActive ? new GridLength(0) : new GridLength(108);
+    }
+
     private void FocusAction_Click(object sender, RoutedEventArgs e)
     {
         if (_viewModel.IsJavaMode)
@@ -1561,11 +1577,6 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         _viewModel.Log($"Copied {_viewModel.Logs.Count} log line(s) to the clipboard.");
     }
 
-    private void OpenRecording_Click(object sender, RoutedEventArgs e)
-    {
-        OpenRecordingStudio();
-    }
-
     private void OpenObjectRepository_Click(object sender, RoutedEventArgs e)
     {
         OpenObjectRepositoryManager();
@@ -1587,16 +1598,8 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
 
     private void OpenRecordingStudio()
     {
-        if (_recordingStudioWindow is null || !_recordingStudioWindow.IsLoaded)
-        {
-            _recordingStudioWindow = new RecordingStudioWindow(_viewModel, this);
-            _recordingStudioWindow.Closed += (_, _) => _recordingStudioWindow = null;
-            _recordingStudioWindow.Show();
-        }
-        else
-        {
-            _recordingStudioWindow.Activate();
-        }
+        WorkspaceTabs.SelectedItem = RecorderWorkspaceTab;
+        Activate();
     }
 
     private void RecordingBadgeOverlay_PauseResumeRequested(object? sender, EventArgs e)
@@ -1636,6 +1639,125 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
             UpdateRecordingBadge();
             BringCurrentJavaWindowToForeground("start recording");
         }
+    }
+
+    private void AppendRecordingSession_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_viewModel.IsJavaMode || _viewModel.CurrentWindow is null || _viewModel.Root is null)
+        {
+            _viewModel.Log("Attach to a Java window before adding recording steps.");
+            OpenRecordingStudio();
+            return;
+        }
+
+        var alias = string.IsNullOrWhiteSpace(_viewModel.RecordingApplicationAlias)
+            ? _viewModel.CurrentWindow.Title
+            : _viewModel.RecordingApplicationAlias;
+        var sessionName = !string.IsNullOrWhiteSpace(_viewModel.RecordingSessionName)
+                          && !string.Equals(_viewModel.RecordingSessionName, "No active recording session", StringComparison.OrdinalIgnoreCase)
+            ? _viewModel.RecordingSessionName
+            : null;
+        var dialog = new RecordingSessionWindow(alias, sessionName) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        if (_viewModel.StartJavaRecordingSession(dialog.SessionName, dialog.ApplicationAlias, appendExisting: true))
+        {
+            _viewModel.Log($"Appending recording steps to '{dialog.SessionName}'.");
+            OpenRecordingStudio();
+            UpdateRecordingBadge();
+            BringCurrentJavaWindowToForeground("append recording");
+        }
+    }
+
+    private void RecorderMoreActions_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { ContextMenu: { } menu } owner) return;
+        menu.PlacementTarget = owner;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    private void GenerateJavaCode_Click(object sender, RoutedEventArgs e)
+    {
+        var className = string.IsNullOrWhiteSpace(_viewModel.RecordingSessionName)
+            || string.Equals(_viewModel.RecordingSessionName, "No active recording session", StringComparison.OrdinalIgnoreCase)
+            ? "GeneratedJavaRecording"
+            : $"{_viewModel.RecordingSessionName}Automation";
+
+        var code = _javaCodeGenerator.GenerateRepositoryBackedMainClass(
+            _viewModel.RecordedSteps,
+            _viewModel.RecordingProjectPath,
+            className);
+
+        var preview = new JavaCodePreviewWindow(code) { Owner = this };
+        preview.ShowDialog();
+        _viewModel.Log($"Generated Java code preview for {_viewModel.RecordedSteps.Count} recorded step(s).");
+    }
+
+    private void RecorderDeleteStep_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.DeleteSelectedRecordedStep();
+        UpdateRecordingBadge();
+    }
+
+    private void RecorderDeleteRepositoryObject_Click(object sender, RoutedEventArgs e)
+    {
+        var entry = _viewModel.SelectedRepositoryEntry;
+        if (entry is null)
+        {
+            _viewModel.DeleteSelectedRepositoryEntry();
+            return;
+        }
+
+        var referencingStepCount = _viewModel.CountRecordedStepsUsingSelectedRepositoryEntry();
+        var deleteDependents = false;
+        if (referencingStepCount > 0)
+        {
+            var answer = System.Windows.MessageBox.Show(
+                this,
+                $"'{entry.ObjectKey}' is used by {referencingStepCount} recorded step(s).\n\nDelete the object and those dependent timeline steps?",
+                "Delete repository object",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (answer != MessageBoxResult.Yes) return;
+            deleteDependents = true;
+        }
+
+        _viewModel.DeleteSelectedRepositoryEntry(deleteDependents);
+        UpdateRecordingBadge();
+    }
+
+    private void RecorderRepositoryDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: JavaObjectRepositoryEntry entry }) return;
+        _viewModel.SelectedRepositoryEntry = entry;
+        var window = CreateLocatorDetailsWindow(
+            $"Repository Object: {entry.DisplayName}",
+            "Object repository locator and accessibility metadata",
+            _viewModel.RecordingRepositoryPreview);
+        window.EnableRepositoryActions(
+            () => HighlightRepositoryEntry(entry),
+            () => ExportRepositoryEntry(entry));
+        window.ShowDialog();
+        e.Handled = true;
+    }
+
+    private void RecorderStepDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: JavaRecordedStep step }) return;
+        _viewModel.SelectedRecordedStep = step;
+        ShowLocatorDetails(
+            $"Step {step.Sequence}: {step.ActionKind}",
+            step.ObjectSummary,
+            _viewModel.RecordingStepPreview);
+        e.Handled = true;
+    }
+
+    private void RecorderHighlightRecordedStep_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: JavaRecordedStep step }) return;
+        _viewModel.SelectedRecordedStep = step;
+        HighlightRecordedStep(step);
+        e.Handled = true;
     }
 
     public void BringCurrentJavaWindowToForeground(string reason)
@@ -1897,6 +2019,58 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         _viewModel.Log($"Repository highlight resolved and selected {node.DisplayName}. {message}");
     }
 
+    public void HighlightRepositoryEntry(JavaObjectRepositoryEntry entry)
+    {
+        _viewModel.SelectedRepositoryEntry = entry;
+        HighlightRepositorySelection();
+    }
+
+    public void ExportRepositoryEntry(JavaObjectRepositoryEntry entry)
+    {
+        _viewModel.SelectedRepositoryEntry = entry;
+        var targetDialog = new AddToRepositoryTargetWindow(_viewModel.CurrentRepositorySummary, _viewModel.RepositoryStorageDirectory) { Owner = this };
+        if (targetDialog.ShowDialog() != true || targetDialog.SelectedTarget is null) return;
+
+        switch (targetDialog.SelectedTarget.Value)
+        {
+            case AddToRepositoryTarget.Current:
+            {
+                _viewModel.Log($"Repository object {entry.ObjectKey} is already available in the current repository list.");
+                OpenObjectRepositoryManager();
+                break;
+            }
+            case AddToRepositoryTarget.ExistingFile:
+            {
+                var dialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Choose existing object repository",
+                    Filter = "Java recording project (*.jrecording.json)|*.jrecording.json|JSON files (*.json)|*.json",
+                    CheckFileExists = true,
+                    InitialDirectory = _viewModel.RepositoryStorageDirectory
+                };
+                if (dialog.ShowDialog(this) != true) return;
+                var saved = _viewModel.AddRepositoryEntryToRepositoryFile(entry, dialog.FileName, createNew: false);
+                if (saved is not null) _viewModel.Log($"Saved repository object {saved.ObjectKey} to existing repository file: {dialog.FileName}");
+                break;
+            }
+            case AddToRepositoryTarget.NewFile:
+            {
+                var dialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = "Create object repository",
+                    Filter = "Java recording project (*.jrecording.json)|*.jrecording.json|JSON files (*.json)|*.json",
+                    FileName = _viewModel.GetDefaultRecordingProjectFileName(),
+                    DefaultExt = ".jrecording.json",
+                    InitialDirectory = _viewModel.RepositoryStorageDirectory
+                };
+                if (dialog.ShowDialog(this) != true) return;
+                var saved = _viewModel.AddRepositoryEntryToRepositoryFile(entry, dialog.FileName, createNew: true);
+                if (saved is not null) _viewModel.Log($"Saved repository object {saved.ObjectKey} to new repository file: {dialog.FileName}");
+                break;
+            }
+        }
+    }
+
     public void HighlightRecordedStep(JavaRecordedStep step)
     {
         if (!_viewModel.TryAutoAttachJavaWindowForRecordedStep(step, out var attachMessage))
@@ -1930,6 +2104,79 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         ActivateHierarchyNode(node);
         DetailsTabs.SelectedItem = PropertiesTab;
         _viewModel.Log($"Recorded-step highlight resolved {node.DisplayName} for step {step.Sequence}. {resolveMessage}");
+    }
+
+    private void ShowLocatorDetails(string title, string subtitle, string details)
+    {
+        var window = CreateLocatorDetailsWindow(title, subtitle, details);
+        window.ShowDialog();
+    }
+
+    private LocatorDetailsWindow CreateLocatorDetailsWindow(string title, string subtitle, string details) => new(title, subtitle, details)
+    {
+        Owner = this
+    };
+
+    private void RecorderStepsList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _recordedStepDragStartPoint = e.GetPosition(RecorderStepsList);
+        _draggedRecordedStep = FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject)?.DataContext as JavaRecordedStep;
+    }
+
+    private void RecorderStepsList_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _draggedRecordedStep is null) return;
+
+        var currentPosition = e.GetPosition(RecorderStepsList);
+        if (Math.Abs(currentPosition.X - _recordedStepDragStartPoint.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(currentPosition.Y - _recordedStepDragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        System.Windows.DragDrop.DoDragDrop(RecorderStepsList, new System.Windows.DataObject(typeof(JavaRecordedStep), _draggedRecordedStep), System.Windows.DragDropEffects.Move);
+    }
+
+    private void RecorderStepsList_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(typeof(JavaRecordedStep)) ? System.Windows.DragDropEffects.Move : System.Windows.DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void RecorderStepsList_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(typeof(JavaRecordedStep))) return;
+        if (e.Data.GetData(typeof(JavaRecordedStep)) is not JavaRecordedStep draggedStep) return;
+
+        var listBoxItem = FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
+        var targetStep = listBoxItem?.DataContext as JavaRecordedStep;
+        var targetIndex = targetStep is null
+            ? _viewModel.RecordedSteps.Count - 1
+            : _viewModel.RecordedSteps.IndexOf(targetStep);
+
+        if (_viewModel.MoveRecordedStep(draggedStep, targetIndex))
+        {
+            UpdateRecordingBadge();
+        }
+
+        _draggedRecordedStep = null;
+        e.Handled = true;
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current is not null)
+        {
+            if (current is T match) return match;
+            current = current switch
+            {
+                Visual or System.Windows.Media.Media3D.Visual3D => VisualTreeHelper.GetParent(current),
+                FrameworkContentElement content => content.Parent,
+                _ => LogicalTreeHelper.GetParent(current)
+            };
+        }
+
+        return null;
     }
 
     public void UpdateRecordingBadge()
