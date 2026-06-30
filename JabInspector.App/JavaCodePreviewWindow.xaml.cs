@@ -4,17 +4,19 @@ namespace JabInspector.App;
 
 public partial class JavaCodePreviewWindow : Window
 {
-    public JavaCodePreviewWindow(string code)
+    public JavaCodePreviewWindow(string repositoryCode, string inlineLocatorCode)
     {
         InitializeComponent();
-        CodeText.Text = code;
+        RepositoryCodeText.Text = repositoryCode;
+        InlineCodeText.Text = inlineLocatorCode;
     }
 
     private void Copy_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(CodeText.Text))
+        var code = CodeTabs.SelectedIndex == 1 ? InlineCodeText.Text : RepositoryCodeText.Text;
+        if (!string.IsNullOrWhiteSpace(code))
         {
-            System.Windows.Clipboard.SetText(CodeText.Text);
+            System.Windows.Clipboard.SetText(code);
         }
     }
 

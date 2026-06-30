@@ -64,7 +64,76 @@ public sealed class JavaClientCodeGenerationService
         return builder.ToString();
     }
 
-    private static void AppendStep(StringBuilder builder, JavaRecordedStep step)
+    public string GenerateInlineLocatorMainClass(
+        IEnumerable<JavaRecordedStep> recordedSteps,
+        string? className = null,
+        string defaultApiUrl = "http://localhost:5000")
+    {
+        var steps = recordedSteps
+            .Where(step => step is not null)
+            .OrderBy(step => step.Sequence)
+            .ToList();
+
+        var normalizedClassName = NormalizeClassName(string.IsNullOrWhiteSpace(className)
+            ? "GeneratedJavaInlineRecording"
+            : $"{className}Inline");
+
+        var builder = new StringBuilder();
+        builder.AppendLine("import com.afsarali.jab.client.JavaAutomation;");
+        builder.AppendLine("import com.afsarali.jab.client.RetryOptions;");
+        builder.AppendLine("import com.afsarali.jab.client.model.ElementBounds;");
+        builder.AppendLine("import com.afsarali.jab.client.model.JavaWindowSelector;");
+        builder.AppendLine("import com.afsarali.jab.client.model.LocatorSuggestion;");
+        builder.AppendLine("import com.afsarali.jab.client.model.ResolutionPolicy;");
+        builder.AppendLine();
+        builder.AppendLine("import java.net.URI;");
+        builder.AppendLine("import java.time.Duration;");
+        builder.AppendLine("import java.util.List;");
+        builder.AppendLine();
+        builder.AppendLine($"public final class {normalizedClassName} {{");
+        builder.AppendLine($"    private static final String DEFAULT_API = {JavaString(defaultApiUrl)};");
+        builder.AppendLine();
+        builder.AppendLine($"    private {normalizedClassName}() {{");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    public static void main(String[] args) {");
+        builder.AppendLine("        URI api = URI.create(args.length > 0 ? args[0] : DEFAULT_API);");
+        builder.AppendLine();
+        builder.AppendLine("        JavaAutomation automation = JavaAutomation.connect(api)");
+        builder.AppendLine("                .resolutionPolicy(ResolutionPolicy.inline());");
+        builder.AppendLine();
+        builder.AppendLine("        RetryOptions actionRetry = RetryOptions.of(Duration.ofSeconds(5), Duration.ofMillis(200));");
+        builder.AppendLine("        RetryOptions windowWait = RetryOptions.of(Duration.ofSeconds(10), Duration.ofMillis(250));");
+
+        if (steps.Count == 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("        // No recorded steps are available yet.");
+        }
+
+        var emittedLocators = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var usedVariableNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var step in steps)
+        {
+            if (step.ActionKind == JavaRecordedActionKind.CloseWindow) continue;
+            var locator = GetLocator(step);
+            if (locator is null) continue;
+            var variableName = CreateLocatorVariableName(step, emittedLocators.Count + 1, usedVariableNames);
+            emittedLocators[StepKey(step)] = variableName;
+            AppendLocatorVariable(builder, variableName, locator);
+        }
+
+        foreach (var step in steps)
+        {
+            AppendStep(builder, step, inlineLocatorVariable: emittedLocators.GetValueOrDefault(StepKey(step)));
+        }
+
+        builder.AppendLine("    }");
+        builder.AppendLine("}");
+        return builder.ToString();
+    }
+
+    private static void AppendStep(StringBuilder builder, JavaRecordedStep step, string? inlineLocatorVariable = null)
     {
         builder.AppendLine();
         builder.AppendLine($"        // Step {step.Sequence}: {step.ActionKind} - {DisplayComment(step)}");
@@ -75,13 +144,19 @@ public sealed class JavaClientCodeGenerationService
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(step.ObjectKey))
+        var targetLocator = !string.IsNullOrWhiteSpace(inlineLocatorVariable)
+            ? inlineLocatorVariable
+            : !string.IsNullOrWhiteSpace(step.ObjectKey)
+                ? JavaString(step.ObjectKey)
+                : "";
+
+        if (string.IsNullOrWhiteSpace(targetLocator))
         {
-            builder.AppendLine("        // Skipped: this recorded step has no object repository key.");
+            builder.AppendLine("        // Skipped: this recorded step has no object repository key or inline locator metadata.");
             return;
         }
 
-        var target = $"automation.window({WindowSelector(step)}, windowWait).object({JavaString(step.ObjectKey)})";
+        var target = $"automation.window({WindowSelector(step)}, windowWait).object({targetLocator})";
         switch (step.ActionKind)
         {
             case JavaRecordedActionKind.Focus:
@@ -113,6 +188,148 @@ public sealed class JavaClientCodeGenerationService
                 break;
         }
     }
+
+    private static void AppendLocatorVariable(StringBuilder builder, string variableName, LocatorSuggestion locator)
+    {
+        builder.AppendLine();
+        builder.AppendLine($"        LocatorSuggestion {variableName} = LocatorSuggestion.builder()");
+        AppendBuilderString(builder, "engine", locator.Engine);
+        AppendBuilderString(builder, "role", locator.Role);
+        AppendBuilderString(builder, "roleEnUs", locator.RoleEnUs);
+        AppendBuilderString(builder, "name", locator.Name);
+        AppendBuilderString(builder, "virtualAccessibleName", locator.VirtualAccessibleName);
+        AppendBuilderString(builder, "description", locator.Description);
+        AppendBuilderString(builder, "states", locator.States);
+        AppendBuilderString(builder, "statesEnUs", locator.StatesEnUs);
+        AppendBuilderInt(builder, "indexInParent", locator.IndexInParent);
+        AppendBuilderInt(builder, "objectDepth", locator.ObjectDepth);
+        AppendBuilderInt(builder, "childrenCount", locator.ChildrenCount);
+        AppendBuilderString(builder, "path", locator.Path);
+        AppendBuilderString(builder, "indexPath", locator.IndexPath);
+        AppendBuilderString(builder, "xPath", locator.XPath);
+        AppendBuilderString(builder, "indexXPath", locator.IndexXPath);
+        AppendBuilderString(builder, "semanticXPath", locator.SemanticXPath);
+        AppendBuilderString(builder, "parentRole", locator.ParentRole);
+        AppendBuilderString(builder, "parentName", locator.ParentName);
+        builder.AppendLine($"                .hasManagedDescendantAncestor({locator.HasManagedDescendantAncestor.ToString().ToLowerInvariant()})");
+        if (locator.ActionNames.Count > 0)
+        {
+            builder.AppendLine($"                .actionNames(List.of({string.Join(", ", locator.ActionNames.Select(JavaString))}))");
+        }
+        AppendBuilderString(builder, "textPreview", locator.TextPreview);
+        AppendBuilderString(builder, "textPreviewSource", locator.TextPreviewSource);
+        AppendBuilderInt(builder, "textCharCount", locator.TextCharCount);
+        AppendBuilderInt(builder, "textCaretIndex", locator.TextCaretIndex);
+        AppendBuilderInt(builder, "textIndexAtPoint", locator.TextIndexAtPoint);
+        AppendBuilderString(builder, "textSelected", locator.TextSelected);
+        AppendBuilderString(builder, "textWord", locator.TextWord);
+        AppendBuilderString(builder, "textSentence", locator.TextSentence);
+        AppendBuilderString(builder, "currentValue", locator.CurrentValue);
+        AppendBuilderString(builder, "minimumValue", locator.MinimumValue);
+        AppendBuilderString(builder, "maximumValue", locator.MaximumValue);
+        if (locator.Bounds.Width != 0 || locator.Bounds.Height != 0)
+        {
+            builder.AppendLine($"                .bounds(new ElementBounds({locator.Bounds.X}, {locator.Bounds.Y}, {locator.Bounds.Width}, {locator.Bounds.Height}))");
+        }
+        builder.AppendLine("                .build();");
+    }
+
+    private static void AppendBuilderString(StringBuilder builder, string methodName, string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            builder.AppendLine($"                .{methodName}({JavaString(value)})");
+        }
+    }
+
+    private static void AppendBuilderInt(StringBuilder builder, string methodName, int value)
+    {
+        if (value >= 0)
+        {
+            builder.AppendLine($"                .{methodName}({value})");
+        }
+    }
+
+    private static LocatorSuggestion? GetLocator(JavaRecordedStep step)
+    {
+        if (step.ObjectLocator is not null) return step.ObjectLocator;
+        if (!string.IsNullOrWhiteSpace(step.ObjectRole)
+            || !string.IsNullOrWhiteSpace(step.ObjectName)
+            || !string.IsNullOrWhiteSpace(step.ObjectVirtualAccessibleName)
+            || !string.IsNullOrWhiteSpace(step.ObjectPath))
+        {
+            return new LocatorSuggestion(
+                "java-access-bridge",
+                step.ObjectRole,
+                "",
+                step.ObjectName,
+                step.ObjectVirtualAccessibleName,
+                step.ObjectDescription,
+                "",
+                "",
+                -1,
+                step.ObjectDepth,
+                -1,
+                step.ObjectPath,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                false,
+                [],
+                "",
+                "",
+                -1,
+                -1,
+                -1,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                new ElementBounds(0, 0, 0, 0));
+        }
+
+        return null;
+    }
+
+    private static string CreateLocatorVariableName(JavaRecordedStep step, int fallbackIndex, ISet<string> usedVariableNames)
+    {
+        var basis = !string.IsNullOrWhiteSpace(step.ObjectKey)
+            ? step.ObjectKey
+            : !string.IsNullOrWhiteSpace(step.ObjectName)
+                ? step.ObjectName
+                : $"step{fallbackIndex}";
+        var builder = new StringBuilder("locator");
+        var capitalizeNext = true;
+        foreach (var ch in basis)
+        {
+            if (char.IsLetterOrDigit(ch))
+            {
+                builder.Append(capitalizeNext ? char.ToUpperInvariant(ch) : ch);
+                capitalizeNext = false;
+            }
+            else
+            {
+                capitalizeNext = true;
+            }
+        }
+
+        var baseName = builder.ToString();
+        var candidate = baseName;
+        var suffix = 2;
+        while (!usedVariableNames.Add(candidate))
+        {
+            candidate = $"{baseName}{suffix++}";
+        }
+
+        return candidate;
+    }
+
+    private static string StepKey(JavaRecordedStep step) => $"{step.Sequence}:{step.ObjectKey}:{step.ObjectPath}";
 
     private static string WindowSelector(JavaRecordedStep step)
     {

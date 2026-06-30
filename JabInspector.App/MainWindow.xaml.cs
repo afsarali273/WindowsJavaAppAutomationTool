@@ -1683,12 +1683,15 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
             ? "GeneratedJavaRecording"
             : $"{_viewModel.RecordingSessionName}Automation";
 
-        var code = _javaCodeGenerator.GenerateRepositoryBackedMainClass(
+        var repositoryCode = _javaCodeGenerator.GenerateRepositoryBackedMainClass(
             _viewModel.RecordedSteps,
             _viewModel.RecordingProjectPath,
             className);
+        var inlineLocatorCode = _javaCodeGenerator.GenerateInlineLocatorMainClass(
+            _viewModel.RecordedSteps,
+            className);
 
-        var preview = new JavaCodePreviewWindow(code) { Owner = this };
+        var preview = new JavaCodePreviewWindow(repositoryCode, inlineLocatorCode) { Owner = this };
         preview.ShowDialog();
         _viewModel.Log($"Generated Java code preview for {_viewModel.RecordedSteps.Count} recorded step(s).");
     }
