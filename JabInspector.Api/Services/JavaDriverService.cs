@@ -1221,28 +1221,33 @@ public sealed class JavaDriverService : IDisposable
     private static JavaWindowInfo? FindWindow(IEnumerable<JavaWindowInfo> windows, JavaWindowSelector selector)
     {
         var candidates = windows.ToList();
-        if (!string.IsNullOrWhiteSpace(selector.Hwnd))
+        if (candidates.Count == 0) return null;
+
+        var ranked = candidates
+            .Select(window => new
+            {
+                Window = window,
+                Score = ScoreWindowSelector(window, selector)
+            })
+            .OrderByDescending(candidate => candidate.Score)
+            .ThenBy(candidate => candidate.Window.Title)
+            .ToList();
+
+        if (ranked.Count == 0) return null;
+
+        var best = ranked[0];
+        if (best.Score <= 0)
         {
-            var normalized = selector.Hwnd.Trim();
-            candidates = candidates
-                .Where(window =>
-                    string.Equals(window.HwndDisplay, normalized, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(window.Hwnd.ToInt64().ToString("X"), normalized.TrimStart('0', 'x', 'X'), StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            var fallback = candidates.FirstOrDefault(window =>
+                !string.IsNullOrWhiteSpace(selector.Title)
+                    ? (selector.ExactTitle
+                        ? string.Equals(window.Title, selector.Title, StringComparison.OrdinalIgnoreCase)
+                        : window.Title.Contains(selector.Title, StringComparison.OrdinalIgnoreCase))
+                    : !string.IsNullOrWhiteSpace(selector.ClassName) && string.Equals(window.ClassName, selector.ClassName, StringComparison.OrdinalIgnoreCase));
+            return fallback ?? candidates.FirstOrDefault();
         }
 
-        if (selector.ProcessId is not null)
-            candidates = candidates.Where(window => window.ProcessId == selector.ProcessId.Value).ToList();
-        if (selector.VmId is not null)
-            candidates = candidates.Where(window => window.VmId == selector.VmId.Value).ToList();
-        if (!string.IsNullOrWhiteSpace(selector.ClassName))
-            candidates = candidates.Where(window => string.Equals(window.ClassName, selector.ClassName, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (!string.IsNullOrWhiteSpace(selector.Title))
-            candidates = candidates.Where(window => selector.ExactTitle
-                ? string.Equals(window.Title, selector.Title, StringComparison.OrdinalIgnoreCase)
-                : window.Title.Contains(selector.Title, StringComparison.OrdinalIgnoreCase)).ToList();
-
-        return candidates.FirstOrDefault();
+        return best.Window;
     }
 
     private static JavaWindowInfo? FindWindow(IEnumerable<JavaWindowInfo> windows, JavaWindowLocator scope)
@@ -1329,6 +1334,44 @@ public sealed class JavaDriverService : IDisposable
     private static bool ScopeProcessMatches(JavaWindowLocator scope, JavaWindowInfo window)
     {
         return true;
+    }
+
+    private static int ScoreWindowSelector(JavaWindowInfo window, JavaWindowSelector selector)
+    {
+        var score = 0;
+
+        if (!string.IsNullOrWhiteSpace(selector.Title))
+        {
+            if (selector.ExactTitle
+                ? string.Equals(window.Title, selector.Title, StringComparison.OrdinalIgnoreCase)
+                : window.Title.Contains(selector.Title, StringComparison.OrdinalIgnoreCase))
+            {
+                score += 80;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(selector.ClassName) &&
+            string.Equals(window.ClassName, selector.ClassName, StringComparison.OrdinalIgnoreCase))
+        {
+            score += 30;
+        }
+
+        if (selector.ProcessId is not null && window.ProcessId == selector.ProcessId.Value)
+            score += 15;
+        if (selector.VmId is not null && window.VmId == selector.VmId.Value)
+            score += 15;
+
+        if (!string.IsNullOrWhiteSpace(selector.Hwnd))
+        {
+            var normalized = selector.Hwnd.Trim();
+            if (string.Equals(window.HwndDisplay, normalized, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(window.Hwnd.ToInt64().ToString("X"), normalized.TrimStart('0', 'x', 'X'), StringComparison.OrdinalIgnoreCase))
+            {
+                score += 100;
+            }
+        }
+
+        return score;
     }
 
     private static bool MatchesRegex(string value, string pattern)
