@@ -333,6 +333,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string WindowsEvidenceSummary => IsJavaMode ? "" : BuildWindowsEvidenceSummary(SelectedWindowsNode, _selectedWindowsElement);
     public string WindowsLocatorCandidatesSummary => IsJavaMode ? "" : BuildWindowsLocatorCandidatesSummary(_selectedWindowsElement);
     public string WindowsMetadataSummary => IsJavaMode ? "" : BuildWindowsMetadataSummary(_selectedWindowsElement);
+    public string WindowsActiveXSummary => IsJavaMode ? "" : BuildWindowsActiveXSummary(_selectedWindowsElement);
+    public string WindowsActiveXDetails => IsJavaMode ? "" : BuildWindowsActiveXDetails(_selectedWindowsElement);
     public IReadOnlyList<LocatorCandidate> WindowsLocatorCandidates => _selectedWindowsElement?.Locators
         .OrderBy(locator => locator.Priority)
         .ThenByDescending(locator => locator.Score)
@@ -2209,6 +2211,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(WindowsLocatorCandidates));
         OnPropertyChanged(nameof(WindowsLocatorCandidatesSummary));
         OnPropertyChanged(nameof(WindowsMetadataSummary));
+        OnPropertyChanged(nameof(WindowsActiveXSummary));
+        OnPropertyChanged(nameof(WindowsActiveXDetails));
         OnPropertyChanged(nameof(SelectedWindowsLocatorCandidateDetails));
         OnPropertyChanged(nameof(WindowsProjectedSourcePreview));
         OnPropertyChanged(nameof(WindowsRawSourcePreview));
@@ -2761,6 +2765,61 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             .OrderBy(pair => pair.Key)
             .Take(8)
             .Select(pair => $"{pair.Key}={pair.Value}"));
+    }
+
+    private static string BuildWindowsActiveXSummary(DesktopElement? projected)
+    {
+        if (projected is null)
+        {
+            return "(no ActiveX/OCX indicators)";
+        }
+
+        var metadata = projected.Metadata;
+        var parts = new List<string>();
+
+        if (metadata.TryGetValue("window.hasOcxModules", out var hasOcx) && !string.IsNullOrWhiteSpace(hasOcx))
+        {
+            parts.Add($"window.hasOcxModules={hasOcx}");
+        }
+
+        if (metadata.TryGetValue("window.legacyModules", out var legacyModules) && !string.IsNullOrWhiteSpace(legacyModules))
+        {
+            parts.Add(legacyModules);
+        }
+
+        if (metadata.TryGetValue("activeX.comEnabled", out var comEnabled) && !string.IsNullOrWhiteSpace(comEnabled))
+        {
+            parts.Add($"comEnabled={comEnabled}");
+        }
+
+        if (metadata.TryGetValue("activeX.typeName", out var typeName) && !string.IsNullOrWhiteSpace(typeName))
+        {
+            parts.Add($"type={typeName}");
+        }
+
+        if (metadata.TryGetValue("activeX.propertyCount", out var propertyCount) && !string.IsNullOrWhiteSpace(propertyCount) && propertyCount != "0")
+        {
+            parts.Add($"properties={propertyCount}");
+        }
+
+        return parts.Count == 0 ? "(no ActiveX/OCX indicators)" : string.Join(Environment.NewLine, parts);
+    }
+
+    private static string BuildWindowsActiveXDetails(DesktopElement? projected)
+    {
+        if (projected is null || projected.Metadata.Count == 0)
+        {
+            return "(no ActiveX details)";
+        }
+
+        var lines = projected.Metadata
+            .Where(pair => pair.Key.StartsWith("activeX.", StringComparison.OrdinalIgnoreCase))
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
+            .OrderBy(pair => pair.Key)
+            .Select(pair => $"{pair.Key}={pair.Value}")
+            .ToList();
+
+        return lines.Count == 0 ? "(no ActiveX details)" : string.Join(Environment.NewLine, lines);
     }
 
     private static string BuildWindowsLocatorCandidateDetails(LocatorCandidate? candidate)

@@ -12,6 +12,12 @@ public sealed class Win32LegacyPanelHeuristics
         var family = Win32ControlClassCatalog.GetFamily(className);
         var isVb6 = Win32ControlClassCatalog.IsVb6Class(className);
         var isCanvasLike = Win32ControlClassCatalog.IsLikelyCanvasLike(className);
+        var hasLegacyModules = node.Metadata.TryGetValue("windowHasLegacyModules", out var hasLegacyModulesValue)
+                               && bool.TryParse(hasLegacyModulesValue, out var parsedLegacyModules)
+                               && parsedLegacyModules;
+        var hasOcxModules = node.Metadata.TryGetValue("windowHasOcxModules", out var hasOcxModulesValue)
+                            && bool.TryParse(hasOcxModulesValue, out var parsedOcxModules)
+                            && parsedOcxModules;
 
         if (isVb6)
         {
@@ -42,6 +48,18 @@ public sealed class Win32LegacyPanelHeuristics
             reasons.Add("no accessible/window text");
         }
 
+        if (hasLegacyModules)
+        {
+            score++;
+            reasons.Add("legacy modules loaded");
+        }
+
+        if (hasOcxModules)
+        {
+            score++;
+            reasons.Add("OCX modules loaded");
+        }
+
         if (node.Bounds.Width >= 160 && node.Bounds.Height >= 80)
         {
             score++;
@@ -56,6 +74,7 @@ public sealed class Win32LegacyPanelHeuristics
 
         var indicator = score switch
         {
+            >= 5 when hasOcxModules => "OCX-backed Custom Panel",
             >= 4 => "Custom Drawn Panel",
             >= 2 => "Likely Container",
             _ => "Real Control"

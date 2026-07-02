@@ -46,6 +46,25 @@ internal static class Win32ControlClassCatalog
             return "treeview";
         }
 
+        if (EqualsAny(
+                value,
+                "MSFlexGridWndClass",
+                "MSHFlexGridWndClass",
+                "VSFlexGrid",
+                "TrueDBGrid80",
+                "TrueOleDBGrid80",
+                "TDBGrid",
+                "vaSpread",
+                "AfxOleControl42"))
+        {
+            return "grid";
+        }
+
+        if (EqualsAny(value, "TabDlg.SSTab", "TabCtlWndClass"))
+        {
+            return "tab";
+        }
+
         return "generic";
     }
 
@@ -56,7 +75,16 @@ internal static class Win32ControlClassCatalog
             return false;
         }
 
-        return className.StartsWith("ThunderRT6", StringComparison.OrdinalIgnoreCase);
+        return className.StartsWith("ThunderRT6", StringComparison.OrdinalIgnoreCase)
+               || EqualsAny(
+                   className,
+                   "MSFlexGridWndClass",
+                   "MSHFlexGridWndClass",
+                   "TabDlg.SSTab",
+                   "VSFlexGrid",
+                   "TrueDBGrid80",
+                   "TrueOleDBGrid80",
+                   "TDBGrid");
     }
 
     public static bool IsLikelyCanvasLike(string className)
@@ -70,6 +98,12 @@ internal static class Win32ControlClassCatalog
                    "ThunderRT6PictureBoxDC",
                    "ThunderRT6UserControlDC",
                    "ThunderRT6Frame",
+                   "MSFlexGridWndClass",
+                   "MSHFlexGridWndClass",
+                   "VSFlexGrid",
+                   "TrueDBGrid80",
+                   "TrueOleDBGrid80",
+                   "TDBGrid",
                    "AfxWnd",
                    "Static",
                    "CustomControl",
@@ -84,6 +118,19 @@ internal static class Win32ControlClassCatalog
         if (IsVb6Class(className))
         {
             return "VB6";
+        }
+
+        if (EqualsAny(
+                className,
+                "MSFlexGridWndClass",
+                "MSHFlexGridWndClass",
+                "TabDlg.SSTab",
+                "VSFlexGrid",
+                "TrueDBGrid80",
+                "TrueOleDBGrid80",
+                "TDBGrid"))
+        {
+            return "ActiveX/OCX";
         }
 
         return "Win32";
@@ -104,13 +151,13 @@ internal static class Win32ControlClassCatalog
     public static bool SupportsSelectionRead(string className)
     {
         var family = GetFamily(className);
-        return family is "combobox" or "listbox" or "tab" or "listview" or "treeview";
+        return family is "combobox" or "listbox" or "tab" or "listview" or "treeview" or "grid";
     }
 
     public static bool SupportsGetText(string className)
     {
         var family = GetFamily(className);
-        return family is "edit" or "button" or "combobox" or "listbox" or "tab" or "listview" or "treeview" or "generic";
+        return family is "edit" or "button" or "combobox" or "listbox" or "tab" or "listview" or "treeview" or "grid" or "generic";
     }
 
     private static bool EqualsAny(string value, params string[] matches) =>

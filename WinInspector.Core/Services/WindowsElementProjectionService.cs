@@ -137,7 +137,14 @@ public sealed class WindowsElementProjectionService
             ["customPanelIndicator"] = node.Metadata.TryGetValue("customPanelIndicator", out var panelIndicator) ? panelIndicator : "",
             ["customPanelScore"] = node.Metadata.TryGetValue("customPanelScore", out var panelScore) ? panelScore : "",
             ["customPanelReasons"] = node.Metadata.TryGetValue("customPanelReasons", out var panelReasons) ? panelReasons : "",
-            ["isVb6"] = node.Metadata.TryGetValue("isVb6", out var isVb6) ? isVb6 : Win32ControlClassCatalog.IsVb6Class(node.ClassName).ToString()
+            ["isVb6"] = node.Metadata.TryGetValue("isVb6", out var isVb6) ? isVb6 : Win32ControlClassCatalog.IsVb6Class(node.ClassName).ToString(),
+            ["window.hasLegacyModules"] = node.Metadata.TryGetValue("windowHasLegacyModules", out var hasLegacyModules) ? hasLegacyModules : "",
+            ["window.hasOcxModules"] = node.Metadata.TryGetValue("windowHasOcxModules", out var hasOcxModules) ? hasOcxModules : "",
+            ["window.legacyModules"] = node.Metadata.TryGetValue("windowLegacyModules", out var legacyModules) ? legacyModules : "",
+            ["window.knownLegacyModuleCount"] = node.Metadata.TryGetValue("windowKnownLegacyModuleCount", out var legacyModuleCount) ? legacyModuleCount : "",
+            ["activeX.comEnabled"] = node.Metadata.TryGetValue("activeXComEnabled", out var activeXComEnabled) ? activeXComEnabled : "",
+            ["activeX.typeName"] = node.Metadata.TryGetValue("activeX.typeName", out var activeXTypeName) ? activeXTypeName : "",
+            ["activeX.propertyCount"] = node.Metadata.TryGetValue("activeX.propertyCount", out var activeXPropertyCount) ? activeXPropertyCount : ""
         };
 
     private static List<LocatorCandidate> BuildLocators(DesktopWindowInfo window, WindowsAutomationNode node, DesktopElement element)

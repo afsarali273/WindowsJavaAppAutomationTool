@@ -458,7 +458,7 @@ Acceptance criteria:
 
 ### Module M060: ActiveX/COM Inspector
 
-Status: Not started
+Status: In progress
 
 Priority: P2
 
@@ -466,11 +466,11 @@ Purpose: Detect and optionally inspect VB6/OCX controls such as MSFlexGrid, Sher
 
 Deliverables:
 
-- [ ] Add OCX/module detector using process module list.
-- [ ] Add known class/control catalog.
-- [ ] Add optional COM/IDispatch reader.
-- [ ] Try common properties: `Rows`, `Cols`, `TextMatrix`, `ListCount`, `Item`, `Caption`, `Value`, `SelectedIndex`, `Text`, `Enabled`, `Visible`.
-- [ ] Add guardrails: feature toggle, timeout, exception isolation.
+- [x] Add OCX/module detector using process module list.
+- [x] Add known class/control catalog.
+- [x] Add optional COM/IDispatch reader.
+- [x] Try common properties: `Rows`, `Cols`, `TextMatrix`, `ListCount`, `Item`, `Caption`, `Value`, `SelectedIndex`, `Text`, `Enabled`, `Visible`.
+- [x] Add guardrails: feature toggle, timeout, exception isolation.
 
 Risks:
 
@@ -481,7 +481,7 @@ Risks:
 Acceptance criteria:
 
 - [ ] ActiveX detection can identify likely OCX-backed controls.
-- [ ] COM extraction is optional and disabled by default for safety.
+- [x] COM extraction is optional and disabled by default for safety.
 
 ### Module M070: GDI Text Capture
 

@@ -2,12 +2,14 @@ using System.Diagnostics;
 using System.Text;
 using WinInspector.Core.Models;
 using WinInspector.Core.Native;
+using WinInspector.Core.Services.ActiveX;
 
 namespace WinInspector.Core.Services;
 
 public sealed class WindowsWindowDiscoveryService
 {
     private readonly WindowsPrivilegeService _privilegeService = new();
+    private readonly ActiveXModuleInspector _activeXModuleInspector = new();
 
     public IReadOnlyList<DesktopWindowInfo> GetTopLevelWindows()
     {
@@ -20,6 +22,8 @@ public sealed class WindowsWindowDiscoveryService
             if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(className)) return true;
             User32DesktopNative.GetWindowThreadProcessId(hwnd, out var processId);
             User32DesktopNative.GetWindowRect(hwnd, out var rect);
+            var processName = TryGetProcessName(processId);
+            var moduleInspection = _activeXModuleInspector.Inspect(processId);
 
             windows.Add(new DesktopWindowInfo
             {
@@ -27,11 +31,15 @@ public sealed class WindowsWindowDiscoveryService
                 Title = title,
                 ClassName = className,
                 ProcessId = processId,
-                ProcessName = TryGetProcessName(processId),
+                ProcessName = processName,
                 Bounds = rect.ToRectangle(),
                 IsVisible = true,
-                ApplicationKind = WindowsTechnologyClassifier.Classify(className, TryGetProcessName(processId), title),
-                IsElevated = _privilegeService.TryIsProcessElevated(processId, out var isElevated) && isElevated
+                ApplicationKind = WindowsTechnologyClassifier.Classify(className, processName, title),
+                IsElevated = _privilegeService.TryIsProcessElevated(processId, out var isElevated) && isElevated,
+                HasLegacyModules = moduleInspection.HasLegacyModules,
+                HasOcxModules = moduleInspection.HasOcxModules,
+                LegacyModuleSummary = moduleInspection.Summary,
+                KnownLegacyModules = moduleInspection.KnownLegacyModules
             });
             return true;
         }, IntPtr.Zero);

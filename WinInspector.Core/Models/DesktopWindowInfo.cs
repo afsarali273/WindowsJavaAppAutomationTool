@@ -13,6 +13,10 @@ public sealed class DesktopWindowInfo
     public required bool IsVisible { get; init; }
     public required WindowsApplicationKind ApplicationKind { get; init; }
     public required bool IsElevated { get; init; }
+    public bool HasLegacyModules { get; init; }
+    public bool HasOcxModules { get; init; }
+    public string LegacyModuleSummary { get; init; } = "";
+    public IReadOnlyList<string> KnownLegacyModules { get; init; } = [];
 
     public string HwndDisplay => $"0x{Hwnd.ToInt64():X}";
     public string DisplayName => string.IsNullOrWhiteSpace(Title) ? $"{ClassName} ({ProcessName})" : $"{Title} ({ProcessName})";

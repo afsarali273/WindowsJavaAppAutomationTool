@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Text;
 using WinInspector.Core.Models;
 using WinInspector.Core.Native;
+using WinInspector.Core.Services.ActiveX;
 using WinInspector.Core.Services.ControlMessages;
 
 namespace WinInspector.Core.Services;
@@ -10,10 +11,12 @@ public sealed class Win32Scanner
 {
     private readonly Win32LegacyPanelHeuristics _legacyHeuristics = new();
     private readonly ControlMessageExtractorRegistry _controlMessageExtractors = new();
+    private readonly ActiveXComInspector _activeXComInspector = new();
 
     public WindowsAutomationNode InspectWindow(DesktopWindowInfo window, int maxDepth = 4, int maxChildren = 200)
     {
         var root = CreateNode(window.Hwnd, null, "window");
+        StampWindowMetadata(root, window);
         PopulateChildren(root, 1, maxDepth, maxChildren);
         return root;
     }
@@ -33,6 +36,7 @@ public sealed class Win32Scanner
 
         var regionRectangle = region.ToRectangle();
         var root = CreateNode(window.Hwnd, null, "window");
+        StampWindowMetadata(root, window);
         if (Intersects(root.Bounds, regionRectangle))
         {
             root.Metadata["regionMatch"] = "intersects";
@@ -201,7 +205,59 @@ public sealed class Win32Scanner
         node.Metadata["customPanelIndicator"] = assessment.Indicator;
         node.Metadata["customPanelReasons"] = string.Join(", ", assessment.Reasons);
 
+        if (parent is not null)
+        {
+            InheritWindowMetadata(parent, node);
+        }
+
+        StampActiveXMetadata(node);
+
         return node;
+    }
+
+    private static void StampWindowMetadata(WindowsAutomationNode node, DesktopWindowInfo window)
+    {
+        node.Metadata["windowHasLegacyModules"] = window.HasLegacyModules.ToString();
+        node.Metadata["windowHasOcxModules"] = window.HasOcxModules.ToString();
+        node.Metadata["windowLegacyModules"] = window.LegacyModuleSummary;
+        node.Metadata["windowKnownLegacyModuleCount"] = window.KnownLegacyModules.Count.ToString();
+    }
+
+    private static void InheritWindowMetadata(WindowsAutomationNode parent, WindowsAutomationNode child)
+    {
+        foreach (var key in new[] { "windowHasLegacyModules", "windowHasOcxModules", "windowLegacyModules", "windowKnownLegacyModuleCount" })
+        {
+            if (parent.Metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+            {
+                child.Metadata[key] = value;
+            }
+        }
+    }
+
+    private void StampActiveXMetadata(WindowsAutomationNode node)
+    {
+        node.Metadata["activeXComEnabled"] = _activeXComInspector.IsEnabled.ToString();
+        if (!_activeXComInspector.IsEnabled)
+        {
+            return;
+        }
+
+        var evidence = _activeXComInspector.TryInspect(node);
+        if (evidence is null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(evidence.TypeName))
+        {
+            node.Metadata["activeX.typeName"] = evidence.TypeName;
+        }
+
+        node.Metadata["activeX.propertyCount"] = evidence.Properties.Count.ToString();
+        foreach (var pair in evidence.Properties)
+        {
+            node.Metadata[$"activeX.{pair.Key}"] = pair.Value;
+        }
     }
 
     private static Rectangle ReadClientBounds(IntPtr hwnd)

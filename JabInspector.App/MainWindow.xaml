@@ -465,6 +465,8 @@
                       <RowDefinition/>
                       <RowDefinition/>
                       <RowDefinition/>
+                      <RowDefinition/>
+                      <RowDefinition/>
                     </Grid.RowDefinitions>
                     <TextBlock Style="{StaticResource PropertyLabel}" Text="Evidence"/>
                     <TextBlock Grid.Column="1" Style="{StaticResource PropertyValue}" Text="{Binding WindowsEvidenceSummary}" TextWrapping="Wrap"/>
@@ -472,6 +474,10 @@
                     <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding WindowsLocatorCandidatesSummary}" TextWrapping="Wrap"/>
                     <TextBlock Grid.Row="2" Style="{StaticResource PropertyLabel}" Text="Metadata"/>
                     <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding WindowsMetadataSummary}" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="3" Style="{StaticResource PropertyLabel}" Text="ActiveX"/>
+                    <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding WindowsActiveXSummary}" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="4" Style="{StaticResource PropertyLabel}" Text="AX details"/>
+                    <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding WindowsActiveXDetails}" TextWrapping="Wrap"/>
                   </Grid>
 
                   <TextBlock Style="{StaticResource SectionTitle}" Text="LOCATOR CANDIDATES" Margin="0,10,0,5"/>
