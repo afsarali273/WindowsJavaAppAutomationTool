@@ -7,6 +7,8 @@ namespace WinInspector.Core.Services;
 
 public sealed class WindowsWindowDiscoveryService
 {
+    private readonly WindowsPrivilegeService _privilegeService = new();
+
     public IReadOnlyList<DesktopWindowInfo> GetTopLevelWindows()
     {
         var windows = new List<DesktopWindowInfo>();
@@ -28,7 +30,8 @@ public sealed class WindowsWindowDiscoveryService
                 ProcessName = TryGetProcessName(processId),
                 Bounds = rect.ToRectangle(),
                 IsVisible = true,
-                ApplicationKind = WindowsTechnologyClassifier.Classify(className, TryGetProcessName(processId), title)
+                ApplicationKind = WindowsTechnologyClassifier.Classify(className, TryGetProcessName(processId), title),
+                IsElevated = _privilegeService.TryIsProcessElevated(processId, out var isElevated) && isElevated
             });
             return true;
         }, IntPtr.Zero);
