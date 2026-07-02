@@ -76,4 +76,36 @@ public final class JavaWindowScope {
     public List<JavaElementHandle> findChildElements(LocatorSuggestion parentLocator, Integer maxDepth, Integer maxResults, boolean includeSelf) {
         return automation.findChildElements(parentLocator, maxDepth, maxResults, includeSelf, selector);
     }
+
+    public List<JavaElementHandle> findTableRows(String parentObjectKey) {
+        return automation.findTableRows(parentObjectKey, selector);
+    }
+
+    public List<JavaElementHandle> findTableRows(LocatorSuggestion parentLocator) {
+        return automation.findTableRows(parentLocator, selector);
+    }
+
+    public List<JavaElementHandle> findTableCells(String parentObjectKey) {
+        return automation.findTableCells(parentObjectKey, selector);
+    }
+
+    public List<JavaElementHandle> findTableCells(LocatorSuggestion parentLocator) {
+        return automation.findTableCells(parentLocator, selector);
+    }
+
+    public JavaElementHandle findTableCell(String parentObjectKey, int rowIndex, int columnIndex) {
+        return automation.findTableCell(parentObjectKey, rowIndex, columnIndex, selector);
+    }
+
+    public JavaElementHandle findTableCell(LocatorSuggestion parentLocator, int rowIndex, int columnIndex) {
+        return automation.findTableCell(parentLocator, rowIndex, columnIndex, selector);
+    }
+
+    public String getTableCellText(String parentObjectKey, int rowIndex, int columnIndex) {
+        return automation.getTableCellText(parentObjectKey, rowIndex, columnIndex, selector);
+    }
+
+    public String getTableCellText(LocatorSuggestion parentLocator, int rowIndex, int columnIndex) {
+        return automation.getTableCellText(parentLocator, rowIndex, columnIndex, selector);
+    }
 }

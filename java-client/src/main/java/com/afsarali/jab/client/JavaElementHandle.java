@@ -183,11 +183,76 @@ public final class JavaElementHandle {
         return wrap(target.findChildSnapshots(maxDepth, maxResults, includeSelf));
     }
 
+    public List<JavaElementHandle> findTableRows() {
+        return filter(target.findChildSnapshots(), JavaElementSnapshot::isTableLikeRow);
+    }
+
+    public List<JavaElementHandle> findTableRows(Integer maxResults) {
+        return take(filter(target.findChildSnapshots(), JavaElementSnapshot::isTableLikeRow), maxResults);
+    }
+
+    public List<JavaElementHandle> findTableCells() {
+        return filter(target.findChildSnapshots(), JavaElementSnapshot::isTableLikeCell);
+    }
+
+    public List<JavaElementHandle> findTableCells(Integer rowIndex) {
+        return filter(target.findChildSnapshots(), snapshot -> snapshot.isTableLikeCell() && snapshot.tableLikeRowIndex() == safeInt(rowIndex));
+    }
+
+    public List<JavaElementHandle> findTableCells(Integer rowIndex, Integer columnIndex) {
+        return filter(target.findChildSnapshots(), snapshot ->
+                snapshot.isTableLikeCell()
+                        && snapshot.tableLikeRowIndex() == safeInt(rowIndex)
+                        && snapshot.tableLikeColumnIndex() == safeInt(columnIndex));
+    }
+
+    public JavaElementHandle findTableCell(int rowIndex, int columnIndex) {
+        return firstOrThrow(findTableCells(rowIndex, columnIndex),
+                "table cell at row " + rowIndex + ", column " + columnIndex);
+    }
+
+    public String getTableCellText(int rowIndex, int columnIndex) {
+        return findTableCell(rowIndex, columnIndex).getText();
+    }
+
+    public JavaElementHandle clickTableCell(int rowIndex, int columnIndex) {
+        return findTableCell(rowIndex, columnIndex).click();
+    }
+
+    public JavaElementHandle doubleClickTableCell(int rowIndex, int columnIndex) {
+        return findTableCell(rowIndex, columnIndex).doubleClick();
+    }
+
     private List<JavaElementHandle> wrap(List<JavaElementSnapshot> snapshots) {
         if (snapshots == null || snapshots.isEmpty()) return List.of();
         return snapshots.stream()
                 .map(target::child)
                 .collect(Collectors.toList());
+    }
+
+    private List<JavaElementHandle> filter(List<JavaElementSnapshot> snapshots, java.util.function.Predicate<JavaElementSnapshot> predicate) {
+        if (snapshots == null || snapshots.isEmpty()) return List.of();
+        return snapshots.stream()
+                .filter(predicate)
+                .map(target::child)
+                .collect(Collectors.toList());
+    }
+
+    private List<JavaElementHandle> take(List<JavaElementHandle> items, Integer maxResults) {
+        if (items == null || items.isEmpty()) return List.of();
+        if (maxResults == null || maxResults < 1 || maxResults >= items.size()) return items;
+        return items.subList(0, Math.min(maxResults, items.size()));
+    }
+
+    private JavaElementHandle firstOrThrow(List<JavaElementHandle> items, String label) {
+        if (items == null || items.isEmpty()) {
+            throw new ApiException(404, "Could not find " + label + ".");
+        }
+        return items.get(0);
+    }
+
+    private static int safeInt(Integer value) {
+        return value == null ? -1 : value;
     }
 
     private interface ActionTarget {
