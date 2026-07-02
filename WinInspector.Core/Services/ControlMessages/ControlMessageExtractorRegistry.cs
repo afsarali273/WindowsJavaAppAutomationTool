@@ -14,7 +14,8 @@ public sealed class ControlMessageExtractorRegistry
             ["listbox"] = new ListBoxExtractor(),
             ["tab"] = new TabControlExtractor(),
             ["listview"] = new ListViewExtractor(),
-            ["treeview"] = new TreeViewExtractor()
+            ["treeview"] = new TreeViewExtractor(),
+            ["legacy-container"] = new LegacyContainerExtractor()
         };
     }
 
@@ -24,6 +25,34 @@ public sealed class ControlMessageExtractorRegistry
             ? rawFamily
             : Win32ControlClassCatalog.GetFamily(parent.ClassName);
 
-        return _extractors.TryGetValue(family, out var extractor) && extractor.TryPopulateVirtualChildren(parent, maxChildren);
+        if (_extractors.TryGetValue(family, out var extractor) && extractor.TryPopulateVirtualChildren(parent, maxChildren))
+        {
+            return true;
+        }
+
+        if (ShouldTryLegacyContainer(parent))
+        {
+            return _extractors["legacy-container"].TryPopulateVirtualChildren(parent, maxChildren);
+        }
+
+        return false;
+    }
+
+    private static bool ShouldTryLegacyContainer(WindowsAutomationNode parent)
+    {
+        var className = parent.ClassName ?? string.Empty;
+        if (Win32ControlClassCatalog.IsLikelyCanvasLike(className) || Win32ControlClassCatalog.IsVb6Class(className))
+        {
+            return true;
+        }
+
+        if (parent.Metadata.TryGetValue("customPanelIndicator", out var indicator) &&
+            !string.IsNullOrWhiteSpace(indicator) &&
+            !string.Equals(indicator, "Real Control", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return string.Equals(className, "ThunderRT6UserControlDC", StringComparison.OrdinalIgnoreCase);
     }
 }
