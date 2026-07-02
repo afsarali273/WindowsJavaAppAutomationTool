@@ -1270,8 +1270,6 @@ public sealed class JavaDriverService : IDisposable
     {
         if (!string.IsNullOrWhiteSpace(entry.WindowHwndDisplay) &&
             string.Equals(entry.WindowHwndDisplay, window.HwndDisplay, StringComparison.OrdinalIgnoreCase)) return true;
-        if (entry.WindowProcessId != 0 && entry.WindowProcessId != window.ProcessId) return false;
-        if (entry.WindowVmId != 0 && entry.WindowVmId != window.VmId) return false;
         if (!string.IsNullOrWhiteSpace(entry.WindowClassName) &&
             !string.Equals(entry.WindowClassName, window.ClassName, StringComparison.OrdinalIgnoreCase)) return false;
         return string.IsNullOrWhiteSpace(entry.WindowTitle) ||
@@ -1282,8 +1280,6 @@ public sealed class JavaDriverService : IDisposable
     {
         if (!string.IsNullOrWhiteSpace(step.WindowHwndDisplay) &&
             string.Equals(step.WindowHwndDisplay, window.HwndDisplay, StringComparison.OrdinalIgnoreCase)) return true;
-        if (step.WindowProcessId != 0 && step.WindowProcessId != window.ProcessId) return false;
-        if (step.WindowVmId != 0 && step.WindowVmId != window.VmId) return false;
         if (!string.IsNullOrWhiteSpace(step.WindowClassName) &&
             !string.Equals(step.WindowClassName, window.ClassName, StringComparison.OrdinalIgnoreCase)) return false;
         return string.IsNullOrWhiteSpace(step.WindowTitle) ||
@@ -1296,8 +1292,8 @@ public sealed class JavaDriverService : IDisposable
             Hwnd: FirstNonEmpty(step?.WindowHwndDisplay, entry?.WindowHwndDisplay),
             Title: FirstNonEmpty(step?.WindowTitle, entry?.WindowTitle),
             ClassName: FirstNonEmpty(step?.WindowClassName, entry?.WindowClassName),
-            ProcessId: step?.WindowProcessId > 0 ? step.WindowProcessId : entry?.WindowProcessId > 0 ? entry.WindowProcessId : null,
-            VmId: step?.WindowVmId > 0 ? step.WindowVmId : entry?.WindowVmId > 0 ? entry.WindowVmId : null,
+            ProcessId: null,
+            VmId: null,
             ExactTitle: true);
     }
 
@@ -1312,8 +1308,7 @@ public sealed class JavaDriverService : IDisposable
 
         return session.Windows.FirstOrDefault(x =>
             string.Equals(x.Title, step.WindowTitle, StringComparison.Ordinal)
-            && string.Equals(x.ClassName, step.WindowClassName, StringComparison.Ordinal)
-            && (step.WindowProcessId == 0 || x.ProcessId == 0 || x.ProcessId == step.WindowProcessId));
+            && string.Equals(x.ClassName, step.WindowClassName, StringComparison.Ordinal));
     }
 
     private static bool WindowMatchesScope(JavaWindowLocator scope, JavaWindowInfo window)
@@ -1333,8 +1328,6 @@ public sealed class JavaDriverService : IDisposable
 
     private static bool ScopeProcessMatches(JavaWindowLocator scope, JavaWindowInfo window)
     {
-        if (scope.ProcessId != 0 && scope.ProcessId != window.ProcessId) return false;
-        if (scope.VmId != 0 && scope.VmId != window.VmId) return false;
         return true;
     }
 
