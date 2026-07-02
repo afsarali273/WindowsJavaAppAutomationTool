@@ -42,6 +42,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     private DateTime _lastAutoAttachProbeAtUtc;
     private IntPtr _recordingBadgeTargetHwnd;
     private NativePoint? _lastHoverPoint;
+    private NativePoint? _lastRecordingHoverPoint;
     private AccessibleNode? _lastHierarchyNode;
     private AccessibleNode? _hoverSelectingNode;
     private AccessibleNode? _lastActivatedNode;
@@ -247,6 +248,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         { _viewModel.Log("Attach to a Java window before enabling hover inspection."); return; }
         _hoverInspecting = !_hoverInspecting;
         _lastHoverPoint = null;
+        _lastRecordingHoverPoint = null;
         _lastHierarchyNode = null;
         _hoverSelectingNode = null;
         if (_hoverInspecting)
@@ -265,33 +267,9 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     {
         if (!_hoverInspecting) return;
         if (!GetCursorPos(out var point)) return;
-        TryAutoAttachJavaWindowFromPoint(point, "hover inspect");
-        if (_viewModel.Root is null || _viewModel.CurrentWindow is null) return;
         if (_lastHoverPoint is { } previous && Math.Abs(previous.X - point.X) < 2 && Math.Abs(previous.Y - point.Y) < 2) return;
         _lastHoverPoint = point;
-        var inspection = _viewModel.InspectJavaAtScreenPoint(
-            new JabInspector.Core.Models.NativePoint(point.X, point.Y),
-            (x, y) => _viewModel.InspectAt(x, y),
-            GetPhysicalBounds,
-            (candidateBounds, candidatePoint) => Contains(candidateBounds, new NativePoint { X = candidatePoint.X, Y = candidatePoint.Y }),
-            "[HOVER]");
-        if (inspection is null) { HighlightOverlay.HidePersistent(); return; }
-        var node = inspection.ResolvedNode;
-        var bounds = inspection.PhysicalBounds;
-        _viewModel.SelectedNode = node;
-        if (!ReferenceEquals(_lastHierarchyNode, node))
-        {
-            _hoverSelectingNode = node;
-            SelectNodeInHierarchy(node);
-            _lastHierarchyNode = node;
-        }
-        DetailsTabs.SelectedItem = PropertiesTab;
-        var visualNode = inspection.VisibleAncestor;
-        if (!ReferenceEquals(visualNode, node))
-        {
-            bounds = GetPhysicalBounds(visualNode);
-        }
-        if (HasOnScreenBounds(bounds)) HighlightOverlay.ShowPersistent(bounds); else HighlightOverlay.HidePersistent();
+        TryShowJavaHoverPreview(point, "hover inspect");
     }
 
     private void PickerButton_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -332,48 +310,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     {
         if (!_pickerActive) return;
         if (!GetCursorPos(out var point)) return;
-
-        TryAutoAttachJavaWindowFromPoint(point, "picker");
-
-        if (_viewModel.Root is null || _viewModel.CurrentWindow is null)
-        {
-            HighlightOverlay.HidePersistent();
-            return;
-        }
-
-        var inspection = _viewModel.InspectJavaAtScreenPoint(
-            new JabInspector.Core.Models.NativePoint(point.X, point.Y),
-            (x, y) => _viewModel.InspectAt(x, y),
-            GetPhysicalBounds,
-            (candidateBounds, candidatePoint) => Contains(candidateBounds, new NativePoint { X = candidatePoint.X, Y = candidatePoint.Y }),
-            "[PICKER]");
-        if (inspection is null)
-        {
-            HighlightOverlay.HidePersistent();
-            return;
-        }
-
-        var node = inspection.ResolvedNode;
-        var bounds = inspection.PhysicalBounds;
-        _viewModel.SelectedNode = node;
-        if (!ReferenceEquals(_lastHierarchyNode, node))
-        {
-            _hoverSelectingNode = node;
-            SelectNodeInHierarchy(node);
-            _lastHierarchyNode = node;
-        }
-
-        DetailsTabs.SelectedItem = PropertiesTab;
-        var visualNode = inspection.VisibleAncestor;
-        if (!ReferenceEquals(visualNode, node))
-        {
-            bounds = GetPhysicalBounds(visualNode);
-        }
-
-        if (HasOnScreenBounds(bounds))
-            HighlightOverlay.ShowPersistent(bounds);
-        else
-            HighlightOverlay.HidePersistent();
+        TryShowJavaHoverPreview(point, "picker");
     }
 
     private void RecordingMonitorTimer_Tick(object? sender, EventArgs e)
@@ -421,6 +358,17 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
                     _viewModel.Log("[RECORDER] Capture pipeline completed.");
                 }
             }));
+        }
+
+        if (!leftDown && GetCursorPos(out var hoverPoint))
+        {
+            if (_lastRecordingHoverPoint is null
+                || Math.Abs(_lastRecordingHoverPoint.Value.X - hoverPoint.X) >= 2
+                || Math.Abs(_lastRecordingHoverPoint.Value.Y - hoverPoint.Y) >= 2)
+            {
+                _lastRecordingHoverPoint = hoverPoint;
+                TryShowJavaHoverPreview(hoverPoint, "recording hover");
+            }
         }
     }
 
@@ -884,6 +832,47 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         }
 
         return HasOnScreenBounds(bounds);
+    }
+
+    private bool TryShowJavaHoverPreview(NativePoint point, string reason)
+    {
+        TryAutoAttachJavaWindowFromPoint(point, reason);
+        if (_viewModel.Root is null || _viewModel.CurrentWindow is null)
+        {
+            HighlightOverlay.HidePersistent();
+            return false;
+        }
+
+        var inspection = _viewModel.InspectJavaAtScreenPoint(
+            new JabInspector.Core.Models.NativePoint(point.X, point.Y),
+            (x, y) => _viewModel.InspectAt(x, y),
+            GetPhysicalBounds,
+            (candidateBounds, candidatePoint) => Contains(candidateBounds, new NativePoint { X = candidatePoint.X, Y = candidatePoint.Y }),
+            "[HOVER]");
+        if (inspection is null || inspection.ResolvedNode is null)
+        {
+            HighlightOverlay.HidePersistent();
+            return false;
+        }
+
+        var node = inspection.ResolvedNode;
+        if (!TryGetHighlightBounds(node, out _, out var bounds))
+        {
+            HighlightOverlay.HidePersistent();
+            return false;
+        }
+
+        _viewModel.SelectedNode = node;
+        if (!ReferenceEquals(_lastHierarchyNode, node))
+        {
+            _hoverSelectingNode = node;
+            SelectNodeInHierarchy(node);
+            _lastHierarchyNode = node;
+        }
+
+        DetailsTabs.SelectedItem = PropertiesTab;
+        HighlightOverlay.ShowPersistent(bounds);
+        return true;
     }
 
     private void SelectNodeInHierarchy(AccessibleNode node, int attempt = 0)
@@ -1543,6 +1532,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     private void RecordingBadgeOverlay_StopRequested(object? sender, EventArgs e)
     {
         _viewModel.StopJavaRecordingSession();
+        _lastRecordingHoverPoint = null;
         UpdateRecordingBadge();
         HighlightOverlay.HidePersistent();
         _viewModel.Log("Recording stopped from floating badge controls.");
@@ -1567,6 +1557,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         if (_viewModel.StartJavaRecordingSession(dialog.SessionName, dialog.ApplicationAlias))
         {
             _viewModel.Log($"Started Java recording session '{dialog.SessionName}'.");
+            _lastRecordingHoverPoint = null;
             OpenRecordingStudio();
             UpdateRecordingBadge();
             BringCurrentJavaWindowToForeground("start recording");
@@ -1594,6 +1585,7 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         if (_viewModel.StartJavaRecordingSession(dialog.SessionName, dialog.ApplicationAlias, appendExisting: true))
         {
             _viewModel.Log($"Appending recording steps to '{dialog.SessionName}'.");
+            _lastRecordingHoverPoint = null;
             OpenRecordingStudio();
             UpdateRecordingBadge();
             BringCurrentJavaWindowToForeground("append recording");
