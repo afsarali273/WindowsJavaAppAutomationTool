@@ -22,10 +22,13 @@ internal sealed class LegacyContainerExtractor : ControlMessageExtractorBase
             return false;
         }
 
+        var isThunderUserControl = string.Equals(parent.ClassName, "ThunderRT6UserControlDC", StringComparison.OrdinalIgnoreCase);
+        var childLimit = isThunderUserControl ? Math.Min(maxChildren, 400) : maxChildren;
+        var descendantDepth = isThunderUserControl ? 8 : 4;
+
         try
         {
-            using var session = new ControlMessageRemoteSession(parent.ProcessId);
-            var count = Math.Min(childCount, maxChildren);
+            var count = Math.Min(childCount, childLimit);
             for (var index = 1; index <= count; index++)
             {
                 var childPath = $"msaa:child:{index}";
@@ -35,7 +38,7 @@ internal sealed class LegacyContainerExtractor : ControlMessageExtractorBase
                 if (child is IAccessible childAccessible)
                 {
                     childNode = BuildNodeFromAccessible(childAccessible, OleAccNative.ChildidSelf, parent, parent.NativeHandle, index - 1, childPath, childCount);
-                    PopulateDescendants(childAccessible, childNode, parent.NativeHandle, 1, 4, maxChildren, childPath);
+                    PopulateDescendants(childAccessible, childNode, parent.NativeHandle, 1, descendantDepth, childLimit, childPath);
                 }
                 else
                 {
@@ -110,6 +113,9 @@ internal sealed class LegacyContainerExtractor : ControlMessageExtractorBase
         var description = SafeRead(() => accessible.get_accDescription(childId));
         var value = SafeRead(() => accessible.get_accValue(childId));
         var defaultAction = SafeRead(() => accessible.get_accDefaultAction(childId));
+        var help = SafeRead(() => SafeReadObject(() => accessible.get_accHelp(childId))?.ToString());
+        var keyboardShortcut = SafeRead(() => accessible.get_accKeyboardShortcut(childId));
+        var childCount = SafeReadInt(() => accessible.accChildCount);
 
         var node = new WindowsAutomationNode
         {
@@ -139,12 +145,22 @@ internal sealed class LegacyContainerExtractor : ControlMessageExtractorBase
         node.Metadata["virtualIndex"] = (indexInParent + 1).ToString();
         node.Metadata["virtualItemCount"] = siblingCount.ToString();
         node.Metadata["virtualParentClass"] = parent.ClassName;
+        node.Metadata["virtualParentName"] = parent.Name;
+        node.Metadata["virtualParentRole"] = parent.Role;
+        node.Metadata["virtualParentHwnd"] = parent.NativeHandle == IntPtr.Zero ? "" : $"0x{parent.NativeHandle.ToInt64():X}";
+        node.Metadata["msaa.isThunderUserControl"] = string.Equals(parent.ClassName, "ThunderRT6UserControlDC", StringComparison.OrdinalIgnoreCase).ToString();
         node.Metadata["msaa.path"] = path;
+        node.Metadata["msaa.name"] = name;
         node.Metadata["msaa.role"] = ConvertRole(role);
         node.Metadata["msaa.state"] = ConvertState(state);
         node.Metadata["msaa.description"] = description;
         node.Metadata["msaa.value"] = value;
         node.Metadata["msaa.defaultAction"] = defaultAction;
+        node.Metadata["msaa.help"] = help;
+        node.Metadata["msaa.keyboardShortcut"] = keyboardShortcut;
+        node.Metadata["msaa.childCount"] = childCount.ToString();
+        node.Metadata["msaa.bounds"] = bounds.Width > 0 && bounds.Height > 0 ? $"{bounds.X},{bounds.Y},{bounds.Width},{bounds.Height}" : "";
+        node.Metadata["msaa.roleRaw"] = role?.ToString() ?? "";
         node.Metadata["msaa.childId"] = NormalizeChildId(childId).ToString();
         node.Metadata["msaa.isChildIdOnly"] = (NormalizeChildId(childId) != OleAccNative.ChildidSelf).ToString();
         if (bounds.Width > 0 && bounds.Height > 0)
