@@ -22,6 +22,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly JavaElementInspectionService _javaInspection;
     private readonly JavaObjectRepositoryService _javaRepository = new();
     private readonly JavaNodeResolverService _javaResolver = new();
+    private readonly JavaTableNavigationService _javaTables = new();
     private readonly WindowsWindowDiscoveryService _windowsDiscovery = new();
     private readonly WindowsPrivilegeService _windowsPrivilege = new();
     private readonly WindowsAutomationRouter _windowsRouter = new();
@@ -330,6 +331,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string PropertyTextPreviewValue => IsJavaMode ? FormatTextPreview(SelectedNode) : BuildWindowsTextPreview(SelectedWindowsNode);
     public string PropertyTextDetailsValue => IsJavaMode ? FormatTextDetails(SelectedNode) : BuildWindowsTextDetails(SelectedWindowsNode);
     public string PropertyValueDetailsValue => IsJavaMode ? FormatValueDetails(SelectedNode) : BuildWindowsValueDetails(_selectedWindowsElement);
+    public string PropertyTableSummaryValue => IsJavaMode ? _javaTables.BuildSummary(SelectedNode) : "";
+    public string PropertyTableDetailsValue => IsJavaMode ? _javaTables.BuildDetails(SelectedNode) : "";
     public string WindowsEvidenceSummary => IsJavaMode ? "" : BuildWindowsEvidenceSummary(SelectedWindowsNode, _selectedWindowsElement);
     public string WindowsLocatorCandidatesSummary => IsJavaMode ? "" : BuildWindowsLocatorCandidatesSummary(_selectedWindowsElement);
     public string WindowsMetadataSummary => IsJavaMode ? "" : BuildWindowsMetadataSummary(_selectedWindowsElement);
@@ -2207,6 +2210,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(PropertyTextPreviewValue));
         OnPropertyChanged(nameof(PropertyTextDetailsValue));
         OnPropertyChanged(nameof(PropertyValueDetailsValue));
+        OnPropertyChanged(nameof(PropertyTableSummaryValue));
+        OnPropertyChanged(nameof(PropertyTableDetailsValue));
         OnPropertyChanged(nameof(WindowsEvidenceSummary));
         OnPropertyChanged(nameof(WindowsLocatorCandidates));
         OnPropertyChanged(nameof(WindowsLocatorCandidatesSummary));

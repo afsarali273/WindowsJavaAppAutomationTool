@@ -177,12 +177,26 @@ public final class JavaElement {
                 : driver.findTableCell(locator, rowIndex, columnIndex);
     }
 
+    public JavaElementHandle findTableCell(int rowIndex, String columnHeader) {
+        return locator == null
+                ? driver.findTableCell(objectKey, rowIndex, columnHeader)
+                : driver.findTableCell(locator, rowIndex, columnHeader);
+    }
+
     public String getTableCellText(int rowIndex, int columnIndex) {
         return findTableCell(rowIndex, columnIndex).getText();
     }
 
+    public String getTableCellText(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).getText();
+    }
+
     public JavaElementHandle clickTableCell(int rowIndex, int columnIndex) {
         return findTableCell(rowIndex, columnIndex).click();
+    }
+
+    public JavaElementHandle clickTableCell(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).click();
     }
 
     private String label() {

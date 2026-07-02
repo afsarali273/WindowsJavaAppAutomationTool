@@ -202,11 +202,11 @@ public final class JavaAutomation {
     }
 
     public List<JavaElementHandle> findTableRows(String parentObjectKey, JavaWindowSelector window, Integer maxResults) {
-        return filterTableNodes(findChildSnapshots(parentObjectKey, null, DEFAULT_CHILD_MAX_DEPTH, DEFAULT_CHILD_MAX_RESULTS, false, window), JavaElementSnapshot::isTableLikeRow, window, maxResults);
+        return synthesizeRows(findChildSnapshots(parentObjectKey, null, DEFAULT_CHILD_MAX_DEPTH, DEFAULT_CHILD_MAX_RESULTS, false, window), window, maxResults);
     }
 
     public List<JavaElementHandle> findTableRows(LocatorSuggestion parentLocator, JavaWindowSelector window, Integer maxResults) {
-        return filterTableNodes(findChildSnapshots(null, parentLocator, DEFAULT_CHILD_MAX_DEPTH, DEFAULT_CHILD_MAX_RESULTS, false, window), JavaElementSnapshot::isTableLikeRow, window, maxResults);
+        return synthesizeRows(findChildSnapshots(null, parentLocator, DEFAULT_CHILD_MAX_DEPTH, DEFAULT_CHILD_MAX_RESULTS, false, window), window, maxResults);
     }
 
     public List<JavaElementHandle> findTableCells(String parentObjectKey, JavaWindowSelector window) {
@@ -233,12 +233,28 @@ public final class JavaAutomation {
         return firstTableMatch(findTableCells(parentLocator, window), rowIndex, columnIndex);
     }
 
+    public JavaElementHandle findTableCell(String parentObjectKey, int rowIndex, String columnHeader, JavaWindowSelector window) {
+        return firstTableMatch(findTableCells(parentObjectKey, window), rowIndex, columnHeader);
+    }
+
+    public JavaElementHandle findTableCell(LocatorSuggestion parentLocator, int rowIndex, String columnHeader, JavaWindowSelector window) {
+        return firstTableMatch(findTableCells(parentLocator, window), rowIndex, columnHeader);
+    }
+
     public String getTableCellText(String parentObjectKey, int rowIndex, int columnIndex, JavaWindowSelector window) {
         return findTableCell(parentObjectKey, rowIndex, columnIndex, window).getText();
     }
 
     public String getTableCellText(LocatorSuggestion parentLocator, int rowIndex, int columnIndex, JavaWindowSelector window) {
         return findTableCell(parentLocator, rowIndex, columnIndex, window).getText();
+    }
+
+    public String getTableCellText(String parentObjectKey, int rowIndex, String columnHeader, JavaWindowSelector window) {
+        return findTableCell(parentObjectKey, rowIndex, columnHeader, window).getText();
+    }
+
+    public String getTableCellText(LocatorSuggestion parentLocator, int rowIndex, String columnHeader, JavaWindowSelector window) {
+        return findTableCell(parentLocator, rowIndex, columnHeader, window).getText();
     }
 
     List<JavaElementSnapshot> findChildSnapshots(String parentObjectKey, LocatorSuggestion parentLocator, Integer maxDepth, Integer maxResults, boolean includeSelf, JavaWindowSelector window) {
@@ -265,11 +281,41 @@ public final class JavaAutomation {
                 .collect(java.util.stream.Collectors.toList());
     }
 
+    private List<JavaElementHandle> synthesizeRows(List<JavaElementSnapshot> snapshots, JavaWindowSelector window, Integer maxResults) {
+        if (snapshots == null || snapshots.isEmpty()) return List.of();
+        List<JavaElementHandle> explicitRows = filterTableNodes(snapshots, JavaElementSnapshot::isTableLikeRow, window, maxResults);
+        if (!explicitRows.isEmpty()) return explicitRows;
+        return snapshots.stream()
+                .filter(JavaElementSnapshot::isTableLikeCell)
+                .filter(snapshot -> snapshot.tableLikeRowIndex() >= 0)
+                .collect(java.util.stream.Collectors.groupingBy(JavaElementSnapshot::tableLikeRowIndex))
+                .entrySet()
+                .stream()
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .limit(maxResults == null || maxResults < 1 ? Long.MAX_VALUE : maxResults)
+                .map(entry -> entry.getValue().stream()
+                        .sorted(java.util.Comparator.comparingInt(JavaElementSnapshot::tableLikeColumnIndex))
+                        .findFirst()
+                        .map(snapshot -> JavaElementHandle.from(this, window, snapshot))
+                        .orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     private JavaElementHandle firstTableMatch(List<JavaElementHandle> matches, int rowIndex, int columnIndex) {
         return matches.stream()
                 .filter(handle -> handle.snapshot().tableLikeRowIndex() == rowIndex && handle.snapshot().tableLikeColumnIndex() == columnIndex)
                 .findFirst()
                 .orElseThrow(() -> new ApiException(404, "Could not find table cell at row " + rowIndex + ", column " + columnIndex + "."));
+    }
+
+    private JavaElementHandle firstTableMatch(List<JavaElementHandle> matches, int rowIndex, String columnHeader) {
+        String normalizedHeader = columnHeader == null ? "" : columnHeader.trim();
+        return matches.stream()
+                .filter(handle -> handle.snapshot().tableLikeRowIndex() == rowIndex)
+                .filter(handle -> handle.snapshot().tableLikeColumnHeader() != null && handle.snapshot().tableLikeColumnHeader().equalsIgnoreCase(normalizedHeader))
+                .findFirst()
+                .orElseThrow(() -> new ApiException(404, "Could not find table cell at row " + rowIndex + ", header '" + normalizedHeader + "'."));
     }
 
     DriverResult run(JavaAction action, String objectKey, String text, JavaWindowSelector window) {

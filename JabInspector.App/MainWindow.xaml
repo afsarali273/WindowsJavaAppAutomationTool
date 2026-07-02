@@ -453,6 +453,25 @@
                   <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding PropertyRawIdsValue}"/>
                 </Grid>
 
+                <StackPanel Visibility="{Binding JavaSelectionVisibility}">
+                  <Separator Margin="0,7" Background="{StaticResource BorderBrush}"/>
+                  <TextBlock Style="{StaticResource SectionTitle}" Text="GRID AND ORACLE TABLE" Margin="0,0,0,5"/>
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="88"/>
+                      <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition/>
+                      <RowDefinition/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource PropertyLabel}" Text="Summary"/>
+                    <TextBlock Grid.Column="1" Style="{StaticResource PropertyValue}" Text="{Binding PropertyTableSummaryValue}" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="1" Style="{StaticResource PropertyLabel}" Text="Details"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding PropertyTableDetailsValue}" TextWrapping="Wrap"/>
+                  </Grid>
+                </StackPanel>
+
                 <StackPanel Visibility="{Binding WindowsSelectionVisibility}">
                   <Separator Margin="0,7" Background="{StaticResource BorderBrush}"/>
                   <TextBlock Style="{StaticResource SectionTitle}" Text="WINDOWS EVIDENCE" Margin="0,0,0,5"/>

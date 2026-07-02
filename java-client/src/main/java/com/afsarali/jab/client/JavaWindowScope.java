@@ -101,11 +101,27 @@ public final class JavaWindowScope {
         return automation.findTableCell(parentLocator, rowIndex, columnIndex, selector);
     }
 
+    public JavaElementHandle findTableCell(String parentObjectKey, int rowIndex, String columnHeader) {
+        return automation.findTableCell(parentObjectKey, rowIndex, columnHeader, selector);
+    }
+
+    public JavaElementHandle findTableCell(LocatorSuggestion parentLocator, int rowIndex, String columnHeader) {
+        return automation.findTableCell(parentLocator, rowIndex, columnHeader, selector);
+    }
+
     public String getTableCellText(String parentObjectKey, int rowIndex, int columnIndex) {
         return automation.getTableCellText(parentObjectKey, rowIndex, columnIndex, selector);
     }
 
     public String getTableCellText(LocatorSuggestion parentLocator, int rowIndex, int columnIndex) {
         return automation.getTableCellText(parentLocator, rowIndex, columnIndex, selector);
+    }
+
+    public String getTableCellText(String parentObjectKey, int rowIndex, String columnHeader) {
+        return automation.getTableCellText(parentObjectKey, rowIndex, columnHeader, selector);
+    }
+
+    public String getTableCellText(LocatorSuggestion parentLocator, int rowIndex, String columnHeader) {
+        return automation.getTableCellText(parentLocator, rowIndex, columnHeader, selector);
     }
 }

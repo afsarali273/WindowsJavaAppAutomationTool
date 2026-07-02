@@ -184,11 +184,11 @@ public final class JavaElementHandle {
     }
 
     public List<JavaElementHandle> findTableRows() {
-        return filter(target.findChildSnapshots(), JavaElementSnapshot::isTableLikeRow);
+        return synthesizeRows(target.findChildSnapshots());
     }
 
     public List<JavaElementHandle> findTableRows(Integer maxResults) {
-        return take(filter(target.findChildSnapshots(), JavaElementSnapshot::isTableLikeRow), maxResults);
+        return take(synthesizeRows(target.findChildSnapshots()), maxResults);
     }
 
     public List<JavaElementHandle> findTableCells() {
@@ -211,16 +211,50 @@ public final class JavaElementHandle {
                 "table cell at row " + rowIndex + ", column " + columnIndex);
     }
 
+    public List<JavaElementHandle> findTableCells(String columnHeader) {
+        String normalizedHeader = columnHeader == null ? "" : columnHeader.trim();
+        return filter(target.findChildSnapshots(), snapshot ->
+                snapshot.isTableLikeCell()
+                        && snapshot.tableLikeColumnHeader() != null
+                        && snapshot.tableLikeColumnHeader().equalsIgnoreCase(normalizedHeader));
+    }
+
+    public List<JavaElementHandle> findTableCells(int rowIndex, String columnHeader) {
+        String normalizedHeader = columnHeader == null ? "" : columnHeader.trim();
+        return filter(target.findChildSnapshots(), snapshot ->
+                snapshot.isTableLikeCell()
+                        && snapshot.tableLikeRowIndex() == rowIndex
+                        && snapshot.tableLikeColumnHeader() != null
+                        && snapshot.tableLikeColumnHeader().equalsIgnoreCase(normalizedHeader));
+    }
+
+    public JavaElementHandle findTableCell(int rowIndex, String columnHeader) {
+        return firstOrThrow(findTableCells(rowIndex, columnHeader),
+                "table cell at row " + rowIndex + ", header '" + columnHeader + "'");
+    }
+
     public String getTableCellText(int rowIndex, int columnIndex) {
         return findTableCell(rowIndex, columnIndex).getText();
+    }
+
+    public String getTableCellText(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).getText();
     }
 
     public JavaElementHandle clickTableCell(int rowIndex, int columnIndex) {
         return findTableCell(rowIndex, columnIndex).click();
     }
 
+    public JavaElementHandle clickTableCell(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).click();
+    }
+
     public JavaElementHandle doubleClickTableCell(int rowIndex, int columnIndex) {
         return findTableCell(rowIndex, columnIndex).doubleClick();
+    }
+
+    public JavaElementHandle doubleClickTableCell(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).doubleClick();
     }
 
     private List<JavaElementHandle> wrap(List<JavaElementSnapshot> snapshots) {
@@ -235,6 +269,26 @@ public final class JavaElementHandle {
         return snapshots.stream()
                 .filter(predicate)
                 .map(target::child)
+                .collect(Collectors.toList());
+    }
+
+    private List<JavaElementHandle> synthesizeRows(List<JavaElementSnapshot> snapshots) {
+        if (snapshots == null || snapshots.isEmpty()) return List.of();
+        List<JavaElementHandle> explicitRows = filter(snapshots, JavaElementSnapshot::isTableLikeRow);
+        if (!explicitRows.isEmpty()) return explicitRows;
+        return snapshots.stream()
+                .filter(JavaElementSnapshot::isTableLikeCell)
+                .filter(snapshot -> snapshot.tableLikeRowIndex() >= 0)
+                .collect(Collectors.groupingBy(JavaElementSnapshot::tableLikeRowIndex))
+                .entrySet()
+                .stream()
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .map(entry -> entry.getValue().stream()
+                        .sorted(java.util.Comparator.comparingInt(JavaElementSnapshot::tableLikeColumnIndex))
+                        .findFirst()
+                        .map(target::child)
+                        .orElse(null))
+                .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toList());
     }
 

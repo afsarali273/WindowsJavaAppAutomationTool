@@ -175,16 +175,32 @@ public final class JavaObject {
         return locator == null ? automation.findTableCell(objectKey, rowIndex, columnIndex, window) : automation.findTableCell(locator, rowIndex, columnIndex, window);
     }
 
+    public JavaElementHandle findTableCell(int rowIndex, String columnHeader) {
+        return locator == null ? automation.findTableCell(objectKey, rowIndex, columnHeader, window) : automation.findTableCell(locator, rowIndex, columnHeader, window);
+    }
+
     public String getTableCellText(int rowIndex, int columnIndex) {
         return findTableCell(rowIndex, columnIndex).getText();
+    }
+
+    public String getTableCellText(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).getText();
     }
 
     public JavaElementHandle clickTableCell(int rowIndex, int columnIndex) {
         return findTableCell(rowIndex, columnIndex).click();
     }
 
+    public JavaElementHandle clickTableCell(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).click();
+    }
+
     public JavaElementHandle doubleClickTableCell(int rowIndex, int columnIndex) {
         return findTableCell(rowIndex, columnIndex).doubleClick();
+    }
+
+    public JavaElementHandle doubleClickTableCell(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).doubleClick();
     }
 
     private String label() {

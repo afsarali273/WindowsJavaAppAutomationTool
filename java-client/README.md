@@ -155,6 +155,21 @@ List<JavaElementHandle> descendants = automation
 
 If no parent object is supplied through the low-level API, child search starts from the current window root.
 
+## Oracle-style grid helpers
+
+For Oracle Forms or other Java apps that expose table-like blocks through JAB, the client supports row and cell helpers, including header-based lookup:
+
+```java
+JavaWindowScope download = automation.window(JavaWindowSelector.title("Download").className("SunAwtDialog"));
+
+List<JavaElementHandle> rows = download.findTableRows("download_dialog_root");
+JavaElementHandle cell = download.findTableCell("download_dialog_root", 0, "Bounding Box");
+String text = download.getTableCellText("download_dialog_root", 0, "Bounding Box");
+cell.click();
+```
+
+When the live app does not expose actual row containers, the client synthesizes row handles from the first visible cell in each inferred row so Oracle-style multi-record blocks remain navigable.
+
 ## Runnable example
 
 See this sample:
