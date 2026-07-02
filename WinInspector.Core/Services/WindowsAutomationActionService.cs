@@ -2,6 +2,7 @@ using System.Text;
 using System.Windows.Automation;
 using WinInspector.Core.Models;
 using WinInspector.Core.Native;
+using System.Runtime.InteropServices;
 
 namespace WinInspector.Core.Services;
 
@@ -192,6 +193,11 @@ public sealed class WindowsAutomationActionService
 
     private static bool TryFocusWin32(DesktopWindowInfo window, WindowsAutomationNode node, out string message)
     {
+        if (TryFocusVirtualWin32Selection(window, node, out message))
+        {
+            return true;
+        }
+
         var hwnd = ResolveNativeHandle(window, node);
         if (hwnd == IntPtr.Zero)
         {
@@ -244,6 +250,12 @@ public sealed class WindowsAutomationActionService
             return false;
         }
 
+        if (node.Metadata.TryGetValue("virtualSelectable", out var rawSelectable) && bool.TryParse(rawSelectable, out var selectable) && !selectable)
+        {
+            message = $"{DescribeNode(node)} | route=Win32 Virtual Select | result=Unavailable | reason=This virtual item is currently read-only.";
+            return true;
+        }
+
         if (!node.Metadata.TryGetValue("virtualIndex", out var rawIndex) || !int.TryParse(rawIndex, out var index))
         {
             message = $"{DescribeNode(node)} | route=Win32 Virtual Select | result=Unavailable | reason=Virtual item index was missing.";
@@ -275,10 +287,42 @@ public sealed class WindowsAutomationActionService
                 User32DesktopNative.SendMessage(hwnd, User32DesktopNative.TcmSetCurSel, (IntPtr)index, IntPtr.Zero);
                 message = $"{DescribeNode(node)} | route=Win32 Virtual Tab Select | result=Success | index={index}";
                 return true;
+            case "listview":
+                return TrySelectVirtualListViewItem(hwnd, node, index, out message);
+            case "treeview":
+                return TrySelectVirtualTreeViewItem(hwnd, node, out message);
             default:
                 message = $"{DescribeNode(node)} | route=Win32 Virtual Select | result=Unavailable | reason=Unsupported parent control family '{family}'.";
                 return true;
         }
+    }
+
+    private static bool TryFocusVirtualWin32Selection(DesktopWindowInfo window, WindowsAutomationNode node, out string message)
+    {
+        message = string.Empty;
+        if (!node.Metadata.TryGetValue("isVirtual", out var isVirtual) || !bool.TryParse(isVirtual, out var virtualFlag) || !virtualFlag)
+        {
+            return false;
+        }
+
+        var hwnd = node.Parent?.NativeHandle ?? node.NativeHandle;
+        if (hwnd == IntPtr.Zero)
+        {
+            message = $"{DescribeNode(node)} | route=Win32 Virtual Focus | result=Unavailable | reason=No parent handle was available.";
+            return true;
+        }
+
+        User32DesktopNative.SetForegroundWindow(window.Hwnd);
+        User32DesktopNative.SetFocus(hwnd);
+
+        if (TryInvokeVirtualWin32Selection(node, out var selectMessage))
+        {
+            message = $"{DescribeNode(node)} | route=Win32 Virtual Focus | result=Success | detail={selectMessage}";
+            return true;
+        }
+
+        message = $"{DescribeNode(node)} | route=Win32 Virtual Focus | result=Success | hwnd=0x{hwnd.ToInt64():X}";
+        return true;
     }
 
     private static bool TrySetTextWin32(DesktopWindowInfo window, WindowsAutomationNode node, string text, out string message)
@@ -396,6 +440,13 @@ public sealed class WindowsAutomationActionService
 
     private static string GetTextWin32(DesktopWindowInfo window, WindowsAutomationNode node)
     {
+        if (node.Metadata.TryGetValue("isVirtual", out var isVirtual) && bool.TryParse(isVirtual, out var virtualFlag) && virtualFlag)
+        {
+            return string.IsNullOrWhiteSpace(node.Name)
+                ? $"{DescribeNode(node)} | route=Win32 Virtual Text | result=Unavailable | reason=No virtual item text was captured."
+                : node.Name;
+        }
+
         var hwnd = ResolveNativeHandle(window, node);
         if (hwnd == IntPtr.Zero)
         {
@@ -572,6 +623,91 @@ public sealed class WindowsAutomationActionService
     private static IntPtr ResolveNativeHandle(DesktopWindowInfo window, WindowsAutomationNode node) =>
         node.NativeHandle != IntPtr.Zero ? node.NativeHandle : window.Hwnd;
 
+    private static bool TrySelectVirtualListViewItem(IntPtr hwnd, WindowsAutomationNode node, int index, out string message)
+    {
+        if (!TrySelectListViewIndex(hwnd, node.ProcessId, index))
+        {
+            message = $"{DescribeNode(node)} | route=Win32 Virtual ListView Select | result=Failed | index={index}";
+            return true;
+        }
+
+        message = $"{DescribeNode(node)} | route=Win32 Virtual ListView Select | result=Success | index={index}";
+        return true;
+    }
+
+    private static bool TrySelectListViewIndex(IntPtr hwnd, uint processId, int index)
+    {
+        try
+        {
+            var state = new ListViewItemState
+            {
+                stateMask = User32DesktopNative.LvisFocused | User32DesktopNative.LvisSelected,
+                state = User32DesktopNative.LvisFocused | User32DesktopNative.LvisSelected
+            };
+
+            using var session = new Services.ControlMessages.ControlMessageRemoteSession(processId);
+            var size = Marshal.SizeOf<ListViewItemState>();
+            var remoteState = session.Allocate(size);
+            session.WriteStruct(remoteState, state);
+            var sent = session.TrySendMessage(
+                hwnd,
+                User32DesktopNative.LvmSetItemState,
+                (IntPtr)index,
+                remoteState,
+                200,
+                out _);
+
+            if (!sent)
+            {
+                return false;
+            }
+
+            User32DesktopNative.SendMessage(hwnd, User32DesktopNative.LvmEnsureVisible, (IntPtr)index, (IntPtr)1);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TrySelectVirtualTreeViewItem(IntPtr hwnd, WindowsAutomationNode node, out string message)
+    {
+        if (!node.Metadata.TryGetValue("virtualTreeHandle", out var rawHandle)
+            || string.IsNullOrWhiteSpace(rawHandle)
+            || !TryParseHexHandle(rawHandle, out var itemHandle))
+        {
+            message = $"{DescribeNode(node)} | route=Win32 Virtual TreeView Select | result=Unavailable | reason=Tree item handle metadata was missing.";
+            return true;
+        }
+
+        try
+        {
+            User32DesktopNative.SendMessage(hwnd, User32DesktopNative.TvmEnsureVisible, IntPtr.Zero, itemHandle);
+            User32DesktopNative.SendMessage(hwnd, User32DesktopNative.TvmSelectItem, (IntPtr)User32DesktopNative.TvgnCaret, itemHandle);
+            message = $"{DescribeNode(node)} | route=Win32 Virtual TreeView Select | result=Success | item=0x{itemHandle.ToInt64():X}";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            message = $"{DescribeNode(node)} | route=Win32 Virtual TreeView Select | result=Failed | reason={ex.Message}";
+            return true;
+        }
+    }
+
+    private static bool TryParseHexHandle(string value, out IntPtr handle)
+    {
+        handle = IntPtr.Zero;
+        var normalized = value.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? value[2..] : value;
+        if (!long.TryParse(normalized, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+        {
+            return false;
+        }
+
+        handle = (IntPtr)parsed;
+        return handle != IntPtr.Zero;
+    }
+
     private static string DescribeNode(WindowsAutomationNode node)
     {
         var name = string.IsNullOrWhiteSpace(node.Name) ? "(no name)" : node.Name;
@@ -597,5 +733,12 @@ public sealed class WindowsAutomationActionService
         }
 
         return indices.ToArray();
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ListViewItemState
+    {
+        public uint stateMask;
+        public uint state;
     }
 }

@@ -10,7 +10,7 @@ internal abstract class ControlMessageExtractorBase : IControlMessageExtractor
 
     public abstract bool TryPopulateVirtualChildren(WindowsAutomationNode parent, int maxChildren);
 
-    protected static WindowsAutomationNode CreateVirtualSelectionNode(WindowsAutomationNode parent, string role, int index, string name, int totalCount)
+    protected static WindowsAutomationNode CreateVirtualSelectionNode(WindowsAutomationNode parent, string role, int index, string name, int totalCount, bool selectable = true)
     {
         var node = new WindowsAutomationNode
         {
@@ -42,6 +42,7 @@ internal abstract class ControlMessageExtractorBase : IControlMessageExtractor
         node.Metadata["controlFamily"] = parent.Metadata.TryGetValue("controlFamily", out var family) ? family : Win32ControlClassCatalog.GetFamily(parent.ClassName);
         node.Metadata["legacyTechnology"] = parent.Metadata.TryGetValue("legacyTechnology", out var tech) ? tech : Win32ControlClassCatalog.GetTechnology(parent.ClassName);
         node.Metadata["customPanelIndicator"] = "Real Control";
+        node.Metadata["virtualSelectable"] = selectable.ToString();
         return node;
     }
 

@@ -30,6 +30,27 @@ internal static class User32DesktopNative
     internal const uint TcmGetItemCount = TcmFirst + 4;
     internal const uint TcmGetCurSel = TcmFirst + 11;
     internal const uint TcmSetCurSel = TcmFirst + 12;
+    internal const uint LvmFirst = 0x1000;
+    internal const uint LvmGetItemCount = LvmFirst + 4;
+    internal const uint LvmGetItemRect = LvmFirst + 14;
+    internal const uint LvmEnsureVisible = LvmFirst + 19;
+    internal const uint LvmSetItemState = LvmFirst + 43;
+    internal const uint LvmGetItemTextW = LvmFirst + 115;
+    internal const uint TvmFirst = 0x1100;
+    internal const uint TvmGetItemRect = TvmFirst + 4;
+    internal const uint TvmGetCount = TvmFirst + 5;
+    internal const uint TvmGetNextItem = TvmFirst + 10;
+    internal const uint TvmSelectItem = TvmFirst + 11;
+    internal const uint TvmEnsureVisible = TvmFirst + 20;
+    internal const uint TvmGetItemW = TvmFirst + 62;
+    internal const uint SmtoAbortIfHung = 0x0002;
+    internal const int LvisFocused = 0x0001;
+    internal const int LvisSelected = 0x0002;
+    internal const int LvirBounds = 0x0000;
+    internal const int TvgnRoot = 0x0;
+    internal const int TvgnNext = 0x1;
+    internal const int TvgnChild = 0x4;
+    internal const int TvgnCaret = 0x9;
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct NativeRect
@@ -127,6 +148,16 @@ internal static class User32DesktopNative
 
     [DllImport("user32.dll")]
     internal static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern IntPtr SendMessageTimeout(
+        IntPtr hwnd,
+        uint msg,
+        IntPtr wParam,
+        IntPtr lParam,
+        uint flags,
+        uint timeout,
+        out IntPtr result);
 
     internal static long GetWindowLongPtr(IntPtr hwnd, int index) =>
         IntPtr.Size == 8 ? GetWindowLongPtr64(hwnd, index).ToInt64() : GetWindowLong32(hwnd, index);

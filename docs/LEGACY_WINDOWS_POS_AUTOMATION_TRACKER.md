@@ -325,7 +325,7 @@ Deliverables:
 - [x] Add `OleAccNative` interop.
 - [x] Add `MsaaScanner.InspectWindow`.
 - [x] Add `MsaaScanner.InspectPoint`.
-- [ ] Add `MsaaElementRef` with `IAccessible`, child ID, hwnd, role, state, bounds.
+- [x] Add `MsaaElementRef` with `IAccessible`, child ID, hwnd, role, state, bounds.
 - [x] Add safe recursion with max depth and max child count.
 - [x] Add MSAA default-action executor.
 
@@ -447,7 +447,7 @@ Deliverables:
 - [x] Add extractor registry by class name and style.
 - [x] Extract child virtual elements for list items, combo items, tabs, tree nodes, grid-like controls where possible.
 - [x] Add message-based action executor.
-- [ ] Add timeout and cross-process safety around `SendMessage`.
+- [x] Add timeout and cross-process safety around `SendMessage`.
 
 Acceptance criteria:
 
@@ -1413,8 +1413,8 @@ Goal: read classic controls without OCR.
 Tasks:
 
 - [ ] Add message extractors for Edit, Button, ListBox, ComboBox, Tab.
-- [ ] Add ListView and TreeView after core extractors stabilize.
-- [ ] Generate virtual child elements for items/tabs.
+- [x] Add ListView and TreeView after core extractors stabilize.
+- [x] Generate virtual child elements for items/tabs.
 - [ ] Add message-based actions.
 
 Exit criteria:

@@ -28,6 +28,39 @@ public sealed class MsaaScanner
         return BuildEvidence(accessible, childId, "");
     }
 
+    public MsaaEvidence? InspectFromWindowPoint(DesktopWindowInfo window, int x, int y)
+    {
+        if (!TryGetRootAccessible(window.Hwnd, out var accessible) || accessible is null)
+        {
+            return null;
+        }
+
+        if (TryResolveHitTarget(accessible, x, y, "root", out var targetAccessible, out var childId, out var path))
+        {
+            var evidence = BuildEvidence(targetAccessible, childId, path);
+            if (evidence.ElementRef is not null)
+            {
+                evidence.ElementRef.Hwnd = window.Hwnd;
+            }
+
+            evidence.Metadata["windowHwnd"] = window.HwndDisplay;
+            evidence.Metadata["windowTitle"] = window.Title;
+            evidence.Metadata["probeMethod"] = "accHitTest";
+            return evidence;
+        }
+
+        var fallback = BuildEvidence(accessible, OleAccNative.ChildidSelf, "root");
+        if (fallback.ElementRef is not null)
+        {
+            fallback.ElementRef.Hwnd = window.Hwnd;
+        }
+
+        fallback.Metadata["windowHwnd"] = window.HwndDisplay;
+        fallback.Metadata["windowTitle"] = window.Title;
+        fallback.Metadata["probeMethod"] = "root-fallback";
+        return fallback;
+    }
+
     public bool TryFocus(DesktopWindowInfo window, WindowsAutomationNode node, out string message)
     {
         if (!TryResolve(window, node, out var accessible, out var childId, out message)) return false;
@@ -231,6 +264,67 @@ public sealed class MsaaScanner
         }
 
         return OleAccNative.TryAccessibleObjectFromWindow(hwnd, OleAccNative.ObjidWindow, out accessible);
+    }
+
+    private bool TryResolveHitTarget(IAccessible accessible, int x, int y, string path, out IAccessible targetAccessible, out object targetChildId, out string resolvedPath)
+    {
+        targetAccessible = accessible;
+        targetChildId = OleAccNative.ChildidSelf;
+        resolvedPath = path;
+
+        object? hit = SafeReadObject(() => accessible.accHitTest(x, y));
+        if (hit is null)
+        {
+            return true;
+        }
+
+        if (hit is IAccessible hitAccessible)
+        {
+            targetAccessible = hitAccessible;
+            targetChildId = OleAccNative.ChildidSelf;
+            resolvedPath = $"{path}/hit:self";
+            return true;
+        }
+
+        var childId = NormalizeChildId(hit);
+        if (childId == OleAccNative.ChildidSelf)
+        {
+            return true;
+        }
+
+        resolvedPath = $"{path}/child:{childId}";
+        targetChildId = childId;
+
+        var child = SafeReadObject(() => accessible.get_accChild(childId));
+        if (child is IAccessible childAccessible)
+        {
+            targetAccessible = childAccessible;
+            targetChildId = OleAccNative.ChildidSelf;
+            resolvedPath = $"{resolvedPath}/self";
+
+            var nestedHit = SafeReadObject(() => childAccessible.accHitTest(x, y));
+            if (nestedHit is null)
+            {
+                return true;
+            }
+
+            if (nestedHit is IAccessible nestedAccessible)
+            {
+                targetAccessible = nestedAccessible;
+                targetChildId = OleAccNative.ChildidSelf;
+                resolvedPath = $"{resolvedPath}/hit:self";
+                return true;
+            }
+
+            var nestedChildId = NormalizeChildId(nestedHit);
+            if (nestedChildId != OleAccNative.ChildidSelf)
+            {
+                targetChildId = nestedChildId;
+                resolvedPath = $"{resolvedPath}/child:{nestedChildId}";
+            }
+        }
+
+        return true;
     }
 
     private static Rectangle ReadBounds(IAccessible accessible, object childId)

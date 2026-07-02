@@ -286,9 +286,12 @@ public sealed class WindowsElementProjectionService
 
         if (node.Metadata.TryGetValue("isVirtual", out var isVirtual) && bool.TryParse(isVirtual, out var virtualFlag) && virtualFlag)
         {
-            actions.Add(SupportedAction.Select);
-            actions.Add(SupportedAction.Click);
-            actions.Add(SupportedAction.Invoke);
+            if (!node.Metadata.TryGetValue("virtualSelectable", out var rawSelectable) || !bool.TryParse(rawSelectable, out var selectable) || selectable)
+            {
+                actions.Add(SupportedAction.Select);
+                actions.Add(SupportedAction.Click);
+                actions.Add(SupportedAction.Invoke);
+            }
             return actions.Distinct().ToList();
         }
 

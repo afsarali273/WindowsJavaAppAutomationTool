@@ -36,6 +36,16 @@ internal static class Win32ControlClassCatalog
             return "tab";
         }
 
+        if (EqualsAny(value, "SysListView32") || value.StartsWith("WindowsForms10.SysListView32", StringComparison.OrdinalIgnoreCase))
+        {
+            return "listview";
+        }
+
+        if (EqualsAny(value, "SysTreeView32") || value.StartsWith("WindowsForms10.SysTreeView32", StringComparison.OrdinalIgnoreCase))
+        {
+            return "treeview";
+        }
+
         return "generic";
     }
 
@@ -94,13 +104,13 @@ internal static class Win32ControlClassCatalog
     public static bool SupportsSelectionRead(string className)
     {
         var family = GetFamily(className);
-        return family is "combobox" or "listbox" or "tab";
+        return family is "combobox" or "listbox" or "tab" or "listview" or "treeview";
     }
 
     public static bool SupportsGetText(string className)
     {
         var family = GetFamily(className);
-        return family is "edit" or "button" or "combobox" or "listbox" or "tab" or "generic";
+        return family is "edit" or "button" or "combobox" or "listbox" or "tab" or "listview" or "treeview" or "generic";
     }
 
     private static bool EqualsAny(string value, params string[] matches) =>

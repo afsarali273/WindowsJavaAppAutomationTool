@@ -2362,7 +2362,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
             if (projectedElement?.SourceType == DesktopElementSource.Msaa || node.BackendKind == WindowsAutomationBackendKind.Msaa)
             {
-                var pointEvidence = _msaaScanner.InspectFromPoint(probeX, probeY);
+                var pointEvidence = SelectedWindowsWindow?.Model is { } selectedWindow
+                    ? _msaaScanner.InspectFromWindowPoint(selectedWindow, probeX, probeY)
+                    : _msaaScanner.InspectFromPoint(probeX, probeY);
                 _windowsPointProbePreview = pointEvidence is null
                     ? "MSAA point probe did not return an accessible object for the sampled point."
                     : JsonSerializer.Serialize(new

@@ -12,7 +12,9 @@ public sealed class ControlMessageExtractorRegistry
         {
             ["combobox"] = new ComboBoxExtractor(),
             ["listbox"] = new ListBoxExtractor(),
-            ["tab"] = new TabControlExtractor()
+            ["tab"] = new TabControlExtractor(),
+            ["listview"] = new ListViewExtractor(),
+            ["treeview"] = new TreeViewExtractor()
         };
     }
 
