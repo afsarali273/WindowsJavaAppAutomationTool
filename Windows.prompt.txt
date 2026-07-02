@@ -1,0 +1,1728 @@
+You are a senior Windows desktop automation architect, expert in VB6, legacy POS applications, Win32, MSAA, UI Automation, ActiveX/COM, GDI/GDI+ rendering, OCR, image recognition, recorder design, and resilient automation frameworks.
+
+I want to build an intelligent inspector and automation engine for VB6 and legacy custom-drawn Windows applications, especially POS applications similar to Agilysys InfoGenesis POS. These applications may contain normal Win32/VB6 controls, ActiveX/OCX controls, owner-drawn controls, custom panels, custom menu grids, custom order list panels, payment/tender panels, table layouts, modal popups, and controls that do not expose deeper child elements through normal accessibility APIs.
+
+The goal is to build a tool similar in spirit to Java Access Bridge, but for VB6/custom Windows/POS applications. The tool should intelligently inspect applications, detect whether an element or section is a real control or a custom-drawn panel, generate multiple locator strategies, rank them, retry with fallback strategies, validate actions, and reconstruct virtual child elements when real child elements are not exposed.
+
+The system must support these discovery strategies in priority order:
+
+1. Win32 child window scan
+2. MSAA child scan
+3. UIA Raw View scan
+4. LegacyIAccessiblePattern scan
+5. Control-specific message extraction
+6. ActiveX/COM property extraction
+7. GDI text capture
+8. Backend/config/database lookup
+9. OCR region scan
+10. Template/image detection
+11. Relative coordinate mapping
+
+Design and implement the architecture in C#/.NET, preferably with a WPF or WinUI inspector frontend.
+
+Build this as a serious enterprise-grade automation platform, not just a basic coordinate recorder.
+
+Main objectives:
+
+1. Build an intelligent desktop inspector.
+2. Build a unified element model.
+3. Build real element and virtual element detection.
+4. Build locator generation with multiple fallback strategies.
+5. Build action execution with retry/fallback.
+6. Build screen recognition and region models.
+7. Build POS-specific workflow adapters.
+8. Build a recorder that stores rich locator evidence.
+9. Build validation-driven replay.
+10. Build self-healing locator confidence updates.
+
+The tool should support applications where the OS exposes real controls, and also applications where the UI is custom drawn and only appears as pixels.
+
+Use the following core concept:
+
+The inspector should not return only one locator.
+The inspector should return an element model containing evidence from multiple sources, locator candidates, confidence scores, fallback order, supported actions, and validation suggestions.
+
+Expected high-level architecture:
+
+Universal Legacy Desktop Automation Bridge
+
+* Inspector UI
+
+  * Click-to-inspect
+  * Hover inspect
+  * Region/section inspect
+  * Tree viewer
+  * Screenshot overlay
+  * Real element tree
+  * Virtual element tree
+  * Locator candidate viewer
+  * Action test panel
+  * Recorder panel
+  * Diagnostic panel
+
+* Discovery Engine
+
+  * Win32 scanner
+  * MSAA scanner
+  * UIA scanner
+  * LegacyIAccessible scanner
+  * Control-message scanner
+  * ActiveX/COM scanner
+  * Optional GDI text capture scanner
+  * Backend/config/database lookup module
+  * OCR scanner
+  * Template/image scanner
+  * Relative coordinate mapper
+
+* Element Resolver
+
+  * Merge evidence from all scanners
+  * Deduplicate overlapping elements
+  * Detect real controls
+  * Detect custom-drawn panels
+  * Build virtual child elements
+  * Assign confidence score
+  * Assign element source type
+  * Assign supported actions
+
+* Locator Engine
+
+  * Generate locator candidates
+  * Score/rank locators
+  * Resolve locators at runtime
+  * Support fallback locators
+  * Support self-healing confidence updates
+
+* Action Engine
+
+  * Click
+  * Type
+  * Select
+  * Press key
+  * Get text
+  * Get value
+  * Wait for element
+  * Assert visible
+  * Assert text
+  * Scroll
+  * Drag/drop if possible
+  * Screenshot
+
+* Retry/Fallback Engine
+
+  * Try best locator first
+  * Refresh tree before retry
+  * Try next locator
+  * Use OCR/image fallback
+  * Use relative coordinate fallback only at the end
+  * Capture diagnostic screenshots
+  * Update locator success/failure statistics
+
+* Validation Engine
+
+  * Validate screen changed
+  * Validate text appeared
+  * Validate order list updated
+  * Validate popup appeared/closed
+  * Validate database/log/backend state
+  * Validate receipt/journal output
+  * Validate no unexpected error popup appeared
+
+* Screen Model Layer
+
+  * Identify current screen
+  * Define screen regions
+  * Recognize login/order/payment/error screens
+  * Recognize POS-specific panels
+  * Store reusable region maps
+  * Support relative coordinates within regions
+
+* POS Adapter Layer
+
+  * GenericVb6Adapter
+  * GenericPosAdapter
+  * InfoGenesis-like adapter
+  * Login screen adapter
+  * Order entry adapter
+  * Menu category adapter
+  * Order list adapter
+  * Payment/tender adapter
+  * Popup/error adapter
+  * Receipt/report adapter
+
+Important application realities:
+
+VB6/POS apps may expose real controls like:
+
+* ThunderRT6FormDC
+* ThunderRT6MDIForm
+* ThunderRT6UserControlDC
+* ThunderRT6PictureBoxDC
+* ThunderRT6CommandButton
+* ThunderRT6TextBox
+* ThunderRT6ComboBox
+* ThunderRT6ListBox
+* ThunderRT6Frame
+* ThunderRT6CheckBox
+* ThunderRT6OptionButton
+
+But sometimes a whole menu panel or order list appears only as:
+
+* ThunderRT6PictureBoxDC
+* ThunderRT6UserControlDC
+* AfxWnd
+* Static
+* CustomControl
+* Panel
+* Canvas-like area
+
+In such cases, deeper child elements may not exist at OS level. The tool must reconstruct virtual children using OCR, image matching, GDI text capture, backend data, and region mapping.
+
+Example:
+
+Real OS tree:
+
+MainWindow
+└── ThunderRT6UserControlDC
+
+But visually user sees:
+
+[Drinks]
+[Food]
+[Desserts]
+[Cash]
+[Card]
+[Coffee x1]
+[Burger x1]
+
+The tool should reconstruct:
+
+MainWindow
+└── ThunderRT6UserControlDC
+├── VirtualButton: Drinks
+├── VirtualButton: Food
+├── VirtualButton: Desserts
+├── VirtualButton: Cash
+├── VirtualButton: Card
+├── VirtualListItem: Coffee x1
+└── VirtualListItem: Burger x1
+
+Core implementation requirements:
+
+1. Win32 Scanner
+
+Implement a Win32 scanner that uses:
+
+* EnumWindows
+* EnumChildWindows
+* FindWindow
+* FindWindowEx
+* GetClassName
+* GetWindowText
+* GetWindowRect
+* GetClientRect
+* ClientToScreen
+* ScreenToClient
+* GetDlgCtrlID
+* GetWindowLongPtr
+* GetParent
+* GetAncestor
+* WindowFromPoint
+* ChildWindowFromPoint
+* ChildWindowFromPointEx
+* RealChildWindowFromPoint
+* IsWindowVisible
+* IsWindowEnabled
+* GetWindowThreadProcessId
+* SendMessage
+* PostMessage
+
+The scanner should collect:
+
+* HWND
+* Parent HWND
+* Child HWNDs
+* Class name
+* Window text
+* Control ID
+* Bounds
+* Client bounds
+* Process ID
+* Thread ID
+* Visibility
+* Enabled state
+* Style
+* Extended style
+
+It should show a full HWND tree and support click-to-inspect using WindowFromPoint and child window resolution.
+
+2. MSAA Scanner
+
+Implement MSAA inspection using:
+
+* AccessibleObjectFromWindow
+* AccessibleObjectFromPoint
+* IAccessible::get_accName
+* IAccessible::get_accRole
+* IAccessible::get_accValue
+* IAccessible::get_accDescription
+* IAccessible::get_accState
+* IAccessible::get_accChildCount
+* IAccessible::get_accChild
+* IAccessible::accLocation
+* IAccessible::accHitTest
+* IAccessible::accNavigate
+* IAccessible::get_accDefaultAction
+* IAccessible::accDoDefaultAction
+
+The MSAA scanner should build an accessibility tree separate from the Win32 tree.
+
+It should handle child IDs correctly. Some MSAA children may not be full COM objects and may only be represented by child IDs.
+
+3. UIA Scanner
+
+Implement UI Automation scanning using:
+
+* AutomationElement.FromHandle
+* AutomationElement.FromPoint
+* TreeWalker.RawViewWalker
+* TreeWalker.ControlViewWalker
+* TreeWalker.ContentViewWalker
+* FindAll
+* FindFirst
+* AutomationElement properties:
+
+  * Name
+  * AutomationId
+  * ClassName
+  * ControlType
+  * LocalizedControlType
+  * BoundingRectangle
+  * FrameworkId
+  * ProcessId
+  * NativeWindowHandle
+  * IsEnabled
+  * IsOffscreen
+  * IsControlElement
+  * IsContentElement
+* Patterns:
+
+  * InvokePattern
+  * ValuePattern
+  * TextPattern
+  * SelectionPattern
+  * GridPattern
+  * TablePattern
+  * ScrollPattern
+  * TogglePattern
+  * ExpandCollapsePattern
+  * LegacyIAccessiblePattern
+
+The tool must inspect UIA Raw View, Control View, and Content View. Raw View is especially important for legacy apps.
+
+4. LegacyIAccessiblePattern
+
+Implement support for UIA LegacyIAccessiblePattern and merge its data with MSAA and Win32 evidence.
+
+Collect:
+
+* Name
+* Role
+* State
+* Value
+* Description
+* Default action
+* Child ID
+* DoDefaultAction support
+
+Use LegacyIAccessiblePattern when standard UIA properties are poor but accessibility data still exists through MSAA.
+
+5. Control-specific message extraction
+
+Implement specific extractors for known Win32 control types.
+
+For ListBox:
+
+* LB_GETCOUNT
+* LB_GETTEXT
+* LB_GETTEXTLEN
+* LB_GETITEMRECT
+* LB_GETCURSEL
+* LB_SETCURSEL
+* LB_SELECTSTRING
+
+For ComboBox:
+
+* CB_GETCOUNT
+* CB_GETLBTEXT
+* CB_GETLBTEXTLEN
+* CB_GETCURSEL
+* CB_SETCURSEL
+* CB_SELECTSTRING
+
+For ListView:
+
+* LVM_GETITEMCOUNT
+* LVM_GETITEMTEXT
+* LVM_GETITEMRECT
+* LVM_GETCOLUMN
+* LVM_GETHEADER
+
+For TreeView:
+
+* TVM_GETNEXTITEM
+* TVM_GETITEM
+* TVM_GETITEMRECT
+
+For Edit/TextBox:
+
+* WM_GETTEXT
+* WM_SETTEXT
+* WM_GETTEXTLENGTH
+* EM_GETLINE
+* EM_GETLINECOUNT
+
+For Button:
+
+* BM_CLICK
+* BM_GETCHECK
+* BM_SETCHECK
+
+For Tab controls:
+
+* TCM_GETITEMCOUNT
+* TCM_GETITEM
+* TCM_SETCURSEL
+
+This scanner should detect if a control supports these messages and extract actual data without OCR.
+
+6. ActiveX/COM property extraction
+
+VB6 apps often use ActiveX/OCX controls. Implement a module that can detect OCX/ActiveX controls and attempt COM/IDispatch inspection.
+
+The tool should identify loaded OCX/DLL modules in the process where possible and detect control class names that may represent:
+
+* MSFlexGrid
+* MSHFlexGrid
+* DataGrid
+* Sheridan controls
+* Infragistics controls
+* ComponentOne controls
+* Custom POS OCX controls
+
+Where possible, attempt to inspect properties such as:
+
+* Rows
+* Cols
+* TextMatrix(row, col)
+* ListCount
+* Item(index)
+* Caption
+* Value
+* SelectedIndex
+* Text
+* Enabled
+* Visible
+
+This module should be optional because COM inspection may not always be available.
+
+7. GDI text capture
+
+Design an optional advanced module for custom-drawn controls that intercepts drawn text before it becomes pixels.
+
+Target APIs:
+
+* TextOutA
+* TextOutW
+* ExtTextOutA
+* ExtTextOutW
+* DrawTextA
+* DrawTextW
+* TabbedTextOut
+* BitBlt
+* StretchBlt
+* Rectangle
+* RoundRect
+
+Possible techniques:
+
+* Microsoft Detours
+* EasyHook
+* MinHook
+* Frida
+* DLL injection
+
+The module should capture:
+
+* Drawn text
+* X/Y coordinates
+* Bounds if available
+* Font
+* Color
+* Target HWND/DC if resolvable
+* Timestamp
+* Screen region
+
+The captured text should be converted into virtual elements.
+
+Example:
+
+{
+"source": "gdi",
+"text": "Cash",
+"x": 712,
+"y": 622,
+"hwnd": "0x001A0932",
+"confidence": 0.95
+}
+
+This is more accurate than OCR but should be treated as an advanced/optional feature because it may have security and stability implications.
+
+8. Backend/config/database lookup
+
+For POS applications, the menu items, tender buttons, order list, transaction data, and receipts may come from backend/config/database/log files.
+
+Design a backend lookup layer that can optionally connect to:
+
+* Local database
+* SQL Server
+* Oracle
+* ODBC source
+* Flat files
+* INI files
+* XML files
+* JSON config
+* POS cache files
+* Transaction journal
+* Receipt logs
+* Kitchen printer logs
+* Settlement logs
+
+Use backend lookup for:
+
+* Menu item names
+* Menu category names
+* Tender/payment methods
+* Current order/check items
+* Item codes
+* Prices
+* Tax/service charge
+* Receipt validation
+* Transaction validation
+
+Do not rely only on UI when backend/log validation is available.
+
+9. OCR region scan
+
+Implement OCR as a fallback and virtual element generator, not as the first strategy.
+
+OCR should support:
+
+* Full screenshot OCR
+* Region OCR
+* Text block detection
+* Confidence score
+* Bounding boxes
+* Text grouping
+* Region-specific extraction
+
+For POS, use region OCR such as:
+
+* leftMenu region
+* menuItems region
+* orderList region
+* paymentButtons region
+* footerActions region
+* popup region
+
+Do not OCR the entire screen blindly unless required.
+
+Example screen region model:
+
+{
+"screen": "OrderEntry",
+"regions": {
+"leftMenu": {
+"xRatio": 0.00,
+"yRatio": 0.12,
+"widthRatio": 0.22,
+"heightRatio": 0.78
+},
+"menuItems": {
+"xRatio": 0.23,
+"yRatio": 0.12,
+"widthRatio": 0.45,
+"heightRatio": 0.78
+},
+"orderList": {
+"xRatio": 0.70,
+"yRatio": 0.12,
+"widthRatio": 0.28,
+"heightRatio": 0.70
+}
+}
+}
+
+10. Template/image detection
+
+Implement template matching for stable visual elements.
+
+Use this for:
+
+* POS buttons
+* Tender buttons
+* Menu icons
+* Table buttons
+* Payment icons
+* Frequent error popups
+* Receipt buttons
+
+Template matching should store:
+
+* Template image path
+* Source screenshot crop
+* Match confidence
+* Region restriction
+* Scale tolerance
+* DPI awareness
+
+It should work together with OCR, not replace OCR.
+
+For example, find “Cash” using:
+
+* OCR text “Cash”
+* Button-like rectangle around text
+* Template match of cash button
+* Known payment region
+
+11. Relative coordinate mapping
+
+Coordinates should be the last fallback.
+
+Never prefer absolute screen coordinates.
+
+Use coordinates relative to:
+
+* Main application window
+* Specific parent HWND
+* Screen region
+* Custom panel
+* POS screen area
+
+Example:
+
+{
+"type": "relative-coordinate",
+"relativeTo": "paymentButtons",
+"xRatio": 0.74,
+"yRatio": 0.81
+}
+
+This survives different screen resolutions better than fixed x/y.
+
+12. Custom panel detection
+
+Implement an intelligent detector that decides whether a selected element or section is a real-control container or custom-drawn panel.
+
+Signals of custom-drawn panel:
+
+* Win32 child count is 0 or very low
+* MSAA child count is 0
+* UIA Raw View returns only Pane/Client/Custom
+* Multiple click points inside panel return same HWND
+* Element names are empty
+* OCR finds multiple text blocks inside the panel
+* Screenshot shows multiple button-like regions
+* Control class is PictureBox/UserControl/custom canvas-like
+* No Invoke/Value/Text/Grid patterns are available
+
+Implement scoring:
+
+If score >= threshold, classify as CustomDrawnPanel.
+
+Example pseudo-code:
+
+public bool IsCustomDrawnPanel(InspectionResult result)
+{
+int score = 0;
+
+```
+if (result.Win32ChildCount == 0) score++;
+if (result.MsaaChildCount == 0) score++;
+if (result.UiaChildCount <= 1) score++;
+if (result.OcrTextBlocks.Count >= 3) score++;
+if (result.DetectedButtonRegions.Count >= 3) score++;
+if (result.SameHwndForMultiplePoints) score++;
+if (result.PrimaryClassName.Contains("PictureBox") || result.PrimaryClassName.Contains("UserControl")) score++;
+
+return score >= 3;
+```
+
+}
+
+13. Unified element model
+
+Create a unified DesktopElement model.
+
+Example:
+
+public class DesktopElement
+{
+public string Id { get; set; }
+public string Name { get; set; }
+public string Role { get; set; }
+public Rectangle Bounds { get; set; }
+
+```
+public string SourceType { get; set; }
+// win32, msaa, uia, legacyIAccessible, control-message, activeX, gdi, ocr, image, virtual, coordinate
+
+public IntPtr? Hwnd { get; set; }
+public string ClassName { get; set; }
+public int? ControlId { get; set; }
+
+public string ParentId { get; set; }
+public List<string> ChildIds { get; set; } = new();
+
+public double Confidence { get; set; }
+
+public List<LocatorCandidate> Locators { get; set; } = new();
+public List<string> SupportedActions { get; set; } = new();
+
+public Dictionary<string, object> Metadata { get; set; } = new();
+```
+
+}
+
+Create LocatorCandidate:
+
+public class LocatorCandidate
+{
+public string Type { get; set; }
+// win32, msaa, uia, legacyIAccessible, control-message, activeX, gdi-text, ocr, image-template, relative-coordinate, absolute-coordinate
+
+```
+public string Value { get; set; }
+
+public Rectangle? Region { get; set; }
+public double Confidence { get; set; }
+public int Priority { get; set; }
+public int Score { get; set; }
+
+public Dictionary<string, object> Properties { get; set; } = new();
+```
+
+}
+
+Create ElementEvidence:
+
+public class ElementEvidence
+{
+public Win32Evidence Win32 { get; set; }
+public MsaaEvidence Msaa { get; set; }
+public UiaEvidence Uia { get; set; }
+public LegacyAccessibleEvidence LegacyIAccessible { get; set; }
+public ControlMessageEvidence ControlMessages { get; set; }
+public ActiveXEvidence ActiveX { get; set; }
+public GdiEvidence Gdi { get; set; }
+public BackendEvidence Backend { get; set; }
+public OcrEvidence Ocr { get; set; }
+public ImageEvidence Image { get; set; }
+public CoordinateEvidence Coordinate { get; set; }
+}
+
+14. Inspection pipeline
+
+Implement point inspection:
+
+public DesktopElement InspectPoint(int x, int y)
+{
+var evidence = new ElementEvidence();
+
+```
+evidence.Win32 = win32Scanner.InspectFromPoint(x, y);
+evidence.Msaa = msaaScanner.InspectFromPoint(x, y);
+evidence.Uia = uiaScanner.InspectFromPoint(x, y);
+evidence.LegacyIAccessible = legacyScanner.TryFromUia(evidence.Uia);
+evidence.ControlMessages = controlMessageScanner.TryExtract(evidence.Win32);
+evidence.ActiveX = activeXScanner.TryExtract(evidence.Win32);
+evidence.Gdi = gdiCapture.TryFindTextNearPoint(x, y);
+evidence.Backend = backendLookup.TryMatchNearPoint(x, y);
+evidence.Ocr = ocrScanner.ReadAround(x, y);
+evidence.Image = imageScanner.DetectAround(x, y);
+evidence.Coordinate = coordinateMapper.Map(x, y);
+
+var element = elementResolver.Merge(evidence);
+element.Locators = locatorGenerator.Generate(element, evidence);
+element.Locators = locatorRanker.Rank(element.Locators);
+
+return element;
+```
+
+}
+
+Implement region inspection:
+
+public List<DesktopElement> InspectRegion(Rectangle region)
+{
+var elements = new List<DesktopElement>();
+
+```
+elements.AddRange(win32Scanner.FindChildrenInRegion(region));
+elements.AddRange(msaaScanner.FindChildrenInRegion(region));
+elements.AddRange(uiaScanner.FindChildrenInRegion(region));
+elements.AddRange(controlMessageScanner.TryExtractChildren(region));
+elements.AddRange(activeXScanner.TryExtractChildren(region));
+
+var result = new RegionInspectionResult
+{
+    Region = region,
+    RealElements = elements,
+    OcrTextBlocks = ocrScanner.ExtractTextBlocks(region),
+    ImageMatches = imageScanner.MatchKnownTemplates(region),
+    GdiTextBlocks = gdiCapture.GetTextBlocks(region)
+};
+
+if (customPanelDetector.IsCustomDrawnPanel(result))
+{
+    var virtualElements = virtualElementExtractor.Extract(region, result);
+    elements.AddRange(virtualElements);
+}
+
+return elementResolver.DeduplicateAndMerge(elements);
+```
+
+}
+
+15. Virtual element extraction
+
+When a panel is custom drawn, reconstruct virtual child elements from:
+
+* GDI captured text
+* OCR text blocks
+* Button-like visual shapes
+* Template matches
+* Backend menu/order data
+* Region map
+* Relative position
+
+Example virtual element:
+
+{
+"id": "ve-001",
+"type": "VirtualButton",
+"name": "Cash",
+"source": "gdi+ocr+template",
+"parent": "hwnd:0x001A0932",
+"bounds": {
+"x": 710,
+"y": 620,
+"width": 120,
+"height": 70
+},
+"confidence": 0.94,
+"actions": ["click"],
+"locators": [
+{
+"type": "gdi-text",
+"value": "Cash",
+"region": "paymentButtons",
+"confidence": 0.95
+},
+{
+"type": "ocr",
+"value": "Cash",
+"region": "paymentButtons",
+"confidence": 0.91
+},
+{
+"type": "image-template",
+"value": "templates/payment/cash.png",
+"confidence": 0.86
+},
+{
+"type": "relative-coordinate",
+"value": "paymentButtons:0.74,0.81",
+"confidence": 0.55
+}
+]
+}
+
+16. Locator generation priority
+
+Generate locators in this order:
+
+1. Win32 locator
+
+   * parent HWND path
+   * class name
+   * control ID
+   * window text
+   * sibling index
+
+2. MSAA locator
+
+   * role
+   * name
+   * value
+   * default action
+   * child ID
+   * parent chain
+
+3. UIA locator
+
+   * AutomationId
+   * Name
+   * ControlType
+   * ClassName
+   * FrameworkId
+   * NativeWindowHandle
+   * parent chain
+
+4. LegacyIAccessible locator
+
+   * role
+   * name
+   * child ID
+   * default action
+
+5. Control-message locator
+
+   * list item text/index
+   * grid row/column
+   * combo item text
+   * tree node path
+
+6. ActiveX/COM locator
+
+   * control property path
+   * row/column
+   * item index
+   * TextMatrix
+   * value/caption
+
+7. GDI text locator
+
+   * drawn text
+   * region
+   * bounds
+   * parent HWND
+
+8. Backend data locator
+
+   * item code
+   * item name
+   * category
+   * tender type
+   * order/check id
+
+9. OCR locator
+
+   * text
+   * region
+   * confidence
+   * nearby shape
+
+10. Image/template locator
+
+* template path
+* region
+* confidence
+
+11. Relative coordinate locator
+
+* relativeTo region/window/panel
+* xRatio
+* yRatio
+
+12. Absolute coordinate locator
+
+* last fallback only
+
+17. Locator scoring and ranking
+
+Implement scoring:
+
+Base score examples:
+
+* Win32 control ID + class: 95
+* MSAA role + name: 88
+* UIA AutomationId: 90
+* UIA name + control type: 85
+* LegacyIAccessible: 84
+* Control-message extraction: 86
+* ActiveX/COM property: 83
+* GDI text capture: 80
+* Backend data locator: 78
+* OCR in known region: 72
+* Image template: 68
+* Relative coordinate: 45
+* Absolute coordinate: 15
+
+Final score should include:
+
+* Base score
+* Confidence
+* Uniqueness
+* Stability
+* Whether it is inside known screen region
+* Whether validation is available
+* Penalty for coordinates
+* Penalty for duplicate text
+* Penalty for unstable sibling index
+
+Pseudo-code:
+
+public int Score(LocatorCandidate locator)
+{
+int score = locator.Type switch
+{
+"win32" => 95,
+"uia-automation-id" => 90,
+"msaa" => 88,
+"control-message" => 86,
+"legacyIAccessible" => 84,
+"activeX" => 83,
+"gdi-text" => 80,
+"backend" => 78,
+"ocr" => 72,
+"image-template" => 68,
+"relative-coordinate" => 45,
+"absolute-coordinate" => 15,
+_ => 10
+};
+
+```
+score += (int)(locator.Confidence * 10);
+
+if (locator.Properties.ContainsKey("isUnique")) score += 10;
+if (locator.Properties.ContainsKey("knownRegion")) score += 8;
+if (locator.Properties.ContainsKey("hasValidation")) score += 8;
+if (locator.Properties.ContainsKey("duplicateText")) score -= 15;
+if (locator.Type.Contains("coordinate")) score -= 20;
+
+return score;
+```
+
+}
+
+18. Locator resolver architecture
+
+Create interface:
+
+public interface ILocatorResolver
+{
+bool CanResolve(LocatorCandidate locator);
+ResolvedElement Resolve(LocatorCandidate locator, ScreenContext context);
+}
+
+Implement:
+
+* Win32LocatorResolver
+* MsaaLocatorResolver
+* UiaLocatorResolver
+* LegacyAccessibleLocatorResolver
+* ControlMessageLocatorResolver
+* ActiveXLocatorResolver
+* GdiTextLocatorResolver
+* BackendLocatorResolver
+* OcrLocatorResolver
+* ImageTemplateLocatorResolver
+* RelativeCoordinateLocatorResolver
+* AbsoluteCoordinateLocatorResolver
+
+The LocatorEngine should select the correct resolver based on locator type.
+
+19. Action execution architecture
+
+Create interface:
+
+public interface IActionExecutor
+{
+ActionResult Click(ResolvedElement element);
+ActionResult TypeText(ResolvedElement element, string text);
+ActionResult Select(ResolvedElement element, string value);
+ActionResult PressKey(string key);
+string GetText(ResolvedElement element);
+}
+
+Implement action execution through:
+
+* Win32 SendMessage/PostMessage
+* MSAA accDoDefaultAction
+* UIA InvokePattern/ValuePattern
+* Control-specific messages
+* ActiveX/COM method calls
+* Mouse click at resolved bounds
+* Keyboard shortcuts
+* Clipboard paste
+* OCR/image coordinate click fallback
+
+Action engine should not blindly click. It should:
+
+1. Resolve element using best locator.
+
+2. Execute action through most reliable method.
+
+3. Validate outcome.
+
+4. Retry if needed.
+
+5. Fallback to next locator.
+
+6. Capture diagnostics if all fail.
+
+7. Action fallback flow
+
+Example click flow:
+
+Execute Click "Cash"
+
+1. Detect active screen.
+2. Confirm expected screen is Payment.
+3. Load Cash locators.
+4. Try Win32 locator if available.
+5. Validate result.
+6. If failed, try MSAA locator.
+7. Validate result.
+8. If failed, try UIA locator.
+9. Validate result.
+10. If failed, try GDI text locator.
+11. Validate result.
+12. If failed, try OCR locator inside payment region.
+13. Validate result.
+14. If failed, try image template.
+15. Validate result.
+16. If failed, try relative coordinate.
+17. Validate result.
+18. If all failed, fail with diagnostics.
+
+Pseudo-code:
+
+public ActionResult Click(DesktopElement element, ActionValidation validation)
+{
+foreach (var locator in element.Locators.OrderByDescending(l => l.Score))
+{
+try
+{
+var resolved = locatorEngine.Resolve(locator, screenContext.Current);
+
+```
+        if (resolved == null)
+            continue;
+
+        var result = actionExecutor.Click(resolved);
+
+        if (!result.Success)
+            continue;
+
+        if (validation == null || validationEngine.Validate(validation))
+        {
+            locatorStats.MarkSuccess(locator);
+            return ActionResult.Success(locator);
+        }
+
+        locatorStats.MarkValidationFailure(locator);
+    }
+    catch (Exception ex)
+    {
+        locatorStats.MarkFailure(locator, ex);
+    }
+}
+
+diagnostics.CaptureFailurePackage(element);
+return ActionResult.Failed(element);
+```
+
+}
+
+21. Retry policy
+
+Implement intelligent retry:
+
+* Retry same locator after short wait
+* Refresh current screen tree
+* Re-run OCR/image scan
+* Check if popup appeared
+* Check if screen changed
+* Try next locator
+* Use coordinate fallback last
+* Record failure reason
+
+Example:
+
+public class RetryPolicy
+{
+public int MaxRetriesPerLocator { get; set; } = 2;
+public bool RefreshBeforeRetry { get; set; } = true;
+public bool AllowFallbackLocator { get; set; } = true;
+public bool AllowVisualFallback { get; set; } = true;
+public bool AllowCoordinateFallback { get; set; } = true;
+public TimeSpan RetryDelay { get; set; } = TimeSpan.FromMilliseconds(500);
+}
+
+22. Validation engine
+
+Validation is mandatory, especially for POS.
+
+Support validation types:
+
+* screenContainsText
+* screenDoesNotContainText
+* elementVisible
+* elementGone
+* elementEnabled
+* elementDisabled
+* windowTitleChanged
+* popupAppeared
+* popupClosed
+* screenStateIs
+* orderListContains
+* orderListDoesNotContain
+* databaseRecordExists
+* databaseRecordUpdated
+* journalContains
+* receiptContains
+* fileCreated
+* logContains
+
+Example validation:
+
+{
+"type": "orderListContains",
+"expectedValue": "Coffee",
+"region": "orderList",
+"timeoutMs": 5000
+}
+
+Example POS action:
+
+Click menu item Coffee.
+Validation:
+
+* Order list region contains Coffee.
+* Optional backend current order contains item code for Coffee.
+
+23. Screen recognition
+
+Implement screen recognition for POS workflows.
+
+Screen types:
+
+* Login
+* Home
+* Revenue center selection
+* Table selection
+* Order entry
+* Menu category
+* Modifier popup
+* Payment/tender
+* Receipt
+* Report/export
+* Error popup
+* Manager approval popup
+* Printer offline popup
+* Network offline popup
+
+Screen recognition signals:
+
+* Window title
+* Visible text from OCR/GDI
+* Known controls
+* Known button templates
+* Region layout
+* Backend state
+* Current active modal
+* Previously executed action
+
+Example ScreenDefinition:
+
+public class ScreenDefinition
+{
+public string Name { get; set; }
+public List<TextSignal> RequiredTexts { get; set; }
+public List<ImageSignal> ImageSignals { get; set; }
+public List<ControlSignal> ControlSignals { get; set; }
+public Dictionary<string, ScreenRegion> Regions { get; set; }
+}
+
+Example regions:
+
+* leftMenu
+* menuItems
+* orderList
+* paymentButtons
+* footerActions
+* popupArea
+
+24. Recorder design
+
+The recorder should capture rich evidence, not just x/y.
+
+On mouse click:
+
+Capture:
+
+* Mouse position
+* Active window
+* HWND under cursor
+* Parent HWND chain
+* Win32 class/text/control ID
+* MSAA object under point
+* UIA element under point
+* LegacyIAccessible data
+* Control-specific data if available
+* Screenshot before click
+* Screenshot crop around click
+* OCR text around click
+* GDI text near click
+* Image template crop
+* Screen name
+* Region name
+* Relative coordinate
+* Backend match if available
+* Screenshot after click
+* Suggested validation
+
+Recorded action should look like:
+
+{
+"screen": "Payment",
+"action": "click",
+"target": {
+"name": "Cash",
+"role": "VirtualButton",
+"bounds": {
+"x": 710,
+"y": 620,
+"width": 120,
+"height": 70
+},
+"locators": [
+{
+"type": "gdi-text",
+"value": "Cash",
+"region": "paymentButtons",
+"priority": 1,
+"confidence": 0.95
+},
+{
+"type": "ocr",
+"value": "Cash",
+"region": "paymentButtons",
+"priority": 2,
+"confidence": 0.91
+},
+{
+"type": "image-template",
+"value": "templates/payment/cash.png",
+"priority": 3,
+"confidence": 0.86
+},
+{
+"type": "relative-coordinate",
+"value": "paymentButtons:0.74,0.81",
+"priority": 4,
+"confidence": 0.55
+}
+]
+},
+"validation": {
+"type": "screenContainsText",
+"value": "Amount Tendered",
+"region": "payment-popup",
+"timeoutMs": 5000
+}
+}
+
+25. Self-healing locator confidence
+
+Store locator statistics:
+
+* success count
+* failure count
+* validation failure count
+* last success
+* last failure
+* average resolve time
+* confidence
+* promoted/demoted status
+
+If primary locator fails but fallback succeeds, promote fallback.
+
+Example:
+
+Before:
+
+1. UIA Name=Cash
+2. OCR Cash in paymentButtons
+3. Relative coordinate
+
+Execution:
+UIA failed.
+OCR succeeded.
+
+After:
+
+1. OCR Cash in paymentButtons
+
+2. UIA Name=Cash
+
+3. Relative coordinate
+
+4. Inspector UI requirements
+
+The inspector UI should have:
+
+* Application selector
+* Process/window list
+* Live screenshot panel
+* Overlay rectangles
+* Real element tree
+
+  * Win32 tree
+  * MSAA tree
+  * UIA Raw View tree
+  * UIA Control View tree
+  * UIA Content View tree
+* Virtual element tree
+* Selected element details
+* Locator candidate table
+* Locator score/explanation
+* Supported actions panel
+* Test action buttons
+
+  * Highlight
+  * Click
+  * Type
+  * Get text
+  * Validate
+* Region selection tool
+* Custom panel detection status
+* OCR/GDI text block viewer
+* Screenshot crop/template manager
+* Recorder start/stop
+* Replay test
+* Diagnostic export
+
+For every selected element, show:
+
+* Name
+* Role
+* Bounds
+* Source type
+* HWND
+* Class
+* Control ID
+* MSAA role/name/value
+* UIA name/control type/automation ID
+* Pattern support
+* OCR text
+* GDI text
+* Image confidence
+* Locator candidates
+* Recommended locator
+* Reason why selected
+
+Example explanation:
+
+Selected locator: OCR "Cash" inside paymentButtons region.
+
+Reason:
+
+* Win32 returned only parent ThunderRT6UserControlDC.
+* MSAA returned no child element.
+* UIA Raw View returned only Pane.
+* OCR found text "Cash" with 91% confidence.
+* Button-like rectangle detected around text.
+* Element is inside known Payment screen region.
+* Template match found similar Cash button.
+
+27. Project structure
+
+Create the project structure:
+
+DesktopBridge/
+│
+├── DesktopBridge.Core
+│   ├── DesktopElement.cs
+│   ├── LocatorCandidate.cs
+│   ├── ElementEvidence.cs
+│   ├── ResolvedElement.cs
+│   ├── ActionResult.cs
+│   ├── ScreenContext.cs
+│   ├── ScreenRegion.cs
+│   └── Rect.cs
+│
+├── DesktopBridge.Win32
+│   ├── NativeMethods.cs
+│   ├── Win32Scanner.cs
+│   ├── Win32Element.cs
+│   ├── Win32LocatorResolver.cs
+│   ├── Win32ActionExecutor.cs
+│   └── Win32TreeBuilder.cs
+│
+├── DesktopBridge.MSAA
+│   ├── MsaaScanner.cs
+│   ├── MsaaElement.cs
+│   ├── MsaaLocatorResolver.cs
+│   └── MsaaActionExecutor.cs
+│
+├── DesktopBridge.UIA
+│   ├── UiaScanner.cs
+│   ├── UiaElement.cs
+│   ├── UiaLocatorResolver.cs
+│   ├── UiaPatternExecutor.cs
+│   └── LegacyAccessibleScanner.cs
+│
+├── DesktopBridge.ControlMessages
+│   ├── ListBoxExtractor.cs
+│   ├── ComboBoxExtractor.cs
+│   ├── ListViewExtractor.cs
+│   ├── TreeViewExtractor.cs
+│   ├── EditExtractor.cs
+│   ├── ButtonExtractor.cs
+│   └── GridExtractor.cs
+│
+├── DesktopBridge.ActiveX
+│   ├── ActiveXScanner.cs
+│   ├── ComPropertyReader.cs
+│   └── OcxDetector.cs
+│
+├── DesktopBridge.GdiCapture
+│   ├── GdiTextCaptureService.cs
+│   ├── DrawnTextBlock.cs
+│   └── HookManager.cs
+│
+├── DesktopBridge.Vision
+│   ├── ScreenshotService.cs
+│   ├── OcrScanner.cs
+│   ├── TextBlock.cs
+│   ├── TemplateMatcher.cs
+│   ├── ButtonShapeDetector.cs
+│   └── VirtualElementExtractor.cs
+│
+├── DesktopBridge.Backend
+│   ├── BackendLookupService.cs
+│   ├── PosMenuRepository.cs
+│   ├── OrderStateRepository.cs
+│   ├── JournalReader.cs
+│   └── ReceiptValidator.cs
+│
+├── DesktopBridge.Engine
+│   ├── InspectionPipeline.cs
+│   ├── RegionInspectionPipeline.cs
+│   ├── CustomPanelDetector.cs
+│   ├── ElementResolver.cs
+│   ├── LocatorGenerator.cs
+│   ├── LocatorRanker.cs
+│   ├── LocatorEngine.cs
+│   ├── ActionEngine.cs
+│   ├── RetryEngine.cs
+│   ├── ValidationEngine.cs
+│   └── DiagnosticsService.cs
+│
+├── DesktopBridge.ScreenModels
+│   ├── ScreenRecognizer.cs
+│   ├── ScreenDefinition.cs
+│   ├── ScreenRegion.cs
+│   └── PosScreenDefinitions.json
+│
+├── DesktopBridge.Adapters
+│   ├── GenericVb6Adapter.cs
+│   ├── GenericPosAdapter.cs
+│   ├── InfoGenesisAdapter.cs
+│   ├── LoginAdapter.cs
+│   ├── OrderEntryAdapter.cs
+│   ├── PaymentAdapter.cs
+│   └── PopupAdapter.cs
+│
+├── DesktopBridge.Recorder
+│   ├── RecorderService.cs
+│   ├── MouseHook.cs
+│   ├── KeyboardHook.cs
+│   ├── RecordedAction.cs
+│   ├── RecordingSerializer.cs
+│   └── ReplayService.cs
+│
+└── DesktopBridge.InspectorApp
+├── WPF or WinUI frontend
+├── ProcessWindowPicker
+├── ScreenshotOverlay
+├── ElementTreeView
+├── LocatorCandidateGrid
+├── ElementDetailsPanel
+├── RegionSelector
+├── RecorderPanel
+└── ReplayPanel
+
+28. MVP phases
+
+Build in phases.
+
+Phase 1: Win32 Inspector
+
+* Process/window picker
+* Enum top-level windows
+* Enum child windows
+* Show HWND tree
+* Show class/text/control ID/bounds
+* Highlight selected HWND
+* Click-to-inspect with WindowFromPoint
+* Basic SendMessage click/type for simple controls
+
+Phase 2: MSAA + UIA Inspector
+
+* Add MSAA tree
+* Add UIA Raw/Control/Content tree
+* Add LegacyIAccessiblePattern support
+* Merge Win32/MSAA/UIA evidence
+* Show locator candidates
+
+Phase 3: Control Message Extraction
+
+* Extract ListBox/ComboBox/ListView/TreeView/Edit/Button data
+* Show extracted items as child elements
+* Support actions through messages
+
+Phase 4: Custom Panel Detection
+
+* Detect shallow tree/custom panel
+* Region selection
+* Same-HWND multi-point test
+* OCR text block detection
+* Mark section as CustomDrawnPanel
+
+Phase 5: Virtual Element Tree
+
+* Extract OCR text blocks
+* Detect button-like regions
+* Build virtual buttons/list items
+* Show virtual tree
+* Click virtual elements
+* Save relative coordinates
+
+Phase 6: Locator Engine
+
+* Generate multiple locator candidates
+* Score/rank locators
+* Resolve locators
+* Implement fallback resolver chain
+
+Phase 7: Action Engine
+
+* Click/type/getText/wait/assert
+* Retry/fallback
+* Validation after every action
+* Diagnostic package on failure
+
+Phase 8: Recorder
+
+* Capture mouse/keyboard actions
+* Store rich locator evidence
+* Store screenshot crops
+* Store templates
+* Store validation suggestions
+* Replay with fallback
+
+Phase 9: Screen Models
+
+* Define POS screens and regions
+* Recognize current screen
+* Use region-based OCR/template matching
+* Validate actions using screen context
+
+Phase 10: POS Adapter
+
+* login()
+* selectRevenueCenter()
+* openTable()
+* addItem()
+* selectModifier()
+* sendOrder()
+* openTender()
+* tenderCash()
+* tenderCard()
+* printReceipt()
+* closeCheck()
+* voidItem()
+* handlePopup()
+
+Phase 11: Advanced Features
+
+* ActiveX/COM property extraction
+* GDI text capture
+* Backend/config/database lookup
+* Self-healing locator confidence
+* Report generation
+* AI-assisted locator explanation
+
+29. Example final APIs
+
+Generic API:
+
+desktop.Inspect.FromPoint(x, y);
+desktop.Inspect.Region(region);
+desktop.Element("CashButton").Click().WithFallback().ValidateTextAppears("Amount Tendered");
+
+POS API:
+
+pos.Login("cashier01", "1234");
+pos.OrderEntry().AddItem("Coffee").ValidateOrderContains("Coffee");
+pos.Payment().TenderCash(50.00).ValidateCheckClosed();
+
+Recorder API:
+
+recorder.Start();
+recorder.Stop();
+recorder.Save("login-order-payment-flow.json");
+replay.Run("login-order-payment-flow.json");
+
+30. Critical design principles
+
+* Do not depend on only UIA.
+* Do not depend on only OCR.
+* Do not depend on absolute coordinates.
+* Always collect evidence from multiple layers.
+* Always generate multiple locators.
+* Always rank locators by stability and confidence.
+* Always validate after action.
+* Always retry with fallback.
+* Always capture diagnostics when failure happens.
+* Reconstruct virtual elements when real child elements do not exist.
+* Treat POS automation as workflow automation, not just element automation.
+* Prefer backend/log validation where available.
+* Use coordinate fallback only as the last option.
+* Make the inspector explain why a locator was selected.
+
+31. Expected output from you
+
+Please produce the complete technical design and implementation plan for this tool.
+
+Include:
+
+1. Full architecture explanation.
+2. Component responsibilities.
+3. Data models/classes.
+4. Interfaces.
+5. Pseudo-code for each scanner.
+6. Pseudo-code for inspection pipeline.
+7. Pseudo-code for custom panel detection.
+8. Pseudo-code for locator generation and ranking.
+9. Pseudo-code for action execution with fallback.
+10. Pseudo-code for validation engine.
+11. Recorder design.
+12. Screen model design.
+13. POS adapter design.
+14. Project structure.
+15. MVP roadmap.
+16. Risks and limitations.
+17. Recommended libraries/packages.
+18. Example JSON output for inspected real controls.
+19. Example JSON output for reconstructed virtual elements.
+20. Example recorded action JSON.
+21. Example replay flow.
+22. Testing strategy for the inspector and automation engine.
+23. How to make this extensible for Java, Electron, Windows desktop, mainframe, and web automation later.
+
+Make the answer practical and implementation-oriented. Avoid only high-level theory. Provide enough detail that a developer can start building the first MVP immediately.
