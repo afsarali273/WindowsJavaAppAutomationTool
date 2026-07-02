@@ -42,6 +42,16 @@ public sealed class JavaObjectRepositoryEntry
     public bool AccessibleValue { get; set; }
     public bool AccessibleTable { get; set; }
     public bool AccessibleInterfaces { get; set; }
+    public bool IsTableLikeContainer { get; set; }
+    public bool IsTableLikeRow { get; set; }
+    public bool IsTableLikeCell { get; set; }
+    public string TableLikeKind { get; set; } = "";
+    public string TableLikeContainerPath { get; set; } = "";
+    public string TableLikeColumnHeader { get; set; } = "";
+    public int TableLikeRowIndex { get; set; } = -1;
+    public int TableLikeColumnIndex { get; set; } = -1;
+    public int TableLikeRowCount { get; set; } = -1;
+    public int TableLikeColumnCount { get; set; } = -1;
     public bool HasManagedDescendantAncestor { get; set; }
     public List<string> ActionNames { get; set; } = [];
     public List<JavaRepositoryProperty> Properties { get; set; } = [];

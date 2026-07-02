@@ -81,7 +81,19 @@
           <TextBlock Text="W" Foreground="#1F5E8C" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="11"/>
         </Border>
         <StackPanel Grid.Column="1">
-          <TextBlock Text="{Binding Model.DisplayName, Mode=OneWay}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" FontSize="12"/>
+          <DockPanel LastChildFill="True">
+            <Border DockPanel.Dock="Right"
+                    Visibility="{Binding ElevationBadgeVisibility}"
+                    Background="#FEE2E2"
+                    BorderBrush="#FCA5A5"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="6,1"
+                    Margin="6,0,0,0">
+              <TextBlock Text="{Binding ElevationBadge}" Foreground="#B42318" FontSize="9" FontWeight="SemiBold"/>
+            </Border>
+            <TextBlock Text="{Binding Model.DisplayName, Mode=OneWay}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" FontSize="12"/>
+          </DockPanel>
           <TextBlock Margin="0,4,0,0" Foreground="{StaticResource MutedBrush}" FontFamily="Consolas" FontSize="9.5">
             <Run Text="{Binding Model.HwndDisplay, Mode=OneWay}"/>
             <Run Text="  ·  PID "/>
@@ -300,16 +312,65 @@
               <TextBlock HorizontalAlignment="Right" Foreground="{StaticResource MutedBrush}" FontSize="10.5" Text="role · accessible name"/>
             </Grid>
           </Border>
-          <TreeView x:Name="AccessibilityTree"
-                    Grid.Row="1"
-                    ItemsSource="{Binding CurrentTreeItems}"
-                    SelectedItemChanged="Tree_SelectedItemChanged"
-                    PreviewMouseLeftButtonUp="AccessibilityTree_PreviewMouseLeftButtonUp"
-                    BorderThickness="0"
-                    Background="Transparent"
-                    Padding="6"
-                    FontSize="10.5"
-                    VirtualizingPanel.IsVirtualizing="False"/>
+          <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Border Padding="6" Margin="6,6,6,0" Background="#F8FAFC" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="5" Visibility="{Binding WindowsSelectionVisibility}">
+              <Grid>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TabControl SelectedValue="{Binding SelectedWindowsInspectionView}"
+                            SelectedValuePath="Tag"
+                            BorderThickness="0"
+                            Background="Transparent">
+                  <TabItem Header="AUTO" Tag="{x:Static winmodel:WindowsInspectionView.Routed}"/>
+                  <TabItem Header="WIN32" Tag="{x:Static winmodel:WindowsInspectionView.Win32}"/>
+                  <TabItem Header="MSAA" Tag="{x:Static winmodel:WindowsInspectionView.Msaa}"/>
+                  <TabItem Header="UIA RAW" Tag="{x:Static winmodel:WindowsInspectionView.UiaRaw}"/>
+                  <TabItem Header="UIA CTRL" Tag="{x:Static winmodel:WindowsInspectionView.UiaControl}"/>
+                  <TabItem Header="UIA CONTENT" Tag="{x:Static winmodel:WindowsInspectionView.UiaContent}"/>
+                </TabControl>
+                <TextBlock Grid.Row="1"
+                           Margin="2,4,2,0"
+                           Foreground="#667085"
+                           FontSize="10.5"
+                           Text="{Binding WindowsInspectionHint}"
+                           TextWrapping="Wrap"/>
+                <TextBlock Grid.Row="2"
+                           Margin="2,4,2,0"
+                           Foreground="#8A6522"
+                           FontSize="10"
+                           Text="{Binding WindowsPrivilegeSummary}"
+                           TextWrapping="Wrap"/>
+              </Grid>
+            </Border>
+            <Border Grid.Row="1"
+                    Margin="6,6,6,0"
+                    Padding="8,6"
+                    CornerRadius="5"
+                    Background="#FFF4E8"
+                    BorderBrush="#F7B267"
+                    BorderThickness="1"
+                    Visibility="{Binding WindowsPrivilegeWarningVisibility}">
+              <TextBlock Text="{Binding SelectedWindowsPrivilegeWarning}" TextWrapping="Wrap" Foreground="#9A5B13" FontSize="10.5"/>
+            </Border>
+            <TreeView x:Name="AccessibilityTree"
+                      Grid.Row="2"
+                      ItemsSource="{Binding CurrentTreeItems}"
+                      SelectedItemChanged="Tree_SelectedItemChanged"
+                      PreviewMouseLeftButtonUp="AccessibilityTree_PreviewMouseLeftButtonUp"
+                      BorderThickness="0"
+                      Background="Transparent"
+                      Padding="6"
+                      FontSize="10.5"
+                      VirtualizingPanel.IsVirtualizing="False"/>
+          </Grid>
         </Grid>
       </Border>
 
@@ -394,6 +455,93 @@
 
                 <StackPanel Visibility="{Binding JavaSelectionVisibility}">
                   <Separator Margin="0,7" Background="{StaticResource BorderBrush}"/>
+                  <TextBlock Style="{StaticResource SectionTitle}" Text="GRID AND ORACLE TABLE" Margin="0,0,0,5"/>
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="88"/>
+                      <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition/>
+                      <RowDefinition/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource PropertyLabel}" Text="Summary"/>
+                    <TextBlock Grid.Column="1" Style="{StaticResource PropertyValue}" Text="{Binding PropertyTableSummaryValue}" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="1" Style="{StaticResource PropertyLabel}" Text="Details"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding PropertyTableDetailsValue}" TextWrapping="Wrap"/>
+                  </Grid>
+                </StackPanel>
+
+                <StackPanel Visibility="{Binding WindowsSelectionVisibility}">
+                  <Separator Margin="0,7" Background="{StaticResource BorderBrush}"/>
+                  <TextBlock Style="{StaticResource SectionTitle}" Text="WINDOWS EVIDENCE" Margin="0,0,0,5"/>
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="88"/>
+                      <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition/>
+                      <RowDefinition/>
+                      <RowDefinition/>
+                      <RowDefinition/>
+                      <RowDefinition/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource PropertyLabel}" Text="Evidence"/>
+                    <TextBlock Grid.Column="1" Style="{StaticResource PropertyValue}" Text="{Binding WindowsEvidenceSummary}" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="1" Style="{StaticResource PropertyLabel}" Text="Locators"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding WindowsLocatorCandidatesSummary}" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="2" Style="{StaticResource PropertyLabel}" Text="Metadata"/>
+                    <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding WindowsMetadataSummary}" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="3" Style="{StaticResource PropertyLabel}" Text="ActiveX"/>
+                    <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding WindowsActiveXSummary}" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Row="4" Style="{StaticResource PropertyLabel}" Text="AX details"/>
+                    <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource PropertyValue}" FontFamily="Consolas" Text="{Binding WindowsActiveXDetails}" TextWrapping="Wrap"/>
+                  </Grid>
+
+                  <TextBlock Style="{StaticResource SectionTitle}" Text="LOCATOR CANDIDATES" Margin="0,10,0,5"/>
+                  <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6" Background="#FBFCFE">
+                    <Grid>
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="140"/>
+                        <RowDefinition Height="Auto"/>
+                      </Grid.RowDefinitions>
+                      <ListView ItemsSource="{Binding WindowsLocatorCandidates}"
+                                SelectedItem="{Binding SelectedWindowsLocatorCandidate}"
+                                BorderThickness="0"
+                                Background="Transparent"
+                                Margin="0"
+                                ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListView.View>
+                          <GridView AllowsColumnReorder="False">
+                            <GridViewColumn Header="P" Width="32" DisplayMemberBinding="{Binding Priority}"/>
+                            <GridViewColumn Header="Type" Width="92" DisplayMemberBinding="{Binding Type}"/>
+                            <GridViewColumn Header="Score" Width="46" DisplayMemberBinding="{Binding Score}"/>
+                            <GridViewColumn Header="Conf" Width="48" DisplayMemberBinding="{Binding Confidence, StringFormat={}{0:0.00}}"/>
+                            <GridViewColumn Header="Value" Width="300" DisplayMemberBinding="{Binding Value}"/>
+                          </GridView>
+                        </ListView.View>
+                      </ListView>
+                      <TextBox Grid.Row="1"
+                               Margin="8"
+                               Text="{Binding SelectedWindowsLocatorCandidateDetails, Mode=OneWay}"
+                               IsReadOnly="True"
+                               AcceptsReturn="True"
+                               TextWrapping="NoWrap"
+                               VerticalScrollBarVisibility="Auto"
+                               HorizontalScrollBarVisibility="Auto"
+                               FontFamily="Consolas"
+                               FontSize="10"
+                               Background="#F7F8FA"
+                               BorderBrush="{StaticResource BorderBrush}"
+                               Padding="8"
+                               MinHeight="92"/>
+                    </Grid>
+                  </Border>
+                </StackPanel>
+
+                <StackPanel Visibility="{Binding JavaSelectionVisibility}">
+                  <Separator Margin="0,7" Background="{StaticResource BorderBrush}"/>
                   <TextBlock Style="{StaticResource SectionTitle}" Text="ACCESSIBLE INTERFACES" Margin="0,0,0,5"/>
                   <WrapPanel>
                     <CheckBox Content="Component" IsChecked="{Binding SelectedNode.AccessibleComponent}" IsHitTestVisible="False" Margin="0,0,8,4" FontSize="10"/>
@@ -431,6 +579,63 @@
                        BorderThickness="0"
                        Padding="10"/>
               <Button Grid.Row="2" Command="{Binding CopyLocatorCommand}" Style="{StaticResource PrimaryButton}" Margin="0,8,0,0" Content="Copy locator JSON"/>
+            </Grid>
+          </TabItem>
+
+          <TabItem Header="  WINDOWS SOURCES  " Visibility="{Binding WindowsSelectionVisibility}">
+            <Grid Margin="8">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+              </Grid.RowDefinitions>
+              <TextBlock Text="Backend-aware evidence for the selected Windows element. Use this to compare projected locators, raw node data, and point inspection results." Foreground="{StaticResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap" Margin="2,0,2,6"/>
+              <TabControl Grid.Row="1" BorderThickness="0" Background="Transparent">
+                <TabItem Header="  PROJECTED  ">
+                  <TextBox Margin="0,6,0,0"
+                           Text="{Binding WindowsProjectedSourcePreview, Mode=OneWay}"
+                           IsReadOnly="True"
+                           AcceptsReturn="True"
+                           TextWrapping="NoWrap"
+                           VerticalScrollBarVisibility="Auto"
+                           HorizontalScrollBarVisibility="Auto"
+                           FontFamily="Consolas"
+                           FontSize="10.5"
+                           Background="#16202C"
+                           Foreground="#E7ECF3"
+                           BorderThickness="0"
+                           Padding="10"/>
+                </TabItem>
+                <TabItem Header="  RAW NODE  ">
+                  <TextBox Margin="0,6,0,0"
+                           Text="{Binding WindowsRawSourcePreview, Mode=OneWay}"
+                           IsReadOnly="True"
+                           AcceptsReturn="True"
+                           TextWrapping="NoWrap"
+                           VerticalScrollBarVisibility="Auto"
+                           HorizontalScrollBarVisibility="Auto"
+                           FontFamily="Consolas"
+                           FontSize="10.5"
+                           Background="#16202C"
+                           Foreground="#E7ECF3"
+                           BorderThickness="0"
+                           Padding="10"/>
+                </TabItem>
+                <TabItem Header="  POINT PROBE  ">
+                  <TextBox Margin="0,6,0,0"
+                           Text="{Binding WindowsPointProbePreview, Mode=OneWay}"
+                           IsReadOnly="True"
+                           AcceptsReturn="True"
+                           TextWrapping="NoWrap"
+                           VerticalScrollBarVisibility="Auto"
+                           HorizontalScrollBarVisibility="Auto"
+                           FontFamily="Consolas"
+                           FontSize="10.5"
+                           Background="#16202C"
+                           Foreground="#E7ECF3"
+                           BorderThickness="0"
+                           Padding="10"/>
+                </TabItem>
+              </TabControl>
             </Grid>
           </TabItem>
 

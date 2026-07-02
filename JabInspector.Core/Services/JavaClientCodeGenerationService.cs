@@ -211,6 +211,16 @@ public sealed class JavaClientCodeGenerationService
         AppendBuilderString(builder, "semanticXPath", locator.SemanticXPath);
         AppendBuilderString(builder, "parentRole", locator.ParentRole);
         AppendBuilderString(builder, "parentName", locator.ParentName);
+        AppendBuilderBool(builder, "isTableLikeContainer", locator.IsTableLikeContainer);
+        AppendBuilderBool(builder, "isTableLikeRow", locator.IsTableLikeRow);
+        AppendBuilderBool(builder, "isTableLikeCell", locator.IsTableLikeCell);
+        AppendBuilderString(builder, "tableLikeKind", locator.TableLikeKind);
+        AppendBuilderString(builder, "tableLikeContainerPath", locator.TableLikeContainerPath);
+        AppendBuilderString(builder, "tableLikeColumnHeader", locator.TableLikeColumnHeader);
+        AppendBuilderInt(builder, "tableLikeRowIndex", locator.TableLikeRowIndex);
+        AppendBuilderInt(builder, "tableLikeColumnIndex", locator.TableLikeColumnIndex);
+        AppendBuilderInt(builder, "tableLikeRowCount", locator.TableLikeRowCount);
+        AppendBuilderInt(builder, "tableLikeColumnCount", locator.TableLikeColumnCount);
         builder.AppendLine($"                .hasManagedDescendantAncestor({locator.HasManagedDescendantAncestor.ToString().ToLowerInvariant()})");
         if (locator.ActionNames.Count > 0)
         {
@@ -250,6 +260,14 @@ public sealed class JavaClientCodeGenerationService
         }
     }
 
+    private static void AppendBuilderBool(StringBuilder builder, string methodName, bool value)
+    {
+        if (value)
+        {
+            builder.AppendLine($"                .{methodName}(true)");
+        }
+    }
+
     private static LocatorSuggestion? GetLocator(JavaRecordedStep step)
     {
         if (step.ObjectLocator is not null) return step.ObjectLocator;
@@ -277,6 +295,16 @@ public sealed class JavaClientCodeGenerationService
                 "",
                 "",
                 "",
+                false,
+                false,
+                false,
+                "",
+                "",
+                "",
+                -1,
+                -1,
+                -1,
+                -1,
                 false,
                 [],
                 "",

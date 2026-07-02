@@ -163,6 +163,42 @@ public final class JavaElement {
         return driver.findChildElements(objectKey, locator, maxDepth, maxResults, includeSelf);
     }
 
+    public List<JavaElementHandle> findTableRows() {
+        return locator == null ? driver.findTableRows(objectKey) : driver.findTableRows(locator);
+    }
+
+    public List<JavaElementHandle> findTableCells() {
+        return locator == null ? driver.findTableCells(objectKey) : driver.findTableCells(locator);
+    }
+
+    public JavaElementHandle findTableCell(int rowIndex, int columnIndex) {
+        return locator == null
+                ? driver.findTableCell(objectKey, rowIndex, columnIndex)
+                : driver.findTableCell(locator, rowIndex, columnIndex);
+    }
+
+    public JavaElementHandle findTableCell(int rowIndex, String columnHeader) {
+        return locator == null
+                ? driver.findTableCell(objectKey, rowIndex, columnHeader)
+                : driver.findTableCell(locator, rowIndex, columnHeader);
+    }
+
+    public String getTableCellText(int rowIndex, int columnIndex) {
+        return findTableCell(rowIndex, columnIndex).getText();
+    }
+
+    public String getTableCellText(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).getText();
+    }
+
+    public JavaElementHandle clickTableCell(int rowIndex, int columnIndex) {
+        return findTableCell(rowIndex, columnIndex).click();
+    }
+
+    public JavaElementHandle clickTableCell(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).click();
+    }
+
     private String label() {
         if (objectKey != null && !objectKey.isBlank()) return objectKey;
         if (locator == null) return "(inline locator)";

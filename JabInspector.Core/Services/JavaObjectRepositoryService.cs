@@ -68,6 +68,16 @@ public sealed class JavaObjectRepositoryService
             SemanticXPath = locator.SemanticXPath,
             ParentRole = locator.ParentRole,
             ParentName = locator.ParentName,
+            IsTableLikeContainer = locator.IsTableLikeContainer,
+            IsTableLikeRow = locator.IsTableLikeRow,
+            IsTableLikeCell = locator.IsTableLikeCell,
+            TableLikeKind = locator.TableLikeKind,
+            TableLikeContainerPath = locator.TableLikeContainerPath,
+            TableLikeColumnHeader = locator.TableLikeColumnHeader,
+            TableLikeRowIndex = locator.TableLikeRowIndex,
+            TableLikeColumnIndex = locator.TableLikeColumnIndex,
+            TableLikeRowCount = locator.TableLikeRowCount,
+            TableLikeColumnCount = locator.TableLikeColumnCount,
             IndexInParent = locator.IndexInParent,
             ObjectDepth = locator.ObjectDepth,
             ChildrenCount = locator.ChildrenCount,
@@ -109,6 +119,16 @@ public sealed class JavaObjectRepositoryService
             Property("semanticXPath", entry.SemanticXPath, true),
             Property("parent.role", entry.ParentRole, true),
             Property("parent.name", entry.ParentName, false),
+            Property("tableLike.container", entry.IsTableLikeContainer.ToString(), false),
+            Property("tableLike.row", entry.IsTableLikeRow.ToString(), false),
+            Property("tableLike.cell", entry.IsTableLikeCell.ToString(), false),
+            Property("tableLike.kind", entry.TableLikeKind, false),
+            Property("tableLike.containerPath", entry.TableLikeContainerPath, false),
+            Property("tableLike.columnHeader", entry.TableLikeColumnHeader, false),
+            Property("tableLike.rowIndex", entry.TableLikeRowIndex.ToString(), false),
+            Property("tableLike.columnIndex", entry.TableLikeColumnIndex.ToString(), false),
+            Property("tableLike.rowCount", entry.TableLikeRowCount.ToString(), false),
+            Property("tableLike.columnCount", entry.TableLikeColumnCount.ToString(), false),
             Property("indexInParent", entry.IndexInParent.ToString(), false),
             Property("objectDepth", entry.ObjectDepth.ToString(), false),
             Property("childrenCount", entry.ChildrenCount.ToString(), false),
@@ -300,6 +320,16 @@ public sealed class JavaObjectRepositoryService
         entry.SemanticXPath = GetProperty(entry, "semanticXPath", entry.SemanticXPath);
         entry.ParentRole = GetProperty(entry, "parent.role", entry.ParentRole);
         entry.ParentName = GetProperty(entry, "parent.name", entry.ParentName);
+        entry.IsTableLikeContainer = GetBoolProperty(entry, "tableLike.container", entry.IsTableLikeContainer);
+        entry.IsTableLikeRow = GetBoolProperty(entry, "tableLike.row", entry.IsTableLikeRow);
+        entry.IsTableLikeCell = GetBoolProperty(entry, "tableLike.cell", entry.IsTableLikeCell);
+        entry.TableLikeKind = GetProperty(entry, "tableLike.kind", entry.TableLikeKind);
+        entry.TableLikeContainerPath = GetProperty(entry, "tableLike.containerPath", entry.TableLikeContainerPath);
+        entry.TableLikeColumnHeader = GetProperty(entry, "tableLike.columnHeader", entry.TableLikeColumnHeader);
+        entry.TableLikeRowIndex = GetIntProperty(entry, "tableLike.rowIndex", entry.TableLikeRowIndex);
+        entry.TableLikeColumnIndex = GetIntProperty(entry, "tableLike.columnIndex", entry.TableLikeColumnIndex);
+        entry.TableLikeRowCount = GetIntProperty(entry, "tableLike.rowCount", entry.TableLikeRowCount);
+        entry.TableLikeColumnCount = GetIntProperty(entry, "tableLike.columnCount", entry.TableLikeColumnCount);
         entry.IndexInParent = GetIntProperty(entry, "indexInParent", entry.IndexInParent);
         entry.ObjectDepth = GetIntProperty(entry, "objectDepth", entry.ObjectDepth);
         entry.ChildrenCount = GetIntProperty(entry, "childrenCount", entry.ChildrenCount);
@@ -344,6 +374,16 @@ public sealed class JavaObjectRepositoryService
             entry.SemanticXPath,
             entry.ParentRole,
             entry.ParentName,
+            entry.IsTableLikeContainer,
+            entry.IsTableLikeRow,
+            entry.IsTableLikeCell,
+            entry.TableLikeKind,
+            entry.TableLikeContainerPath,
+            entry.TableLikeColumnHeader,
+            entry.TableLikeRowIndex,
+            entry.TableLikeColumnIndex,
+            entry.TableLikeRowCount,
+            entry.TableLikeColumnCount,
             entry.HasManagedDescendantAncestor,
             entry.ActionNames,
             GetProperty(entry, "text.preview", existing?.TextPreview ?? ""),

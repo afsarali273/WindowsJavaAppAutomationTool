@@ -25,6 +25,16 @@ public final class LocatorSuggestion {
     @JsonProperty private final String semanticXPath;
     @JsonProperty private final String parentRole;
     @JsonProperty private final String parentName;
+    @JsonProperty private final Boolean isTableLikeContainer;
+    @JsonProperty private final Boolean isTableLikeRow;
+    @JsonProperty private final Boolean isTableLikeCell;
+    @JsonProperty private final String tableLikeKind;
+    @JsonProperty private final String tableLikeContainerPath;
+    @JsonProperty private final String tableLikeColumnHeader;
+    @JsonProperty private final Integer tableLikeRowIndex;
+    @JsonProperty private final Integer tableLikeColumnIndex;
+    @JsonProperty private final Integer tableLikeRowCount;
+    @JsonProperty private final Integer tableLikeColumnCount;
     @JsonProperty private final Boolean hasManagedDescendantAncestor;
     @JsonProperty private final List<String> actionNames;
     @JsonProperty private final String textPreview;
@@ -60,6 +70,16 @@ public final class LocatorSuggestion {
             @JsonProperty("semanticXPath") String semanticXPath,
             @JsonProperty("parentRole") String parentRole,
             @JsonProperty("parentName") String parentName,
+            @JsonProperty("isTableLikeContainer") Boolean isTableLikeContainer,
+            @JsonProperty("isTableLikeRow") Boolean isTableLikeRow,
+            @JsonProperty("isTableLikeCell") Boolean isTableLikeCell,
+            @JsonProperty("tableLikeKind") String tableLikeKind,
+            @JsonProperty("tableLikeContainerPath") String tableLikeContainerPath,
+            @JsonProperty("tableLikeColumnHeader") String tableLikeColumnHeader,
+            @JsonProperty("tableLikeRowIndex") Integer tableLikeRowIndex,
+            @JsonProperty("tableLikeColumnIndex") Integer tableLikeColumnIndex,
+            @JsonProperty("tableLikeRowCount") Integer tableLikeRowCount,
+            @JsonProperty("tableLikeColumnCount") Integer tableLikeColumnCount,
             @JsonProperty("hasManagedDescendantAncestor") Boolean hasManagedDescendantAncestor,
             @JsonProperty("actionNames") List<String> actionNames,
             @JsonProperty("textPreview") String textPreview,
@@ -92,6 +112,16 @@ public final class LocatorSuggestion {
         this.semanticXPath = semanticXPath;
         this.parentRole = parentRole;
         this.parentName = parentName;
+        this.isTableLikeContainer = isTableLikeContainer;
+        this.isTableLikeRow = isTableLikeRow;
+        this.isTableLikeCell = isTableLikeCell;
+        this.tableLikeKind = tableLikeKind;
+        this.tableLikeContainerPath = tableLikeContainerPath;
+        this.tableLikeColumnHeader = tableLikeColumnHeader;
+        this.tableLikeRowIndex = tableLikeRowIndex;
+        this.tableLikeColumnIndex = tableLikeColumnIndex;
+        this.tableLikeRowCount = tableLikeRowCount;
+        this.tableLikeColumnCount = tableLikeColumnCount;
         this.hasManagedDescendantAncestor = hasManagedDescendantAncestor;
         this.actionNames = actionNames;
         this.textPreview = textPreview;
@@ -126,6 +156,16 @@ public final class LocatorSuggestion {
     public String semanticXPath() { return semanticXPath; }
     public String parentRole() { return parentRole; }
     public String parentName() { return parentName; }
+    public Boolean isTableLikeContainer() { return isTableLikeContainer; }
+    public Boolean isTableLikeRow() { return isTableLikeRow; }
+    public Boolean isTableLikeCell() { return isTableLikeCell; }
+    public String tableLikeKind() { return tableLikeKind; }
+    public String tableLikeContainerPath() { return tableLikeContainerPath; }
+    public String tableLikeColumnHeader() { return tableLikeColumnHeader; }
+    public Integer tableLikeRowIndex() { return tableLikeRowIndex; }
+    public Integer tableLikeColumnIndex() { return tableLikeColumnIndex; }
+    public Integer tableLikeRowCount() { return tableLikeRowCount; }
+    public Integer tableLikeColumnCount() { return tableLikeColumnCount; }
     public Boolean hasManagedDescendantAncestor() { return hasManagedDescendantAncestor; }
     public List<String> actionNames() { return actionNames; }
     public String textPreview() { return textPreview; }
@@ -200,6 +240,16 @@ public final class LocatorSuggestion {
         private String semanticXPath;
         private String parentRole;
         private String parentName;
+        private Boolean isTableLikeContainer;
+        private Boolean isTableLikeRow;
+        private Boolean isTableLikeCell;
+        private String tableLikeKind;
+        private String tableLikeContainerPath;
+        private String tableLikeColumnHeader;
+        private Integer tableLikeRowIndex;
+        private Integer tableLikeColumnIndex;
+        private Integer tableLikeRowCount;
+        private Integer tableLikeColumnCount;
         private Boolean hasManagedDescendantAncestor;
         private List<String> actionNames;
         private String textPreview;
@@ -233,6 +283,16 @@ public final class LocatorSuggestion {
         public Builder semanticXPath(String semanticXPath) { this.semanticXPath = semanticXPath; return this; }
         public Builder parentRole(String parentRole) { this.parentRole = parentRole; return this; }
         public Builder parentName(String parentName) { this.parentName = parentName; return this; }
+        public Builder isTableLikeContainer(Boolean isTableLikeContainer) { this.isTableLikeContainer = isTableLikeContainer; return this; }
+        public Builder isTableLikeRow(Boolean isTableLikeRow) { this.isTableLikeRow = isTableLikeRow; return this; }
+        public Builder isTableLikeCell(Boolean isTableLikeCell) { this.isTableLikeCell = isTableLikeCell; return this; }
+        public Builder tableLikeKind(String tableLikeKind) { this.tableLikeKind = tableLikeKind; return this; }
+        public Builder tableLikeContainerPath(String tableLikeContainerPath) { this.tableLikeContainerPath = tableLikeContainerPath; return this; }
+        public Builder tableLikeColumnHeader(String tableLikeColumnHeader) { this.tableLikeColumnHeader = tableLikeColumnHeader; return this; }
+        public Builder tableLikeRowIndex(Integer tableLikeRowIndex) { this.tableLikeRowIndex = tableLikeRowIndex; return this; }
+        public Builder tableLikeColumnIndex(Integer tableLikeColumnIndex) { this.tableLikeColumnIndex = tableLikeColumnIndex; return this; }
+        public Builder tableLikeRowCount(Integer tableLikeRowCount) { this.tableLikeRowCount = tableLikeRowCount; return this; }
+        public Builder tableLikeColumnCount(Integer tableLikeColumnCount) { this.tableLikeColumnCount = tableLikeColumnCount; return this; }
         public Builder hasManagedDescendantAncestor(Boolean hasManagedDescendantAncestor) { this.hasManagedDescendantAncestor = hasManagedDescendantAncestor; return this; }
         public Builder actionNames(List<String> actionNames) { this.actionNames = actionNames; return this; }
         public Builder textPreview(String textPreview) { this.textPreview = textPreview; return this; }
@@ -268,6 +328,16 @@ public final class LocatorSuggestion {
                     semanticXPath,
                     parentRole,
                     parentName,
+                    isTableLikeContainer,
+                    isTableLikeRow,
+                    isTableLikeCell,
+                    tableLikeKind,
+                    tableLikeContainerPath,
+                    tableLikeColumnHeader,
+                    tableLikeRowIndex,
+                    tableLikeColumnIndex,
+                    tableLikeRowCount,
+                    tableLikeColumnCount,
                     hasManagedDescendantAncestor,
                     actionNames,
                     textPreview,

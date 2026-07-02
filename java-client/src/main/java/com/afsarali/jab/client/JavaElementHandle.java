@@ -183,11 +183,130 @@ public final class JavaElementHandle {
         return wrap(target.findChildSnapshots(maxDepth, maxResults, includeSelf));
     }
 
+    public List<JavaElementHandle> findTableRows() {
+        return synthesizeRows(target.findChildSnapshots());
+    }
+
+    public List<JavaElementHandle> findTableRows(Integer maxResults) {
+        return take(synthesizeRows(target.findChildSnapshots()), maxResults);
+    }
+
+    public List<JavaElementHandle> findTableCells() {
+        return filter(target.findChildSnapshots(), JavaElementSnapshot::isTableLikeCell);
+    }
+
+    public List<JavaElementHandle> findTableCells(Integer rowIndex) {
+        return filter(target.findChildSnapshots(), snapshot -> snapshot.isTableLikeCell() && snapshot.tableLikeRowIndex() == safeInt(rowIndex));
+    }
+
+    public List<JavaElementHandle> findTableCells(Integer rowIndex, Integer columnIndex) {
+        return filter(target.findChildSnapshots(), snapshot ->
+                snapshot.isTableLikeCell()
+                        && snapshot.tableLikeRowIndex() == safeInt(rowIndex)
+                        && snapshot.tableLikeColumnIndex() == safeInt(columnIndex));
+    }
+
+    public JavaElementHandle findTableCell(int rowIndex, int columnIndex) {
+        return firstOrThrow(findTableCells(rowIndex, columnIndex),
+                "table cell at row " + rowIndex + ", column " + columnIndex);
+    }
+
+    public List<JavaElementHandle> findTableCells(String columnHeader) {
+        String normalizedHeader = columnHeader == null ? "" : columnHeader.trim();
+        return filter(target.findChildSnapshots(), snapshot ->
+                snapshot.isTableLikeCell()
+                        && snapshot.tableLikeColumnHeader() != null
+                        && snapshot.tableLikeColumnHeader().equalsIgnoreCase(normalizedHeader));
+    }
+
+    public List<JavaElementHandle> findTableCells(int rowIndex, String columnHeader) {
+        String normalizedHeader = columnHeader == null ? "" : columnHeader.trim();
+        return filter(target.findChildSnapshots(), snapshot ->
+                snapshot.isTableLikeCell()
+                        && snapshot.tableLikeRowIndex() == rowIndex
+                        && snapshot.tableLikeColumnHeader() != null
+                        && snapshot.tableLikeColumnHeader().equalsIgnoreCase(normalizedHeader));
+    }
+
+    public JavaElementHandle findTableCell(int rowIndex, String columnHeader) {
+        return firstOrThrow(findTableCells(rowIndex, columnHeader),
+                "table cell at row " + rowIndex + ", header '" + columnHeader + "'");
+    }
+
+    public String getTableCellText(int rowIndex, int columnIndex) {
+        return findTableCell(rowIndex, columnIndex).getText();
+    }
+
+    public String getTableCellText(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).getText();
+    }
+
+    public JavaElementHandle clickTableCell(int rowIndex, int columnIndex) {
+        return findTableCell(rowIndex, columnIndex).click();
+    }
+
+    public JavaElementHandle clickTableCell(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).click();
+    }
+
+    public JavaElementHandle doubleClickTableCell(int rowIndex, int columnIndex) {
+        return findTableCell(rowIndex, columnIndex).doubleClick();
+    }
+
+    public JavaElementHandle doubleClickTableCell(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).doubleClick();
+    }
+
     private List<JavaElementHandle> wrap(List<JavaElementSnapshot> snapshots) {
         if (snapshots == null || snapshots.isEmpty()) return List.of();
         return snapshots.stream()
                 .map(target::child)
                 .collect(Collectors.toList());
+    }
+
+    private List<JavaElementHandle> filter(List<JavaElementSnapshot> snapshots, java.util.function.Predicate<JavaElementSnapshot> predicate) {
+        if (snapshots == null || snapshots.isEmpty()) return List.of();
+        return snapshots.stream()
+                .filter(predicate)
+                .map(target::child)
+                .collect(Collectors.toList());
+    }
+
+    private List<JavaElementHandle> synthesizeRows(List<JavaElementSnapshot> snapshots) {
+        if (snapshots == null || snapshots.isEmpty()) return List.of();
+        List<JavaElementHandle> explicitRows = filter(snapshots, JavaElementSnapshot::isTableLikeRow);
+        if (!explicitRows.isEmpty()) return explicitRows;
+        return snapshots.stream()
+                .filter(JavaElementSnapshot::isTableLikeCell)
+                .filter(snapshot -> snapshot.tableLikeRowIndex() >= 0)
+                .collect(Collectors.groupingBy(JavaElementSnapshot::tableLikeRowIndex))
+                .entrySet()
+                .stream()
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .map(entry -> entry.getValue().stream()
+                        .sorted(java.util.Comparator.comparingInt(JavaElementSnapshot::tableLikeColumnIndex))
+                        .findFirst()
+                        .map(target::child)
+                        .orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    private List<JavaElementHandle> take(List<JavaElementHandle> items, Integer maxResults) {
+        if (items == null || items.isEmpty()) return List.of();
+        if (maxResults == null || maxResults < 1 || maxResults >= items.size()) return items;
+        return items.subList(0, Math.min(maxResults, items.size()));
+    }
+
+    private JavaElementHandle firstOrThrow(List<JavaElementHandle> items, String label) {
+        if (items == null || items.isEmpty()) {
+            throw new ApiException(404, "Could not find " + label + ".");
+        }
+        return items.get(0);
+    }
+
+    private static int safeInt(Integer value) {
+        return value == null ? -1 : value;
     }
 
     private interface ActionTarget {

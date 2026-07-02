@@ -7,8 +7,25 @@ namespace WinInspector.Core.Backends;
 
 public sealed class UiaAutomationBackend : IWindowsAutomationBackend
 {
+    private readonly UiaTreeViewMode _viewMode;
+
+    public UiaAutomationBackend()
+        : this(UiaTreeViewMode.Raw)
+    {
+    }
+
+    public UiaAutomationBackend(UiaTreeViewMode viewMode)
+    {
+        _viewMode = viewMode;
+    }
+
     public WindowsAutomationBackendKind Kind => WindowsAutomationBackendKind.Uia;
-    public string DisplayName => "Windows UI Automation";
+    public string DisplayName => _viewMode switch
+    {
+        UiaTreeViewMode.Control => "Windows UI Automation (Control View)",
+        UiaTreeViewMode.Content => "Windows UI Automation (Content View)",
+        _ => "Windows UI Automation (Raw View)"
+    };
 
     public bool IsAvailable() => true;
 
@@ -42,20 +59,42 @@ public sealed class UiaAutomationBackend : IWindowsAutomationBackend
             AutomationId = element.Current.AutomationId ?? "",
             Value = element.Current.ItemType ?? "",
             Bounds = ToRectangle(element.Current.BoundingRectangle),
-            NativeHandle = new IntPtr(element.Current.NativeWindowHandle)
+            ClientBounds = ToRectangle(element.Current.BoundingRectangle),
+            NativeHandle = new IntPtr(element.Current.NativeWindowHandle),
+            ProcessId = (uint)Math.Max(element.Current.ProcessId, 0),
+            IsVisible = !element.Current.IsOffscreen,
+            IsEnabled = element.Current.IsEnabled
         };
+
+        node.Metadata["frameworkId"] = element.Current.FrameworkId ?? "";
+        node.Metadata["localizedControlType"] = element.Current.LocalizedControlType ?? "";
+        node.Metadata["isControlElement"] = element.Current.IsControlElement.ToString();
+        node.Metadata["isContentElement"] = element.Current.IsContentElement.ToString();
+        node.Metadata["uia.viewMode"] = _viewMode.ToString();
 
         if (depth >= maxDepth) return node;
 
-        var children = element.FindAll(TreeScope.Children, Condition.TrueCondition);
-        for (var i = 0; i < Math.Min(children.Count, maxChildren); i++)
+        var walker = GetWalker();
+        var currentChild = walker.GetFirstChild(element);
+        var i = 0;
+        while (currentChild is not null && i < maxChildren)
         {
-            var child = BuildNode(children[i], node, depth + 1, maxDepth, maxChildren);
+            var child = BuildNode(currentChild, node, depth + 1, maxDepth, maxChildren);
             child.IndexInParent = i;
             node.Children.Add(child);
+            currentChild = walker.GetNextSibling(currentChild);
+            i++;
         }
         return node;
     }
+
+    private TreeWalker GetWalker() =>
+        _viewMode switch
+        {
+            UiaTreeViewMode.Control => TreeWalker.ControlViewWalker,
+            UiaTreeViewMode.Content => TreeWalker.ContentViewWalker,
+            _ => TreeWalker.RawViewWalker
+        };
 
     private static Rectangle ToRectangle(System.Windows.Rect rect) =>
         rect.IsEmpty ? Rectangle.Empty : Rectangle.FromLTRB((int)rect.Left, (int)rect.Top, (int)rect.Right, (int)rect.Bottom);

@@ -85,6 +85,21 @@ public sealed class JavaElementInspectionService
             }
         }
 
+        if (node is null || !containsPoint(bounds, screenPoint))
+        {
+            var geometricNode = FindDeepestContainingNode(root, screenPoint, getPhysicalBounds, containsPoint, refreshBounds);
+            if (geometricNode is not null)
+            {
+                node = geometricNode;
+                bounds = getPhysicalBounds(geometricNode);
+                _logger.Debug($"{logPrefix} Geometry fallback returned '{node.DisplayName}' with physical bounds ({bounds.X},{bounds.Y},{bounds.Width},{bounds.Height}).");
+            }
+            else
+            {
+                _logger.Debug($"{logPrefix} Geometry fallback returned no node.");
+            }
+        }
+
         if (node is null) return null;
 
         var visualNode = node;
@@ -129,4 +144,64 @@ public sealed class JavaElementInspectionService
     }
 
     private static bool HasUsableBounds(ElementBounds bounds) => bounds.Width > 0 && bounds.Height > 0;
+
+    private static AccessibleNode? FindDeepestContainingNode(
+        AccessibleNode root,
+        NativePoint screenPoint,
+        Func<AccessibleNode, ElementBounds> getPhysicalBounds,
+        Func<ElementBounds, NativePoint, bool> containsPoint,
+        Action<AccessibleNode> refreshBounds)
+    {
+        AccessibleNode? best = null;
+        var bestDepth = -1;
+        var bestArea = int.MaxValue;
+
+        void Visit(AccessibleNode node, int depth)
+        {
+            refreshBounds(node);
+            var bounds = getPhysicalBounds(node);
+            if (!HasUsableBounds(bounds) || !containsPoint(bounds, screenPoint))
+            {
+                return;
+            }
+
+            var area = Math.Max(1, bounds.Width * bounds.Height);
+            if (depth > bestDepth || (depth == bestDepth && area < bestArea) || (depth == bestDepth && area == bestArea && IsPreferredOracleFormsLikeNode(node, best)))
+            {
+                best = node;
+                bestDepth = depth;
+                bestArea = area;
+            }
+
+            foreach (var child in node.Children)
+            {
+                Visit(child, depth + 1);
+            }
+        }
+
+        Visit(root, 0);
+        return best;
+    }
+
+    private static bool IsPreferredOracleFormsLikeNode(AccessibleNode candidate, AccessibleNode? currentBest)
+    {
+        if (currentBest is null)
+        {
+            return true;
+        }
+
+        return ScoreNode(candidate) > ScoreNode(currentBest);
+    }
+
+    private static int ScoreNode(AccessibleNode node)
+    {
+        var score = 0;
+        var role = $"{node.Role} {node.RoleEnUs}".ToLowerInvariant();
+        if (role.Contains("internal frame")) score += 5;
+        if (role.Contains("desktop pane")) score += 4;
+        if (role.Contains("root pane")) score += 3;
+        if (role.Contains("panel")) score += 2;
+        if (!string.IsNullOrWhiteSpace(node.Name)) score += 1;
+        return score;
+    }
 }

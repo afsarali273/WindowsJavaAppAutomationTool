@@ -7,6 +7,7 @@ namespace JabInspector.Core.Services;
 
 public sealed class AccessibleTreeCrawler(AccessBridgeService bridge, InspectorLogger logger)
 {
+    private readonly JavaTableInferenceService _tableInference = new();
     public int MaxDepth { get; init; } = 25;
     public int MaxChildrenPerNode { get; init; } = 500;
     public int NodeCount { get; private set; }
@@ -18,7 +19,11 @@ public sealed class AccessibleTreeCrawler(AccessBridgeService bridge, InspectorL
         if (rootContext == 0 && !bridge.TryGetAccessibleContextFromHwnd(window.Hwnd, out _, out rootContext))
         { logger.Log("Failed to obtain AccessibleContext from selected window."); return null; }
         var root = ReadNode(window.VmId, rootContext, null, 0);
-        if (root is not null) LocatorGenerator.AssignPaths(root);
+        if (root is not null)
+        {
+            LocatorGenerator.AssignPaths(root);
+            _tableInference.Annotate(root);
+        }
         logger.Log($"Tree crawl completed: {NodeCount:N0} nodes in {sw.ElapsedMilliseconds:N0} ms.");
         if (root is not null && root.Children.Count == 0) logger.Log("The root has no exposed children. The app may use custom controls or a separately bundled JRE.");
         return root;

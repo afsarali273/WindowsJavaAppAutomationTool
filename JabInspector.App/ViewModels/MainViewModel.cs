@@ -22,12 +22,20 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly JavaElementInspectionService _javaInspection;
     private readonly JavaObjectRepositoryService _javaRepository = new();
     private readonly JavaNodeResolverService _javaResolver = new();
+    private readonly JavaTableNavigationService _javaTables = new();
     private readonly WindowsWindowDiscoveryService _windowsDiscovery = new();
+    private readonly WindowsPrivilegeService _windowsPrivilege = new();
     private readonly WindowsAutomationRouter _windowsRouter = new();
     private readonly WindowsAutomationActionService _windowsActions = new();
+    private readonly WindowsElementProjectionService _windowsProjection = new();
+    private readonly Win32Scanner _win32Scanner = new();
+    private readonly MsaaScanner _msaaScanner = new();
     private readonly object _pendingLogLock = new();
     private readonly Queue<string> _pendingLogs = new();
     private bool _logDrainScheduled;
+    private string _windowsProjectedSourcePreview = "Select a Windows automation node to inspect projected source data.";
+    private string _windowsRawSourcePreview = "Select a Windows automation node to inspect raw backend data.";
+    private string _windowsPointProbePreview = "Select a Windows automation node to inspect point-probe evidence.";
 
     private JavaWindowViewModel? _selectedJavaWindow;
     private WindowsWindowViewModel? _selectedWindowsWindow;
@@ -35,8 +43,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private WindowsAutomationNode? _selectedWindowsNode;
     private JavaObjectRepositoryEntry? _selectedRepositoryEntry;
     private JavaRecordedStep? _selectedRecordedStep;
+    private LocatorCandidate? _selectedWindowsLocatorCandidate;
     private AccessibleNode? _root;
     private WindowsAutomationNode? _windowsRoot;
+    private DesktopElement? _selectedWindowsElement;
+    private WindowsInspectionView _selectedWindowsInspectionView = WindowsInspectionView.Routed;
     private InspectorMode _selectedMode = InspectorMode.Java;
     private string _locatorPreview = "Select an element to generate a resilient locator.";
     private string _status = "Ready to inspect";
@@ -60,6 +71,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _recordingRepositoryPreview = "Select a recorded object to inspect its repository properties.";
     private string _recordingStepPreview = "Select a recorded step to inspect its playback metadata.";
     private string _playbackOutput = "Playback output will appear here.";
+    private string _windowsPrivilegeSummary = "Inspector privilege diagnostics will appear when Windows mode is active.";
+    private string _selectedWindowsPrivilegeWarning = "";
     private bool _isRecordingActive;
     private bool _isRecordingPaused;
 
@@ -73,6 +86,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ObservableCollection<string> Logs { get; } = [];
     public ObservableCollection<RequirementCheckViewModel> RequirementChecks { get; } = [];
     public IReadOnlyList<InspectorMode> AvailableModes { get; } = Enum.GetValues<InspectorMode>();
+    public IReadOnlyList<WindowsInspectionView> AvailableWindowsInspectionViews { get; } = Enum.GetValues<WindowsInspectionView>();
 
     public RelayCommand RefreshWindowsCommand { get; }
     public RelayCommand AttachCommand { get; }
@@ -123,6 +137,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             if (!Set(ref _selectedWindowsWindow, value)) return;
             OnPropertyChanged(nameof(SelectedWindowItem));
+            UpdateWindowsPrivilegeState();
             RefreshPropertySurface();
             AttachCommand.RaiseCanExecuteChanged();
             if (IsWindowsMode && value is not null) _ = SafeAutoAttachSelectedWindowAsync();
@@ -170,7 +185,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (!Set(ref _selectedWindowsNode, value)) return;
             if (IsWindowsMode)
             {
-                LocatorPreview = value is null ? "Select an element to generate a resilient locator." : BuildWindowsLocatorPreview(value);
+                _selectedWindowsElement = value is null || SelectedWindowsWindow?.Model is null
+                    ? null
+                    : _windowsProjection.Project(SelectedWindowsWindow.Model, value);
+                UpdateWindowsSourcePreviews(value, _selectedWindowsElement);
+                SelectedWindowsLocatorCandidate = _selectedWindowsElement?.Locators
+                    .OrderBy(locator => locator.Priority)
+                    .ThenByDescending(locator => locator.Score)
+                    .FirstOrDefault();
+                LocatorPreview = value is null ? "Select an element to generate a resilient locator." : BuildWindowsLocatorPreview(value, _selectedWindowsElement);
                 SupportedActions = value is null ? "Select a Windows automation node." : $"Resolved through {value.BackendKind}. Focus, click, type, set text, and get text are available where the selected backend exposes them.";
             }
             CopyLocatorCommand.RaiseCanExecuteChanged();
@@ -186,6 +209,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             if (!Set(ref _selectedRepositoryEntry, value)) return;
             RecordingRepositoryPreview = value is null ? "Select a recorded object to inspect its repository properties." : _javaRepository.BuildPropertiesPreview(value);
+        }
+    }
+
+    public LocatorCandidate? SelectedWindowsLocatorCandidate
+    {
+        get => _selectedWindowsLocatorCandidate;
+        set
+        {
+            if (!Set(ref _selectedWindowsLocatorCandidate, value)) return;
+            OnPropertyChanged(nameof(SelectedWindowsLocatorCandidateDetails));
         }
     }
 
@@ -224,6 +257,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             CopyLocatorCommand.RaiseCanExecuteChanged();
             RefreshPropertySurface();
             Status = value == InspectorMode.Java ? "Java mode selected" : "Windows mode selected";
+            if (value == InspectorMode.Windows)
+            {
+                UpdateWindowsPrivilegeState();
+            }
         }
     }
 
@@ -233,6 +270,19 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool HasSelection => IsJavaMode ? SelectedNode is not null : SelectedWindowsNode is not null;
     public bool IsJavaMode => SelectedMode == InspectorMode.Java;
     public bool IsWindowsMode => SelectedMode == InspectorMode.Windows;
+    public WindowsInspectionView SelectedWindowsInspectionView
+    {
+        get => _selectedWindowsInspectionView;
+        set
+        {
+            if (!Set(ref _selectedWindowsInspectionView, value)) return;
+            OnPropertyChanged(nameof(WindowsInspectionHint));
+            if (IsWindowsMode && SelectedWindowsWindow is not null)
+            {
+                _ = SafeAutoAttachSelectedWindowAsync();
+            }
+        }
+    }
     public object CurrentWindowItems => IsJavaMode ? JavaWindows : WindowsDesktopWindows;
     public object CurrentTreeItems => IsJavaMode ? Tree : WindowsTree;
     public int WindowItemCount => IsJavaMode ? JavaWindows.Count : WindowsDesktopWindows.Count;
@@ -245,6 +295,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string HeaderSubtitle => IsJavaMode ? "Inspect hierarchy, properties, and automation targets" : "Shared shell for Windows UIA, Win32, and future FlaUI inspection";
     public string WindowPaneTitle => IsJavaMode ? "JAVA WINDOWS" : "DESKTOP WINDOWS";
     public string WindowPaneHint => IsJavaMode ? "Tip: start the target Swing or AWT app, then refresh." : "Tip: select a native window, attach, and inspect it with UIA and Win32 fallback.";
+    public string WindowsInspectionHint => SelectedWindowsInspectionView switch
+    {
+        WindowsInspectionView.Routed => "Auto-selects the strongest available Windows backend.",
+        WindowsInspectionView.UiaRaw => "UIA Raw View exposes the deepest automation tree the OS provides.",
+        WindowsInspectionView.UiaControl => "UIA Control View filters down to interactive controls.",
+        WindowsInspectionView.UiaContent => "UIA Content View focuses on user-facing content elements.",
+        WindowsInspectionView.Msaa => "MSAA is useful for VB6 and older accessibility trees.",
+        WindowsInspectionView.Win32 => "Win32 shows the raw HWND tree and classic control metadata.",
+        _ => ""
+    };
     public string RefreshButtonLabel => IsJavaMode ? "Refresh windows" : "Refresh desktop";
     public string AttachButtonLabel => IsJavaMode ? "Attach and inspect" : "Inspect selection";
 
@@ -252,25 +312,44 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ? SelectedNode?.DisplayName ?? "(no selection)"
         : SelectedWindowsNode?.DisplayName ?? SelectedWindowsWindow?.Model.DisplayName ?? "(no selection)";
     public string PropertyNameValue => IsJavaMode ? SelectedNode?.Name ?? "" : SelectedWindowsNode?.Name ?? "";
-    public string PropertyDescriptionValue => IsJavaMode ? SelectedNode?.Description ?? "" : SelectedWindowsWindow?.Model.DisplayName ?? "";
+    public string PropertyDescriptionValue => IsJavaMode ? SelectedNode?.Description ?? "" : BuildWindowsDescription(SelectedWindowsNode);
     public string PropertyRoleValue => IsJavaMode ? SelectedNode?.Role ?? "" : SelectedWindowsNode?.Role ?? "";
-    public string PropertyRoleSecondaryValue => IsJavaMode ? SelectedNode?.RoleEnUs ?? "" : SelectedWindowsNode?.BackendKind.ToString() ?? "";
-    public string PropertyStatesValue => IsJavaMode ? SelectedNode?.States ?? "" : SelectedWindowsNode?.ClassName ?? "";
-    public string PropertyStatesSecondaryValue => IsJavaMode ? SelectedNode?.StatesEnUs ?? "" : SelectedWindowsNode?.AutomationId ?? "";
+    public string PropertyRoleSecondaryValue => IsJavaMode ? SelectedNode?.RoleEnUs ?? "" : BuildWindowsRoleSecondaryValue(SelectedWindowsNode, _selectedWindowsElement);
+    public string PropertyStatesValue => IsJavaMode ? SelectedNode?.States ?? "" : BuildWindowsStatesValue(SelectedWindowsNode);
+    public string PropertyStatesSecondaryValue => IsJavaMode ? SelectedNode?.StatesEnUs ?? "" : BuildWindowsStatesSecondaryValue(SelectedWindowsNode);
     public string PropertyBoundsValue => IsJavaMode
         ? FormatJavaBounds(SelectedNode)
-        : FormatWindowsBounds(SelectedWindowsNode);
+        : BuildWindowsBoundsValue(SelectedWindowsNode);
     public string PropertyIndexValue => IsJavaMode ? $"{SelectedNode?.IndexInParent ?? -1}" : $"{SelectedWindowsNode?.IndexInParent ?? -1}";
     public string PropertyChildrenValue => IsJavaMode ? $"{SelectedNode?.ChildrenCount ?? 0}" : $"{SelectedWindowsNode?.Children.Count ?? 0}";
     public string PropertyRawIdsValue => IsJavaMode
         ? FormatJavaIds(SelectedNode)
-        : FormatWindowsIds(SelectedWindowsNode);
-    public string PropertyLocatorPathValue => IsJavaMode && SelectedNode is not null ? LocatorGenerator.BuildPath(SelectedNode) : "";
-    public string PropertyIndexPathValue => IsJavaMode && SelectedNode is not null ? LocatorGenerator.BuildIndexPath(SelectedNode) : "";
-    public string PropertyXPathValue => IsJavaMode && SelectedNode is not null ? LocatorGenerator.BuildXPath(SelectedNode) : "";
-    public string PropertyTextPreviewValue => IsJavaMode ? FormatTextPreview(SelectedNode) : SelectedWindowsNode?.Value ?? "";
-    public string PropertyTextDetailsValue => IsJavaMode ? FormatTextDetails(SelectedNode) : "";
-    public string PropertyValueDetailsValue => IsJavaMode ? FormatValueDetails(SelectedNode) : "";
+        : BuildWindowsRawIdsValue(SelectedWindowsNode);
+    public string PropertyLocatorPathValue => IsJavaMode && SelectedNode is not null ? LocatorGenerator.BuildPath(SelectedNode) : BuildWindowsPath(SelectedWindowsNode);
+    public string PropertyIndexPathValue => IsJavaMode && SelectedNode is not null ? LocatorGenerator.BuildIndexPath(SelectedNode) : BuildWindowsIndexPath(SelectedWindowsNode);
+    public string PropertyXPathValue => IsJavaMode && SelectedNode is not null ? LocatorGenerator.BuildXPath(SelectedNode) : BuildWindowsClassPath(SelectedWindowsNode);
+    public string PropertyTextPreviewValue => IsJavaMode ? FormatTextPreview(SelectedNode) : BuildWindowsTextPreview(SelectedWindowsNode);
+    public string PropertyTextDetailsValue => IsJavaMode ? FormatTextDetails(SelectedNode) : BuildWindowsTextDetails(SelectedWindowsNode);
+    public string PropertyValueDetailsValue => IsJavaMode ? FormatValueDetails(SelectedNode) : BuildWindowsValueDetails(_selectedWindowsElement);
+    public string PropertyTableSummaryValue => IsJavaMode ? _javaTables.BuildSummary(SelectedNode) : "";
+    public string PropertyTableDetailsValue => IsJavaMode ? _javaTables.BuildDetails(SelectedNode) : "";
+    public string WindowsEvidenceSummary => IsJavaMode ? "" : BuildWindowsEvidenceSummary(SelectedWindowsNode, _selectedWindowsElement);
+    public string WindowsLocatorCandidatesSummary => IsJavaMode ? "" : BuildWindowsLocatorCandidatesSummary(_selectedWindowsElement);
+    public string WindowsMetadataSummary => IsJavaMode ? "" : BuildWindowsMetadataSummary(_selectedWindowsElement);
+    public string WindowsActiveXSummary => IsJavaMode ? "" : BuildWindowsActiveXSummary(_selectedWindowsElement);
+    public string WindowsActiveXDetails => IsJavaMode ? "" : BuildWindowsActiveXDetails(_selectedWindowsElement);
+    public IReadOnlyList<LocatorCandidate> WindowsLocatorCandidates => _selectedWindowsElement?.Locators
+        .OrderBy(locator => locator.Priority)
+        .ThenByDescending(locator => locator.Score)
+        .ToList() ?? [];
+    public string SelectedWindowsLocatorCandidateDetails => BuildWindowsLocatorCandidateDetails(SelectedWindowsLocatorCandidate);
+    public string WindowsProjectedSourcePreview => IsJavaMode ? "" : _windowsProjectedSourcePreview;
+    public string WindowsRawSourcePreview => IsJavaMode ? "" : _windowsRawSourcePreview;
+    public string WindowsPointProbePreview => IsJavaMode ? "" : _windowsPointProbePreview;
+    public string WindowsPrivilegeSummary { get => _windowsPrivilegeSummary; private set => Set(ref _windowsPrivilegeSummary, value); }
+    public string SelectedWindowsPrivilegeWarning { get => _selectedWindowsPrivilegeWarning; private set => Set(ref _selectedWindowsPrivilegeWarning, value); }
+    public bool IsInspectorElevated => _windowsPrivilege.IsCurrentProcessElevated();
+    public Visibility WindowsPrivilegeWarningVisibility => !string.IsNullOrWhiteSpace(SelectedWindowsPrivilegeWarning) ? Visibility.Visible : Visibility.Collapsed;
     public Visibility JavaSelectionVisibility => IsJavaMode ? Visibility.Visible : Visibility.Collapsed;
     public Visibility WindowsSelectionVisibility => IsWindowsMode ? Visibility.Visible : Visibility.Collapsed;
 
@@ -352,6 +431,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             WindowsDesktopWindows.Clear();
             foreach (var window in windows) WindowsDesktopWindows.Add(new(window));
             SelectedWindowsWindow = WindowsDesktopWindows.FirstOrDefault();
+            UpdateWindowsPrivilegeState();
             Status = windows.Count == 0 ? "No desktop windows found" : $"{windows.Count} desktop window(s) available";
             _logger.Log($"Windows mode discovered {windows.Count} top-level window(s).");
         }
@@ -431,7 +511,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         SelectedWindowsNode = null;
         try
         {
-            var result = await Task.Run(() => _windowsRouter.Inspect(SelectedWindowsWindow.Model));
+            var selectedView = SelectedWindowsInspectionView;
+            var result = await Task.Run(() => _windowsRouter.Inspect(SelectedWindowsWindow.Model, selectedView));
             if (result.Succeeded && result.Root is not null)
             {
                 _windowsRoot = result.Root;
@@ -439,8 +520,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 OnPropertyChanged(nameof(WindowsRoot));
                 OnPropertyChanged(nameof(CurrentTreeItems));
                 SelectedWindowsNode = result.Root;
-                Status = $"Attached via {result.BackendKind}";
-                _logger.Log($"Windows attach succeeded using {result.BackendKind} for {SelectedWindowsWindow.Model.DisplayName}.");
+                Status = selectedView == WindowsInspectionView.Routed
+                    ? $"Attached via {result.BackendKind}"
+                    : $"Attached via {selectedView}";
+                _logger.Log($"Windows attach succeeded using {result.BackendKind} for {SelectedWindowsWindow.Model.DisplayName}. RequestedView={selectedView}.");
             }
             else
             {
@@ -2087,6 +2170,27 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         return string.IsNullOrWhiteSpace(sanitized) ? $"JavaRecording_{DateTime.Now:yyyyMMdd_HHmmss}" : sanitized;
     }
 
+    private void UpdateWindowsPrivilegeState()
+    {
+        var inspectorElevated = IsInspectorElevated;
+        WindowsPrivilegeSummary = inspectorElevated
+            ? "Inspector is running elevated. Admin target windows can be inspected more completely."
+            : "Inspector is not elevated. Admin target windows may expose partial trees or block actions.";
+
+        if (SelectedWindowsWindow?.Model is not { } selectedWindow)
+        {
+            SelectedWindowsPrivilegeWarning = "";
+            OnPropertyChanged(nameof(WindowsPrivilegeWarningVisibility));
+            return;
+        }
+
+        SelectedWindowsPrivilegeWarning = selectedWindow.IsElevated && !inspectorElevated
+            ? $"Privilege mismatch detected: '{selectedWindow.Title}' is running as administrator, but the inspector is not. Re-run the inspector as admin to inspect and automate this window reliably."
+            : "";
+
+        OnPropertyChanged(nameof(WindowsPrivilegeWarningVisibility));
+    }
+
     private void RefreshPropertySurface()
     {
         OnPropertyChanged(nameof(SelectedDisplayName));
@@ -2106,32 +2210,434 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(PropertyTextPreviewValue));
         OnPropertyChanged(nameof(PropertyTextDetailsValue));
         OnPropertyChanged(nameof(PropertyValueDetailsValue));
+        OnPropertyChanged(nameof(PropertyTableSummaryValue));
+        OnPropertyChanged(nameof(PropertyTableDetailsValue));
+        OnPropertyChanged(nameof(WindowsEvidenceSummary));
+        OnPropertyChanged(nameof(WindowsLocatorCandidates));
+        OnPropertyChanged(nameof(WindowsLocatorCandidatesSummary));
+        OnPropertyChanged(nameof(WindowsMetadataSummary));
+        OnPropertyChanged(nameof(WindowsActiveXSummary));
+        OnPropertyChanged(nameof(WindowsActiveXDetails));
+        OnPropertyChanged(nameof(SelectedWindowsLocatorCandidateDetails));
+        OnPropertyChanged(nameof(WindowsProjectedSourcePreview));
+        OnPropertyChanged(nameof(WindowsRawSourcePreview));
+        OnPropertyChanged(nameof(WindowsPointProbePreview));
     }
 
-    private static string BuildWindowsLocatorPreview(WindowsAutomationNode node)
+    private string BuildWindowsLocatorPreview(WindowsAutomationNode node, DesktopElement? projectedElement)
     {
+        var pointEvidence = projectedElement?.SourceType == DesktopElementSource.Win32 && !node.Bounds.IsEmpty
+            ? _win32Scanner.InspectFromPoint(node.Bounds.X + Math.Max(node.Bounds.Width / 2, 1), node.Bounds.Y + Math.Max(node.Bounds.Height / 2, 1))
+            : null;
         var payload = new
         {
-            provider = node.BackendKind.ToString().ToLowerInvariant(),
-            path = BuildWindowsPath(node),
-            role = node.Role,
-            name = node.Name,
-            className = node.ClassName,
-            automationId = node.AutomationId,
-            nativeHandle = $"0x{node.NativeHandle.ToInt64():X}"
+            provider = "windows-desktop",
+            backend = node.BackendKind.ToString(),
+            projected = projectedElement is null ? null : new
+            {
+                id = projectedElement.Id,
+                name = projectedElement.Name,
+                role = projectedElement.Role,
+                className = projectedElement.ClassName,
+                controlId = projectedElement.ControlId,
+                sourceType = projectedElement.SourceType.ToString(),
+                elementKind = projectedElement.ElementKind.ToString(),
+                bounds = projectedElement.Bounds,
+                locators = projectedElement.Locators.Select(locator => new
+                {
+                    type = locator.Type.ToString(),
+                    value = locator.Value,
+                    score = locator.Score,
+                    confidence = locator.Confidence,
+                    priority = locator.Priority
+                }),
+                supportedActions = projectedElement.SupportedActions.Select(action => action.ToString()),
+                metadata = projectedElement.Metadata
+            },
+            rawNode = new
+            {
+                path = BuildWindowsPath(node),
+                role = node.Role,
+                name = node.Name,
+                className = node.ClassName,
+                automationId = node.AutomationId,
+                nativeHandle = $"0x{node.NativeHandle.ToInt64():X}",
+                controlId = node.ControlId >= 0 ? (int?)node.ControlId : null,
+                processId = node.ProcessId,
+                threadId = node.ThreadId,
+                isVisible = node.IsVisible,
+                isEnabled = node.IsEnabled,
+                style = $"0x{node.Style:X}",
+                extendedStyle = $"0x{node.ExtendedStyle:X}",
+                clientBounds = new { x = node.ClientBounds.X, y = node.ClientBounds.Y, width = node.ClientBounds.Width, height = node.ClientBounds.Height },
+                metadata = node.Metadata
+            },
+            win32PointEvidence = pointEvidence is null ? null : new
+            {
+                hwnd = pointEvidence.Hwnd == IntPtr.Zero ? "" : $"0x{pointEvidence.Hwnd.ToInt64():X}",
+                className = pointEvidence.ClassName,
+                windowText = pointEvidence.WindowText,
+                controlId = pointEvidence.ControlId,
+                childCount = pointEvidence.ChildCount,
+                isVisible = pointEvidence.IsVisible,
+                isEnabled = pointEvidence.IsEnabled,
+                bounds = pointEvidence.Bounds,
+                metadata = pointEvidence.Metadata
+            }
         };
         return JsonSerializer.Serialize(payload, JsonExportService.Options);
     }
 
-    private static string BuildWindowsPath(WindowsAutomationNode node)
+    private void UpdateWindowsSourcePreviews(WindowsAutomationNode? node, DesktopElement? projectedElement)
     {
+        if (node is null)
+        {
+            _windowsProjectedSourcePreview = "Select a Windows automation node to inspect projected source data.";
+            _windowsRawSourcePreview = "Select a Windows automation node to inspect raw backend data.";
+            _windowsPointProbePreview = "Select a Windows automation node to inspect point-probe evidence.";
+            return;
+        }
+
+        _windowsProjectedSourcePreview = JsonSerializer.Serialize(new
+        {
+            provider = "windows-desktop",
+            id = projectedElement?.Id ?? "",
+            name = projectedElement?.Name ?? node.Name,
+            role = projectedElement?.Role ?? node.Role,
+            className = projectedElement?.ClassName ?? node.ClassName,
+            sourceType = projectedElement?.SourceType.ToString() ?? "unknown",
+            elementKind = projectedElement?.ElementKind.ToString() ?? "unknown",
+            confidence = projectedElement?.Confidence ?? 0,
+            bounds = projectedElement?.Bounds,
+            supportedActions = projectedElement?.SupportedActions.Select(action => action.ToString()),
+            metadata = projectedElement?.Metadata,
+            childIds = projectedElement?.ChildIds,
+            locatorTypes = projectedElement?.Locators.Select(locator => new
+            {
+                type = locator.Type.ToString(),
+                priority = locator.Priority,
+                score = locator.Score,
+                confidence = locator.Confidence
+            })
+        }, JsonExportService.Options);
+
+        _windowsRawSourcePreview = JsonSerializer.Serialize(new
+        {
+            backend = node.BackendKind.ToString(),
+            path = BuildWindowsPath(node),
+            indexPath = BuildWindowsIndexPath(node),
+            classPath = BuildWindowsClassPath(node),
+            name = node.Name,
+            role = node.Role,
+            className = node.ClassName,
+            automationId = node.AutomationId,
+            value = node.Value,
+            nativeHandle = node.NativeHandle == IntPtr.Zero ? "" : $"0x{node.NativeHandle.ToInt64():X}",
+            controlId = node.ControlId >= 0 ? (int?)node.ControlId : null,
+            processId = node.ProcessId,
+            threadId = node.ThreadId,
+            isVisible = node.IsVisible,
+            isEnabled = node.IsEnabled,
+            style = $"0x{node.Style:X}",
+            extendedStyle = $"0x{node.ExtendedStyle:X}",
+            bounds = new { x = node.Bounds.X, y = node.Bounds.Y, width = node.Bounds.Width, height = node.Bounds.Height },
+            clientBounds = new { x = node.ClientBounds.X, y = node.ClientBounds.Y, width = node.ClientBounds.Width, height = node.ClientBounds.Height },
+            metadata = node.Metadata
+        }, JsonExportService.Options);
+
+        if (!node.Bounds.IsEmpty)
+        {
+            var probeX = node.Bounds.X + Math.Max(node.Bounds.Width / 2, 1);
+            var probeY = node.Bounds.Y + Math.Max(node.Bounds.Height / 2, 1);
+
+            if (projectedElement?.SourceType == DesktopElementSource.Win32)
+            {
+                var pointEvidence = _win32Scanner.InspectFromPoint(probeX, probeY);
+                _windowsPointProbePreview = JsonSerializer.Serialize(new
+                {
+                    source = "Win32",
+                    hwnd = pointEvidence.Hwnd == IntPtr.Zero ? "" : $"0x{pointEvidence.Hwnd.ToInt64():X}",
+                    className = pointEvidence.ClassName,
+                    windowText = pointEvidence.WindowText,
+                    controlId = pointEvidence.ControlId,
+                    childCount = pointEvidence.ChildCount,
+                    isVisible = pointEvidence.IsVisible,
+                    isEnabled = pointEvidence.IsEnabled,
+                    bounds = pointEvidence.Bounds,
+                    metadata = pointEvidence.Metadata
+                }, JsonExportService.Options);
+                return;
+            }
+
+            if (projectedElement?.SourceType == DesktopElementSource.Msaa || node.BackendKind == WindowsAutomationBackendKind.Msaa)
+            {
+                var pointEvidence = SelectedWindowsWindow?.Model is { } selectedWindow
+                    ? _msaaScanner.InspectFromWindowPoint(selectedWindow, probeX, probeY)
+                    : _msaaScanner.InspectFromPoint(probeX, probeY);
+                _windowsPointProbePreview = pointEvidence is null
+                    ? "MSAA point probe did not return an accessible object for the sampled point."
+                    : JsonSerializer.Serialize(new
+                    {
+                        source = "Msaa",
+                        name = pointEvidence.Name,
+                        role = pointEvidence.Role,
+                        value = pointEvidence.Value,
+                        description = pointEvidence.Description,
+                        defaultAction = pointEvidence.DefaultAction,
+                        childCount = pointEvidence.ChildCount,
+                        childId = pointEvidence.ChildId,
+                        bounds = pointEvidence.Bounds,
+                        elementRef = pointEvidence.ElementRef,
+                        metadata = pointEvidence.Metadata
+                    }, JsonExportService.Options);
+                return;
+            }
+        }
+
+        _windowsPointProbePreview = "Point-probe evidence is available for Win32 and MSAA nodes when valid bounds are available.";
+    }
+
+    private static string BuildWindowsPath(WindowsAutomationNode? node)
+    {
+        if (node is null)
+        {
+            return "";
+        }
+
         var segments = new Stack<string>();
         for (var cursor = node; cursor is not null; cursor = cursor.Parent)
         {
             var role = string.IsNullOrWhiteSpace(cursor.Role) ? "node" : cursor.Role;
             segments.Push($"{role}[{Math.Max(cursor.IndexInParent, 0)}]");
         }
+
         return string.Join("/", segments);
+    }
+
+    private static string BuildWindowsDescription(WindowsAutomationNode? node)
+    {
+        if (node is null)
+        {
+            return "";
+        }
+
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(node.ClassName))
+        {
+            parts.Add(node.ClassName);
+        }
+
+        if (node.ProcessId > 0)
+        {
+            parts.Add($"PID {node.ProcessId}");
+        }
+
+        if (node.ThreadId > 0)
+        {
+            parts.Add($"TID {node.ThreadId}");
+        }
+
+        return parts.Count == 0
+            ? "(no backend description exposed)"
+            : string.Join(" · ", parts);
+    }
+
+    private static string BuildWindowsRoleSecondaryValue(WindowsAutomationNode? node, DesktopElement? projected)
+    {
+        if (node is null)
+        {
+            return "";
+        }
+
+        var parts = new List<string> { node.BackendKind.ToString() };
+
+        if (projected is not null)
+        {
+            parts.Add(projected.SourceType.ToString());
+        }
+
+        if (!string.IsNullOrWhiteSpace(node.ClassName))
+        {
+            parts.Add(node.ClassName);
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    private static string BuildWindowsStatesValue(WindowsAutomationNode? node)
+    {
+        if (node is null)
+        {
+            return "";
+        }
+
+        var parts = new List<string>
+        {
+            node.IsVisible ? "visible" : "hidden",
+            node.IsEnabled ? "enabled" : "disabled"
+        };
+
+        if (!string.IsNullOrWhiteSpace(node.AutomationId))
+        {
+            parts.Add($"automationId={node.AutomationId}");
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    private static string BuildWindowsStatesSecondaryValue(WindowsAutomationNode? node)
+    {
+        if (node is null)
+        {
+            return "";
+        }
+
+        var parts = new List<string>();
+
+        if (node.ControlId > 0)
+        {
+            parts.Add($"ctrlId={node.ControlId}");
+        }
+
+        if (node.Style != 0)
+        {
+            parts.Add($"style=0x{node.Style:X}");
+        }
+
+        if (node.ExtendedStyle != 0)
+        {
+            parts.Add($"exStyle=0x{node.ExtendedStyle:X}");
+        }
+
+        if (node.Metadata.TryGetValue("msaa.isChildIdOnly", out var isChildIdOnly) && bool.TryParse(isChildIdOnly, out var childIdOnly) && childIdOnly)
+        {
+            parts.Add("msaaChildIdOnly=true");
+        }
+
+        return parts.Count == 0
+            ? "(no additional native state)"
+            : string.Join(" · ", parts);
+    }
+
+    private static string BuildWindowsIndexPath(WindowsAutomationNode? node)
+    {
+        if (node is null)
+        {
+            return "";
+        }
+
+        var segments = new Stack<string>();
+        for (var cursor = node; cursor is not null; cursor = cursor.Parent)
+        {
+            segments.Push(Math.Max(cursor.IndexInParent, 0).ToString());
+        }
+
+        return string.Join("/", segments);
+    }
+
+    private static string BuildWindowsClassPath(WindowsAutomationNode? node)
+    {
+        if (node is null)
+        {
+            return "";
+        }
+
+        var segments = new Stack<string>();
+        for (var cursor = node; cursor is not null; cursor = cursor.Parent)
+        {
+            var className = string.IsNullOrWhiteSpace(cursor.ClassName) ? "node" : cursor.ClassName;
+            segments.Push($"/{className}[{Math.Max(cursor.IndexInParent, 0) + 1}]");
+        }
+
+        return string.Concat(segments);
+    }
+
+    private static string BuildWindowsTextPreview(WindowsAutomationNode? node)
+    {
+        if (node is null)
+        {
+            return "";
+        }
+
+        if (!string.IsNullOrWhiteSpace(node.Value))
+        {
+            return node.Value;
+        }
+
+        if (node.Metadata.TryGetValue("msaa.value", out var msaaValue) && !string.IsNullOrWhiteSpace(msaaValue))
+        {
+            return msaaValue;
+        }
+
+        if (node.Metadata.TryGetValue("uia.helpText", out var helpText) && !string.IsNullOrWhiteSpace(helpText))
+        {
+            return helpText;
+        }
+
+        return "(no text/value exposed by current Windows backend)";
+    }
+
+    private static string BuildWindowsTextDetails(WindowsAutomationNode? node)
+    {
+        if (node is null)
+        {
+            return "";
+        }
+
+        var parts = new List<string>();
+
+        if (node.Metadata.TryGetValue("uia.acceleratorKey", out var accelerator) && !string.IsNullOrWhiteSpace(accelerator))
+        {
+            parts.Add($"accelerator={accelerator}");
+        }
+
+        if (node.Metadata.TryGetValue("uia.accessKey", out var accessKey) && !string.IsNullOrWhiteSpace(accessKey))
+        {
+            parts.Add($"accessKey={accessKey}");
+        }
+
+        if (node.Metadata.TryGetValue("msaa.defaultAction", out var defaultAction) && !string.IsNullOrWhiteSpace(defaultAction))
+        {
+            parts.Add($"defaultAction={defaultAction}");
+        }
+
+        if (node.Metadata.TryGetValue("msaa.keyboardShortcut", out var shortcut) && !string.IsNullOrWhiteSpace(shortcut))
+        {
+            parts.Add($"shortcut={shortcut}");
+        }
+
+        return parts.Count == 0
+            ? "(no additional text metadata)"
+            : string.Join(" · ", parts);
+    }
+
+    private static string BuildWindowsValueDetails(DesktopElement? projected)
+    {
+        if (projected is null)
+        {
+            return "";
+        }
+
+        var parts = new List<string>();
+
+        if (projected.SupportedActions.Count > 0)
+        {
+            parts.Add($"actions={string.Join(",", projected.SupportedActions)}");
+        }
+
+        if (projected.Locators.Count > 0)
+        {
+            parts.Add($"locators={projected.Locators.Count}");
+        }
+
+        if (projected.Metadata.Count > 0)
+        {
+            parts.Add($"metadata={projected.Metadata.Count}");
+        }
+
+        return parts.Count == 0
+            ? "(no projected action/value metadata)"
+            : string.Join(" · ", parts);
     }
 
     private static string FormatJavaBounds(AccessibleNode? node) =>
@@ -2181,6 +2687,178 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private static string FormatActions(IReadOnlyList<string> actions) =>
         actions.Count == 0 ? "No semantic actions exposed" : string.Join("  ·  ", actions);
+
+    private static string BuildWindowsBoundsValue(WindowsAutomationNode? node)
+    {
+        if (node is null)
+        {
+            return "";
+        }
+
+        return node.ClientBounds.Width > 0 && node.ClientBounds.Height > 0
+            ? $"{node.Bounds.X}, {node.Bounds.Y}  ·  {node.Bounds.Width} x {node.Bounds.Height}  |  client {node.ClientBounds.X}, {node.ClientBounds.Y}  ·  {node.ClientBounds.Width} x {node.ClientBounds.Height}"
+            : $"{node.Bounds.X}, {node.Bounds.Y}  ·  {node.Bounds.Width} x {node.Bounds.Height}";
+    }
+
+    private static string BuildWindowsRawIdsValue(WindowsAutomationNode? node)
+    {
+        if (node is null)
+        {
+            return "";
+        }
+
+        var parts = new List<string> { $"HWND 0x{node.NativeHandle.ToInt64():X}" };
+
+        if (node.ControlId > 0)
+        {
+            parts.Add($"CTRL {node.ControlId}");
+        }
+
+        if (node.ProcessId > 0)
+        {
+            parts.Add($"PID {node.ProcessId}");
+        }
+
+        if (node.ThreadId > 0)
+        {
+            parts.Add($"TID {node.ThreadId}");
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    private static string BuildWindowsEvidenceSummary(WindowsAutomationNode? node, DesktopElement? projected)
+    {
+        if (node is null)
+        {
+            return "";
+        }
+
+        var parts = new List<string> { $"backend={node.BackendKind}", $"source={projected?.SourceType.ToString() ?? "unknown"}" };
+
+        if (projected is not null)
+        {
+            parts.Add($"kind={projected.ElementKind}");
+            parts.Add($"confidence={projected.Confidence:0.00}");
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    private static string BuildWindowsLocatorCandidatesSummary(DesktopElement? projected)
+    {
+        if (projected is null || projected.Locators.Count == 0)
+        {
+            return "(no locator candidates projected yet)";
+        }
+
+        return string.Join(Environment.NewLine, projected.Locators
+            .OrderBy(locator => locator.Priority)
+            .Take(4)
+            .Select(locator => $"P{locator.Priority} [{locator.Type}] score={locator.Score}  {locator.Value}"));
+    }
+
+    private static string BuildWindowsMetadataSummary(DesktopElement? projected)
+    {
+        if (projected is null || projected.Metadata.Count == 0)
+        {
+            return "(no projected metadata)";
+        }
+
+        return string.Join(Environment.NewLine, projected.Metadata
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
+            .OrderBy(pair => pair.Key)
+            .Take(8)
+            .Select(pair => $"{pair.Key}={pair.Value}"));
+    }
+
+    private static string BuildWindowsActiveXSummary(DesktopElement? projected)
+    {
+        if (projected is null)
+        {
+            return "(no ActiveX/OCX indicators)";
+        }
+
+        var metadata = projected.Metadata;
+        var parts = new List<string>();
+
+        if (metadata.TryGetValue("window.hasOcxModules", out var hasOcx) && !string.IsNullOrWhiteSpace(hasOcx))
+        {
+            parts.Add($"window.hasOcxModules={hasOcx}");
+        }
+
+        if (metadata.TryGetValue("window.legacyModules", out var legacyModules) && !string.IsNullOrWhiteSpace(legacyModules))
+        {
+            parts.Add(legacyModules);
+        }
+
+        if (metadata.TryGetValue("activeX.comEnabled", out var comEnabled) && !string.IsNullOrWhiteSpace(comEnabled))
+        {
+            parts.Add($"comEnabled={comEnabled}");
+        }
+
+        if (metadata.TryGetValue("activeX.typeName", out var typeName) && !string.IsNullOrWhiteSpace(typeName))
+        {
+            parts.Add($"type={typeName}");
+        }
+
+        if (metadata.TryGetValue("activeX.propertyCount", out var propertyCount) && !string.IsNullOrWhiteSpace(propertyCount) && propertyCount != "0")
+        {
+            parts.Add($"properties={propertyCount}");
+        }
+
+        return parts.Count == 0 ? "(no ActiveX/OCX indicators)" : string.Join(Environment.NewLine, parts);
+    }
+
+    private static string BuildWindowsActiveXDetails(DesktopElement? projected)
+    {
+        if (projected is null || projected.Metadata.Count == 0)
+        {
+            return "(no ActiveX details)";
+        }
+
+        var lines = projected.Metadata
+            .Where(pair => pair.Key.StartsWith("activeX.", StringComparison.OrdinalIgnoreCase))
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
+            .OrderBy(pair => pair.Key)
+            .Select(pair => $"{pair.Key}={pair.Value}")
+            .ToList();
+
+        return lines.Count == 0 ? "(no ActiveX details)" : string.Join(Environment.NewLine, lines);
+    }
+
+    private static string BuildWindowsLocatorCandidateDetails(LocatorCandidate? candidate)
+    {
+        if (candidate is null)
+        {
+            return "Select a locator candidate to inspect its payload and supporting properties.";
+        }
+
+        var lines = new List<string>
+        {
+            $"type={candidate.Type}",
+            $"priority={candidate.Priority}",
+            $"score={candidate.Score}",
+            $"confidence={candidate.Confidence:0.00}",
+            $"value={candidate.Value}"
+        };
+
+        if (candidate.Region is not null)
+        {
+            var region = candidate.Region.Value;
+            lines.Add($"region={region.X},{region.Y},{region.Width},{region.Height}");
+        }
+
+        foreach (var property in candidate.Properties.OrderBy(pair => pair.Key))
+        {
+            if (!string.IsNullOrWhiteSpace(property.Value))
+            {
+                lines.Add($"{property.Key}={property.Value}");
+            }
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {

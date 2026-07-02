@@ -269,27 +269,15 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         if (_viewModel.Root is null || _viewModel.CurrentWindow is null) return;
         if (_lastHoverPoint is { } previous && Math.Abs(previous.X - point.X) < 2 && Math.Abs(previous.Y - point.Y) < 2) return;
         _lastHoverPoint = point;
-        if (!GetWindowRect(_viewModel.CurrentWindow.Hwnd, out var native) || point.X < native.Left || point.X >= native.Right || point.Y < native.Top || point.Y >= native.Bottom)
-        { HighlightOverlay.HidePersistent(); return; }
-
-        _viewModel.RefreshBounds(_viewModel.Root);
-        var root = _viewModel.Root;
-        if (!root.HasValidBounds) return;
-        var scaleX = (double)(native.Right - native.Left) / root.Width;
-        var scaleY = (double)(native.Bottom - native.Top) / root.Height;
-        var jabX = root.X + (int)Math.Round((point.X - native.Left) / scaleX);
-        var jabY = root.Y + (int)Math.Round((point.Y - native.Top) / scaleY);
-        // JAB distributions differ on whether hit-testing expects physical
-        // screen pixels or Java's logical coordinates. Probe physical first,
-        // then use the anchored inverse transform when the result misses.
-        var node = _viewModel.InspectAt(point.X, point.Y);
-        var bounds = node is null ? new ElementBounds(0, 0, 0, 0) : GetPhysicalBounds(node);
-        if (node is null || !Contains(bounds, point))
-        {
-            var logicalNode = _viewModel.InspectAt(jabX, jabY);
-            if (logicalNode is not null) { node = logicalNode; bounds = GetPhysicalBounds(logicalNode); }
-        }
-        if (node is null) { HighlightOverlay.HidePersistent(); return; }
+        var inspection = _viewModel.InspectJavaAtScreenPoint(
+            new JabInspector.Core.Models.NativePoint(point.X, point.Y),
+            (x, y) => _viewModel.InspectAt(x, y),
+            GetPhysicalBounds,
+            (candidateBounds, candidatePoint) => Contains(candidateBounds, new NativePoint { X = candidatePoint.X, Y = candidatePoint.Y }),
+            "[HOVER]");
+        if (inspection is null) { HighlightOverlay.HidePersistent(); return; }
+        var node = inspection.ResolvedNode;
+        var bounds = inspection.PhysicalBounds;
         _viewModel.SelectedNode = node;
         if (!ReferenceEquals(_lastHierarchyNode, node))
         {
@@ -298,9 +286,11 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
             _lastHierarchyNode = node;
         }
         DetailsTabs.SelectedItem = PropertiesTab;
-        var visualNode = node;
-        while (!HasOnScreenBounds(bounds) && visualNode.Parent is not null)
-        { visualNode = visualNode.Parent; _viewModel.RefreshBounds(visualNode); bounds = GetPhysicalBounds(visualNode); }
+        var visualNode = inspection.VisibleAncestor;
+        if (!ReferenceEquals(visualNode, node))
+        {
+            bounds = GetPhysicalBounds(visualNode);
+        }
         if (HasOnScreenBounds(bounds)) HighlightOverlay.ShowPersistent(bounds); else HighlightOverlay.HidePersistent();
     }
 
@@ -351,42 +341,20 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
             return;
         }
 
-        if (!GetWindowRect(_viewModel.CurrentWindow.Hwnd, out var native) ||
-            point.X < native.Left || point.X >= native.Right ||
-            point.Y < native.Top || point.Y >= native.Bottom)
+        var inspection = _viewModel.InspectJavaAtScreenPoint(
+            new JabInspector.Core.Models.NativePoint(point.X, point.Y),
+            (x, y) => _viewModel.InspectAt(x, y),
+            GetPhysicalBounds,
+            (candidateBounds, candidatePoint) => Contains(candidateBounds, new NativePoint { X = candidatePoint.X, Y = candidatePoint.Y }),
+            "[PICKER]");
+        if (inspection is null)
         {
             HighlightOverlay.HidePersistent();
             return;
         }
 
-        _viewModel.RefreshBounds(_viewModel.Root);
-        var root = _viewModel.Root;
-        if (!root.HasValidBounds) return;
-
-        var scaleX = (double)(native.Right - native.Left) / root.Width;
-        var scaleY = (double)(native.Bottom - native.Top) / root.Height;
-        var jabX = root.X + (int)Math.Round((point.X - native.Left) / scaleX);
-        var jabY = root.Y + (int)Math.Round((point.Y - native.Top) / scaleY);
-
-        var node = _viewModel.InspectAt(point.X, point.Y);
-        var bounds = node is null ? new ElementBounds(0, 0, 0, 0) : GetPhysicalBounds(node);
-
-        if (node is null || !Contains(bounds, point))
-        {
-            var logicalNode = _viewModel.InspectAt(jabX, jabY);
-            if (logicalNode is not null)
-            {
-                node = logicalNode;
-                bounds = GetPhysicalBounds(logicalNode);
-            }
-        }
-
-        if (node is null)
-        {
-            HighlightOverlay.HidePersistent();
-            return;
-        }
-
+        var node = inspection.ResolvedNode;
+        var bounds = inspection.PhysicalBounds;
         _viewModel.SelectedNode = node;
         if (!ReferenceEquals(_lastHierarchyNode, node))
         {
@@ -396,12 +364,9 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         }
 
         DetailsTabs.SelectedItem = PropertiesTab;
-
-        var visualNode = node;
-        while (!HasOnScreenBounds(bounds) && visualNode.Parent is not null)
+        var visualNode = inspection.VisibleAncestor;
+        if (!ReferenceEquals(visualNode, node))
         {
-            visualNode = visualNode.Parent;
-            _viewModel.RefreshBounds(visualNode);
             bounds = GetPhysicalBounds(visualNode);
         }
 
@@ -903,52 +868,19 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
     {
         node = null;
         bounds = new ElementBounds(0, 0, 0, 0);
-        if (_viewModel.Root is null || _viewModel.CurrentWindow is null) return false;
-        if (!GetWindowRect(_viewModel.CurrentWindow.Hwnd, out var native)) return false;
-        if (point.X < native.Left || point.X >= native.Right || point.Y < native.Top || point.Y >= native.Bottom)
+        var inspection = _viewModel.InspectJavaAtScreenPoint(
+            new JabInspector.Core.Models.NativePoint(point.X, point.Y),
+            (x, y) => _viewModel.InspectAt(x, y),
+            GetPhysicalBounds,
+            (candidateBounds, candidatePoint) => Contains(candidateBounds, new NativePoint { X = candidatePoint.X, Y = candidatePoint.Y }),
+            "[RECORDER]");
+        if (inspection is null) return false;
+
+        node = inspection.ResolvedNode;
+        bounds = inspection.PhysicalBounds;
+        if (!HasOnScreenBounds(bounds) && !ReferenceEquals(inspection.VisibleAncestor, inspection.ResolvedNode))
         {
-            _viewModel.Log($"[RECORDER] Resolve skipped because point is outside native window rect. Point=({point.X},{point.Y}), Rect=({native.Left},{native.Top},{native.Right},{native.Bottom}).");
-            return false;
-        }
-
-        _viewModel.RefreshBounds(_viewModel.Root);
-        var root = _viewModel.Root;
-        if (!root.HasValidBounds) return false;
-
-        var scaleX = (double)(native.Right - native.Left) / root.Width;
-        var scaleY = (double)(native.Bottom - native.Top) / root.Height;
-        var jabX = root.X + (int)Math.Round((point.X - native.Left) / scaleX);
-        var jabY = root.Y + (int)Math.Round((point.Y - native.Top) / scaleY);
-        _viewModel.Log($"[RECORDER] Resolving point. Physical=({point.X},{point.Y}), NativeRect=({native.Left},{native.Top},{native.Right},{native.Bottom}), RootBounds=({root.X},{root.Y},{root.Width},{root.Height}), Scale=({scaleX:0.###},{scaleY:0.###}), LogicalProbe=({jabX},{jabY}).");
-
-        node = _viewModel.InspectAt(point.X, point.Y);
-        bounds = node is null ? new ElementBounds(0, 0, 0, 0) : GetPhysicalBounds(node);
-        _viewModel.Log(node is null
-            ? "[RECORDER] Physical JAB hit-test returned no node."
-            : $"[RECORDER] Physical JAB hit-test returned '{node.DisplayName}' with physical bounds ({bounds.X},{bounds.Y},{bounds.Width},{bounds.Height}). ContainsPoint={Contains(bounds, point)}.");
-        if (node is null || !Contains(bounds, point))
-        {
-            var logicalNode = _viewModel.InspectAt(jabX, jabY);
-            if (logicalNode is not null)
-            {
-                node = logicalNode;
-                bounds = GetPhysicalBounds(logicalNode);
-                _viewModel.Log($"[RECORDER] Logical JAB hit-test returned '{node.DisplayName}' with physical bounds ({bounds.X},{bounds.Y},{bounds.Width},{bounds.Height}). ContainsPoint={Contains(bounds, point)}.");
-            }
-            else
-            {
-                _viewModel.Log("[RECORDER] Logical JAB hit-test returned no node.");
-            }
-        }
-
-        if (node is null) return false;
-
-        var visualNode = node;
-        while (!HasOnScreenBounds(bounds) && visualNode.Parent is not null)
-        {
-            visualNode = visualNode.Parent;
-            _viewModel.RefreshBounds(visualNode);
-            bounds = GetPhysicalBounds(visualNode);
+            bounds = GetPhysicalBounds(inspection.VisibleAncestor);
         }
 
         return HasOnScreenBounds(bounds);

@@ -163,6 +163,46 @@ public final class JavaObject {
         return automation.findChildElements(objectKey, locator, maxDepth, maxResults, includeSelf, window);
     }
 
+    public List<JavaElementHandle> findTableRows() {
+        return locator == null ? automation.findTableRows(objectKey, window) : automation.findTableRows(locator, window);
+    }
+
+    public List<JavaElementHandle> findTableCells() {
+        return locator == null ? automation.findTableCells(objectKey, window) : automation.findTableCells(locator, window);
+    }
+
+    public JavaElementHandle findTableCell(int rowIndex, int columnIndex) {
+        return locator == null ? automation.findTableCell(objectKey, rowIndex, columnIndex, window) : automation.findTableCell(locator, rowIndex, columnIndex, window);
+    }
+
+    public JavaElementHandle findTableCell(int rowIndex, String columnHeader) {
+        return locator == null ? automation.findTableCell(objectKey, rowIndex, columnHeader, window) : automation.findTableCell(locator, rowIndex, columnHeader, window);
+    }
+
+    public String getTableCellText(int rowIndex, int columnIndex) {
+        return findTableCell(rowIndex, columnIndex).getText();
+    }
+
+    public String getTableCellText(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).getText();
+    }
+
+    public JavaElementHandle clickTableCell(int rowIndex, int columnIndex) {
+        return findTableCell(rowIndex, columnIndex).click();
+    }
+
+    public JavaElementHandle clickTableCell(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).click();
+    }
+
+    public JavaElementHandle doubleClickTableCell(int rowIndex, int columnIndex) {
+        return findTableCell(rowIndex, columnIndex).doubleClick();
+    }
+
+    public JavaElementHandle doubleClickTableCell(int rowIndex, String columnHeader) {
+        return findTableCell(rowIndex, columnHeader).doubleClick();
+    }
+
     private String label() {
         if (objectKey != null && !objectKey.isBlank()) return objectKey;
         if (locator == null) return "(inline locator)";

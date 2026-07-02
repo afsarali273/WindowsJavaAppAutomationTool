@@ -23,6 +23,16 @@ public static class LocatorGenerator
         BuildSemanticXPath(node),
         node.Parent?.Role ?? "",
         node.Parent?.Name ?? "",
+        node.IsTableLikeContainer,
+        node.IsTableLikeRow,
+        node.IsTableLikeCell,
+        node.TableLikeKind,
+        node.TableLikeContainerPath,
+        node.TableLikeColumnHeader,
+        node.TableLikeRowIndex,
+        node.TableLikeColumnIndex,
+        node.TableLikeRowCount,
+        node.TableLikeColumnCount,
         node.HasManagedDescendantAncestor,
         node.ActionNames,
         node.TextPreview,
@@ -100,10 +110,15 @@ public static class LocatorGenerator
         AddPredicate(predicates, "description", node.Description);
         AddPredicate(predicates, "textPreview", node.TextPreview);
         AddPredicate(predicates, "currentValue", node.CurrentValue);
+        AddPredicate(predicates, "tableLikeKind", node.TableLikeKind);
+        AddPredicate(predicates, "tableLikeColumnHeader", node.TableLikeColumnHeader);
+        AddPredicate(predicates, "tableLikeContainerPath", node.TableLikeContainerPath);
         AddPredicate(predicates, "parentRole", node.Parent?.Role);
         AddPredicate(predicates, "parentName", node.Parent?.Name);
         if (node.ObjectDepth >= 0) predicates.Add($"@objectDepth='{node.ObjectDepth}'");
         if (node.IndexInParent >= 0) predicates.Add($"@indexInParent='{node.IndexInParent}'");
+        if (node.TableLikeRowIndex >= 0) predicates.Add($"@tableLikeRowIndex='{node.TableLikeRowIndex}'");
+        if (node.TableLikeColumnIndex >= 0) predicates.Add($"@tableLikeColumnIndex='{node.TableLikeColumnIndex}'");
 
         return predicates.Count == 0
             ? $"//{role}"

@@ -146,7 +146,7 @@ Do not split too early. Start in `WinInspector.Core` while interfaces stabilize.
 
 ### Module M001: Unified Windows Element Model
 
-Status: Not started
+Status: In progress
 
 Priority: P0
 
@@ -208,9 +208,9 @@ public sealed class ElementEvidence
 
 Deliverables:
 
-- [ ] Add `DesktopElement`, `LocatorCandidate`, `ElementEvidence`, `ResolvedElement`, `WindowsScreenContext`, `WindowsScreenRegion`.
-- [ ] Keep existing `WindowsAutomationNode` until UI migration is ready.
-- [ ] Add converters from existing UIA/Win32 backend nodes to `DesktopElement`.
+- [x] Add `DesktopElement`, `LocatorCandidate`, `ElementEvidence`, `ResolvedElement`, `WindowsScreenContext`, `WindowsScreenRegion`.
+- [x] Keep existing `WindowsAutomationNode` until UI migration is ready.
+- [x] Add converters from existing UIA/Win32 backend nodes to `DesktopElement`.
 - [ ] Add provider metadata fields: `provider`, `backend`, `sourceType`, `elementKind`.
 - [ ] Add JSON serialization compatibility tests.
 
@@ -265,9 +265,9 @@ Required APIs:
 Deliverables:
 
 - [ ] Expand native interop with missing Win32 methods.
-- [ ] Add `Win32Scanner.InspectWindow`.
-- [ ] Add `Win32Scanner.InspectPoint`.
-- [ ] Add `Win32Scanner.FindChildrenInRegion`.
+- [x] Add `Win32Scanner.InspectWindow`.
+- [x] Add `Win32Scanner.InspectPoint`.
+- [x] Add `Win32Scanner.FindChildrenInRegion`.
 - [ ] Collect HWND, parent HWND, class name, window text, control ID, bounds, client bounds, process ID, thread ID, visibility, enabled state, style, extended style.
 - [ ] Add path generation: HWND path, class path, control ID path, index path.
 - [ ] Add same-HWND multi-point probe helper for custom panel detection.
@@ -293,7 +293,7 @@ Acceptance criteria:
 
 ### Module M020: MSAA Scanner
 
-Status: Not started
+Status: In progress
 
 Priority: P0
 
@@ -322,12 +322,12 @@ MSAA children may be either COM objects or integer child IDs. Store both the par
 
 Deliverables:
 
-- [ ] Add `OleAccNative` interop.
-- [ ] Add `MsaaScanner.InspectWindow`.
-- [ ] Add `MsaaScanner.InspectPoint`.
-- [ ] Add `MsaaElementRef` with `IAccessible`, child ID, hwnd, role, state, bounds.
-- [ ] Add safe recursion with max depth and max child count.
-- [ ] Add MSAA default-action executor.
+- [x] Add `OleAccNative` interop.
+- [x] Add `MsaaScanner.InspectWindow`.
+- [x] Add `MsaaScanner.InspectPoint`.
+- [x] Add `MsaaElementRef` with `IAccessible`, child ID, hwnd, role, state, bounds.
+- [x] Add safe recursion with max depth and max child count.
+- [x] Add MSAA default-action executor.
 
 Pseudo-code:
 
@@ -347,7 +347,7 @@ Acceptance criteria:
 
 ### Module M030: UIA Raw/Control/Content Scanner
 
-Status: Existing basic Raw-like tree through UIA, needs multi-view support
+Status: In progress
 
 Priority: P0
 
@@ -391,7 +391,7 @@ Required patterns:
 Deliverables:
 
 - [ ] Split current `UiaAutomationBackend` into scanner plus tree adapter.
-- [ ] Add view option: Raw, Control, Content.
+- [x] Add view option: Raw, Control, Content.
 - [ ] Capture pattern support into metadata.
 - [ ] Add `UiaEvidence`.
 - [ ] Add UIA point inspection.
@@ -405,7 +405,7 @@ Acceptance criteria:
 
 ### Module M040: LegacyIAccessible Pattern Merger
 
-Status: Not started
+Status: In progress
 
 Priority: P1
 
@@ -425,7 +425,7 @@ Acceptance criteria:
 
 ### Module M050: Control Message Extractors
 
-Status: Not started
+Status: In progress
 
 Priority: P1
 
@@ -443,22 +443,22 @@ Control extractors:
 
 Deliverables:
 
-- [ ] Add `IControlMessageExtractor`.
-- [ ] Add extractor registry by class name and style.
-- [ ] Extract child virtual elements for list items, combo items, tabs, tree nodes, grid-like controls where possible.
-- [ ] Add message-based action executor.
-- [ ] Add timeout and cross-process safety around `SendMessage`.
+- [x] Add `IControlMessageExtractor`.
+- [x] Add extractor registry by class name and style.
+- [x] Extract child virtual elements for list items, combo items, tabs, tree nodes, grid-like controls where possible.
+- [x] Add message-based action executor.
+- [x] Add timeout and cross-process safety around `SendMessage`.
 
 Acceptance criteria:
 
-- [ ] Classic ListBox item text appears as child elements.
-- [ ] Classic ComboBox selected item can be read and changed.
-- [ ] Edit/TextBox values can be read and set without OCR.
-- [ ] Button click can use `BM_CLICK`.
+- [x] Classic ListBox item text appears as child elements.
+- [x] Classic ComboBox selected item can be read and changed.
+- [x] Edit/TextBox values can be read and set without OCR.
+- [x] Button click can use `BM_CLICK`.
 
 ### Module M060: ActiveX/COM Inspector
 
-Status: Not started
+Status: In progress
 
 Priority: P2
 
@@ -466,11 +466,11 @@ Purpose: Detect and optionally inspect VB6/OCX controls such as MSFlexGrid, Sher
 
 Deliverables:
 
-- [ ] Add OCX/module detector using process module list.
-- [ ] Add known class/control catalog.
-- [ ] Add optional COM/IDispatch reader.
-- [ ] Try common properties: `Rows`, `Cols`, `TextMatrix`, `ListCount`, `Item`, `Caption`, `Value`, `SelectedIndex`, `Text`, `Enabled`, `Visible`.
-- [ ] Add guardrails: feature toggle, timeout, exception isolation.
+- [x] Add OCX/module detector using process module list.
+- [x] Add known class/control catalog.
+- [x] Add optional COM/IDispatch reader.
+- [x] Try common properties: `Rows`, `Cols`, `TextMatrix`, `ListCount`, `Item`, `Caption`, `Value`, `SelectedIndex`, `Text`, `Enabled`, `Visible`.
+- [x] Add guardrails: feature toggle, timeout, exception isolation.
 
 Risks:
 
@@ -481,7 +481,7 @@ Risks:
 Acceptance criteria:
 
 - [ ] ActiveX detection can identify likely OCX-backed controls.
-- [ ] COM extraction is optional and disabled by default for safety.
+- [x] COM extraction is optional and disabled by default for safety.
 
 ### Module M070: GDI Text Capture
 
@@ -738,9 +738,9 @@ public bool IsCustomDrawnPanel(RegionInspectionResult result)
 
 Deliverables:
 
-- [ ] Add scoring model and explanation.
-- [ ] Add known legacy class list: `ThunderRT6PictureBoxDC`, `ThunderRT6UserControlDC`, `AfxWnd`, `Static`, `CustomControl`, `Panel`.
-- [ ] Add UI panel indicator: `Real Control`, `Likely Container`, `Custom Drawn Panel`.
+- [x] Add scoring model and explanation.
+- [x] Add known legacy class list: `ThunderRT6PictureBoxDC`, `ThunderRT6UserControlDC`, `AfxWnd`, `Static`, `CustomControl`, `Panel`.
+- [x] Add UI panel indicator: `Real Control`, `Likely Container`, `Custom Drawn Panel`.
 
 Acceptance criteria:
 
@@ -1282,10 +1282,10 @@ Rules:
 
 Deliverables:
 
-- [ ] Windows selected element details panel.
-- [ ] Windows locator candidate table.
-- [ ] Windows source/evidence viewer.
-- [ ] Real tree tabs: Win32, MSAA, UIA Raw, UIA Control, UIA Content.
+- [x] Windows selected element details panel.
+- [x] Windows locator candidate table.
+- [x] Windows source/evidence viewer.
+- [x] Real tree tabs: Win32, MSAA, UIA Raw, UIA Control, UIA Content.
 - [ ] Virtual element tree panel.
 - [ ] Screenshot panel with overlays.
 - [ ] Region selection tool.
@@ -1413,8 +1413,8 @@ Goal: read classic controls without OCR.
 Tasks:
 
 - [ ] Add message extractors for Edit, Button, ListBox, ComboBox, Tab.
-- [ ] Add ListView and TreeView after core extractors stabilize.
-- [ ] Generate virtual child elements for items/tabs.
+- [x] Add ListView and TreeView after core extractors stabilize.
+- [x] Generate virtual child elements for items/tabs.
 - [ ] Add message-based actions.
 
 Exit criteria:

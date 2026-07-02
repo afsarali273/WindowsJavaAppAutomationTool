@@ -1037,6 +1037,16 @@ public sealed class JavaDriverService : IDisposable
             LocatorGenerator.BuildXPath(node),
             node.Parent?.Role ?? "",
             node.Parent?.Name ?? "",
+            node.IsTableLikeContainer,
+            node.IsTableLikeRow,
+            node.IsTableLikeCell,
+            node.TableLikeKind,
+            node.TableLikeContainerPath,
+            node.TableLikeColumnHeader,
+            node.TableLikeRowIndex,
+            node.TableLikeColumnIndex,
+            node.TableLikeRowCount,
+            node.TableLikeColumnCount,
             node.TextPreview,
             node.CurrentValue,
             new ElementBounds(node.X, node.Y, node.Width, node.Height),
@@ -1060,6 +1070,9 @@ public sealed class JavaDriverService : IDisposable
         AddScore(ref score, TextEquals(LocatorGenerator.BuildIndexXPath(node), locator?.IndexXPath ?? entry?.IndexXPath), 30);
         AddScore(ref score, TextEquals(node.Parent?.Role, locator?.ParentRole ?? entry?.ParentRole), 10);
         AddScore(ref score, TextEquals(node.Parent?.Name, locator?.ParentName ?? entry?.ParentName), 10);
+        AddScore(ref score, TextEquals(node.TableLikeKind, locator?.TableLikeKind ?? entry?.TableLikeKind), 16);
+        AddScore(ref score, TextEquals(node.TableLikeContainerPath, locator?.TableLikeContainerPath ?? entry?.TableLikeContainerPath), 20);
+        AddScore(ref score, TextEquals(node.TableLikeColumnHeader, locator?.TableLikeColumnHeader ?? entry?.TableLikeColumnHeader), 12);
         AddScore(ref score, TextEquals(node.TextPreview, locator?.TextPreview ?? entry?.Locator?.TextPreview), 12);
         AddScore(ref score, TextEquals(node.CurrentValue, locator?.CurrentValue ?? entry?.Locator?.CurrentValue), 14);
 
@@ -1067,6 +1080,10 @@ public sealed class JavaDriverService : IDisposable
         if (expectedDepth >= 0 && node.ObjectDepth == expectedDepth) score += 8;
         var expectedIndex = locator?.IndexInParent ?? entry?.IndexInParent ?? -1;
         if (expectedIndex >= 0 && node.IndexInParent == expectedIndex) score += 8;
+        var expectedRow = locator?.TableLikeRowIndex ?? entry?.TableLikeRowIndex ?? -1;
+        if (expectedRow >= 0 && node.TableLikeRowIndex == expectedRow) score += 18;
+        var expectedColumn = locator?.TableLikeColumnIndex ?? entry?.TableLikeColumnIndex ?? -1;
+        if (expectedColumn >= 0 && node.TableLikeColumnIndex == expectedColumn) score += 18;
 
         if (locator?.Bounds is not null && BoundsClose(node, locator.Bounds)) score += 8;
         else if (entry is not null && BoundsClose(node, new ElementBounds(entry.X, entry.Y, entry.Width, entry.Height))) score += 8;
@@ -1204,28 +1221,33 @@ public sealed class JavaDriverService : IDisposable
     private static JavaWindowInfo? FindWindow(IEnumerable<JavaWindowInfo> windows, JavaWindowSelector selector)
     {
         var candidates = windows.ToList();
-        if (!string.IsNullOrWhiteSpace(selector.Hwnd))
+        if (candidates.Count == 0) return null;
+
+        var ranked = candidates
+            .Select(window => new
+            {
+                Window = window,
+                Score = ScoreWindowSelector(window, selector)
+            })
+            .OrderByDescending(candidate => candidate.Score)
+            .ThenBy(candidate => candidate.Window.Title)
+            .ToList();
+
+        if (ranked.Count == 0) return null;
+
+        var best = ranked[0];
+        if (best.Score <= 0)
         {
-            var normalized = selector.Hwnd.Trim();
-            candidates = candidates
-                .Where(window =>
-                    string.Equals(window.HwndDisplay, normalized, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(window.Hwnd.ToInt64().ToString("X"), normalized.TrimStart('0', 'x', 'X'), StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            var fallback = candidates.FirstOrDefault(window =>
+                !string.IsNullOrWhiteSpace(selector.Title)
+                    ? (selector.ExactTitle
+                        ? string.Equals(window.Title, selector.Title, StringComparison.OrdinalIgnoreCase)
+                        : window.Title.Contains(selector.Title, StringComparison.OrdinalIgnoreCase))
+                    : !string.IsNullOrWhiteSpace(selector.ClassName) && string.Equals(window.ClassName, selector.ClassName, StringComparison.OrdinalIgnoreCase));
+            return fallback ?? candidates.FirstOrDefault();
         }
 
-        if (selector.ProcessId is not null)
-            candidates = candidates.Where(window => window.ProcessId == selector.ProcessId.Value).ToList();
-        if (selector.VmId is not null)
-            candidates = candidates.Where(window => window.VmId == selector.VmId.Value).ToList();
-        if (!string.IsNullOrWhiteSpace(selector.ClassName))
-            candidates = candidates.Where(window => string.Equals(window.ClassName, selector.ClassName, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (!string.IsNullOrWhiteSpace(selector.Title))
-            candidates = candidates.Where(window => selector.ExactTitle
-                ? string.Equals(window.Title, selector.Title, StringComparison.OrdinalIgnoreCase)
-                : window.Title.Contains(selector.Title, StringComparison.OrdinalIgnoreCase)).ToList();
-
-        return candidates.FirstOrDefault();
+        return best.Window;
     }
 
     private static JavaWindowInfo? FindWindow(IEnumerable<JavaWindowInfo> windows, JavaWindowLocator scope)
@@ -1253,8 +1275,6 @@ public sealed class JavaDriverService : IDisposable
     {
         if (!string.IsNullOrWhiteSpace(entry.WindowHwndDisplay) &&
             string.Equals(entry.WindowHwndDisplay, window.HwndDisplay, StringComparison.OrdinalIgnoreCase)) return true;
-        if (entry.WindowProcessId != 0 && entry.WindowProcessId != window.ProcessId) return false;
-        if (entry.WindowVmId != 0 && entry.WindowVmId != window.VmId) return false;
         if (!string.IsNullOrWhiteSpace(entry.WindowClassName) &&
             !string.Equals(entry.WindowClassName, window.ClassName, StringComparison.OrdinalIgnoreCase)) return false;
         return string.IsNullOrWhiteSpace(entry.WindowTitle) ||
@@ -1265,8 +1285,6 @@ public sealed class JavaDriverService : IDisposable
     {
         if (!string.IsNullOrWhiteSpace(step.WindowHwndDisplay) &&
             string.Equals(step.WindowHwndDisplay, window.HwndDisplay, StringComparison.OrdinalIgnoreCase)) return true;
-        if (step.WindowProcessId != 0 && step.WindowProcessId != window.ProcessId) return false;
-        if (step.WindowVmId != 0 && step.WindowVmId != window.VmId) return false;
         if (!string.IsNullOrWhiteSpace(step.WindowClassName) &&
             !string.Equals(step.WindowClassName, window.ClassName, StringComparison.OrdinalIgnoreCase)) return false;
         return string.IsNullOrWhiteSpace(step.WindowTitle) ||
@@ -1279,8 +1297,8 @@ public sealed class JavaDriverService : IDisposable
             Hwnd: FirstNonEmpty(step?.WindowHwndDisplay, entry?.WindowHwndDisplay),
             Title: FirstNonEmpty(step?.WindowTitle, entry?.WindowTitle),
             ClassName: FirstNonEmpty(step?.WindowClassName, entry?.WindowClassName),
-            ProcessId: step?.WindowProcessId > 0 ? step.WindowProcessId : entry?.WindowProcessId > 0 ? entry.WindowProcessId : null,
-            VmId: step?.WindowVmId > 0 ? step.WindowVmId : entry?.WindowVmId > 0 ? entry.WindowVmId : null,
+            ProcessId: null,
+            VmId: null,
             ExactTitle: true);
     }
 
@@ -1295,8 +1313,7 @@ public sealed class JavaDriverService : IDisposable
 
         return session.Windows.FirstOrDefault(x =>
             string.Equals(x.Title, step.WindowTitle, StringComparison.Ordinal)
-            && string.Equals(x.ClassName, step.WindowClassName, StringComparison.Ordinal)
-            && (step.WindowProcessId == 0 || x.ProcessId == 0 || x.ProcessId == step.WindowProcessId));
+            && string.Equals(x.ClassName, step.WindowClassName, StringComparison.Ordinal));
     }
 
     private static bool WindowMatchesScope(JavaWindowLocator scope, JavaWindowInfo window)
@@ -1316,9 +1333,45 @@ public sealed class JavaDriverService : IDisposable
 
     private static bool ScopeProcessMatches(JavaWindowLocator scope, JavaWindowInfo window)
     {
-        if (scope.ProcessId != 0 && scope.ProcessId != window.ProcessId) return false;
-        if (scope.VmId != 0 && scope.VmId != window.VmId) return false;
         return true;
+    }
+
+    private static int ScoreWindowSelector(JavaWindowInfo window, JavaWindowSelector selector)
+    {
+        var score = 0;
+
+        if (!string.IsNullOrWhiteSpace(selector.Title))
+        {
+            if (selector.ExactTitle
+                ? string.Equals(window.Title, selector.Title, StringComparison.OrdinalIgnoreCase)
+                : window.Title.Contains(selector.Title, StringComparison.OrdinalIgnoreCase))
+            {
+                score += 80;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(selector.ClassName) &&
+            string.Equals(window.ClassName, selector.ClassName, StringComparison.OrdinalIgnoreCase))
+        {
+            score += 30;
+        }
+
+        if (selector.ProcessId is not null && window.ProcessId == selector.ProcessId.Value)
+            score += 15;
+        if (selector.VmId is not null && window.VmId == selector.VmId.Value)
+            score += 15;
+
+        if (!string.IsNullOrWhiteSpace(selector.Hwnd))
+        {
+            var normalized = selector.Hwnd.Trim();
+            if (string.Equals(window.HwndDisplay, normalized, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(window.Hwnd.ToInt64().ToString("X"), normalized.TrimStart('0', 'x', 'X'), StringComparison.OrdinalIgnoreCase))
+            {
+                score += 100;
+            }
+        }
+
+        return score;
     }
 
     private static bool MatchesRegex(string value, string pattern)
