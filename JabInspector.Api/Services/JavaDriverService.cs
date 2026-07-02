@@ -1037,6 +1037,16 @@ public sealed class JavaDriverService : IDisposable
             LocatorGenerator.BuildXPath(node),
             node.Parent?.Role ?? "",
             node.Parent?.Name ?? "",
+            node.IsTableLikeContainer,
+            node.IsTableLikeRow,
+            node.IsTableLikeCell,
+            node.TableLikeKind,
+            node.TableLikeContainerPath,
+            node.TableLikeColumnHeader,
+            node.TableLikeRowIndex,
+            node.TableLikeColumnIndex,
+            node.TableLikeRowCount,
+            node.TableLikeColumnCount,
             node.TextPreview,
             node.CurrentValue,
             new ElementBounds(node.X, node.Y, node.Width, node.Height),
@@ -1060,6 +1070,9 @@ public sealed class JavaDriverService : IDisposable
         AddScore(ref score, TextEquals(LocatorGenerator.BuildIndexXPath(node), locator?.IndexXPath ?? entry?.IndexXPath), 30);
         AddScore(ref score, TextEquals(node.Parent?.Role, locator?.ParentRole ?? entry?.ParentRole), 10);
         AddScore(ref score, TextEquals(node.Parent?.Name, locator?.ParentName ?? entry?.ParentName), 10);
+        AddScore(ref score, TextEquals(node.TableLikeKind, locator?.TableLikeKind ?? entry?.TableLikeKind), 16);
+        AddScore(ref score, TextEquals(node.TableLikeContainerPath, locator?.TableLikeContainerPath ?? entry?.TableLikeContainerPath), 20);
+        AddScore(ref score, TextEquals(node.TableLikeColumnHeader, locator?.TableLikeColumnHeader ?? entry?.TableLikeColumnHeader), 12);
         AddScore(ref score, TextEquals(node.TextPreview, locator?.TextPreview ?? entry?.Locator?.TextPreview), 12);
         AddScore(ref score, TextEquals(node.CurrentValue, locator?.CurrentValue ?? entry?.Locator?.CurrentValue), 14);
 
@@ -1067,6 +1080,10 @@ public sealed class JavaDriverService : IDisposable
         if (expectedDepth >= 0 && node.ObjectDepth == expectedDepth) score += 8;
         var expectedIndex = locator?.IndexInParent ?? entry?.IndexInParent ?? -1;
         if (expectedIndex >= 0 && node.IndexInParent == expectedIndex) score += 8;
+        var expectedRow = locator?.TableLikeRowIndex ?? entry?.TableLikeRowIndex ?? -1;
+        if (expectedRow >= 0 && node.TableLikeRowIndex == expectedRow) score += 18;
+        var expectedColumn = locator?.TableLikeColumnIndex ?? entry?.TableLikeColumnIndex ?? -1;
+        if (expectedColumn >= 0 && node.TableLikeColumnIndex == expectedColumn) score += 18;
 
         if (locator?.Bounds is not null && BoundsClose(node, locator.Bounds)) score += 8;
         else if (entry is not null && BoundsClose(node, new ElementBounds(entry.X, entry.Y, entry.Width, entry.Height))) score += 8;

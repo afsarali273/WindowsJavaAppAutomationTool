@@ -35,6 +35,16 @@ public final class JavaElementSnapshot {
     public String xPath() { return text("xPath"); }
     public String parentRole() { return text("parentRole"); }
     public String parentName() { return text("parentName"); }
+    public boolean isTableLikeContainer() { return bool("isTableLikeContainer"); }
+    public boolean isTableLikeRow() { return bool("isTableLikeRow"); }
+    public boolean isTableLikeCell() { return bool("isTableLikeCell"); }
+    public String tableLikeKind() { return text("tableLikeKind"); }
+    public String tableLikeContainerPath() { return text("tableLikeContainerPath"); }
+    public String tableLikeColumnHeader() { return text("tableLikeColumnHeader"); }
+    public int tableLikeRowIndex() { return integer("tableLikeRowIndex"); }
+    public int tableLikeColumnIndex() { return integer("tableLikeColumnIndex"); }
+    public int tableLikeRowCount() { return integer("tableLikeRowCount"); }
+    public int tableLikeColumnCount() { return integer("tableLikeColumnCount"); }
     public String objectKey() { return text("objectKey"); }
     public String textPreview() { return text("textPreview"); }
     public String currentValue() { return text("currentValue"); }
@@ -47,7 +57,8 @@ public final class JavaElementSnapshot {
         }
 
         try {
-            return MAPPER.treeToValue(data, LocatorSuggestion.class);
+            JsonNode locatorNode = data.get("locator");
+            return MAPPER.treeToValue(locatorNode != null && !locatorNode.isNull() ? locatorNode : data, LocatorSuggestion.class);
         } catch (Exception ex) {
             throw new ApiException(0, "Could not convert element snapshot into a locator: " + ex.getMessage());
         }
@@ -77,5 +88,10 @@ public final class JavaElementSnapshot {
     private int integer(String field) {
         JsonNode value = data == null ? null : data.get(field);
         return value == null || value.isNull() ? 0 : value.asInt(0);
+    }
+
+    private boolean bool(String field) {
+        JsonNode value = data == null ? null : data.get(field);
+        return value != null && !value.isNull() && value.asBoolean(false);
     }
 }
