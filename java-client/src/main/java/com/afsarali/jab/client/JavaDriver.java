@@ -229,6 +229,16 @@ public final class JavaDriver implements AutoCloseable {
         return element(locator).asTable();
     }
 
+    public JavaDriver navigate(JavaNavigationCommand command) {
+        return navigate(command, 1);
+    }
+
+    public JavaDriver navigate(JavaNavigationCommand command, int count) {
+        DriverResult result = api.navigate(sessionId, JavaNavigationRequest.of(command, count));
+        ensureSuccess(result);
+        return this;
+    }
+
     public boolean exists(String objectKey) {
         return validate(objectKey).exists();
     }

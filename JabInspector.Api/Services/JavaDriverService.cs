@@ -307,6 +307,15 @@ public sealed class JavaDriverService : IDisposable
         }
     }
 
+    public DriverResult ExecuteNavigation(string sessionId, JavaNavigationRequest request)
+    {
+        lock (_sync)
+        {
+            if (!TryGetSession(sessionId, out var session, out var result)) return result;
+            return ExecuteNavigationCore(session, request);
+        }
+    }
+
     public DriverResult ExecuteOneShotAction(JavaOneShotActionRequest request)
     {
         lock (_sync)
@@ -973,6 +982,29 @@ public sealed class JavaDriverService : IDisposable
             element = new ResolvedElementDto(node.DisplayName, LocatorGenerator.GenerateLocator(node), _automation.GetActions(node)),
             message = execution.Message,
             text = execution.Text
+        });
+    }
+
+    private DriverResult ExecuteNavigationCore(JavaDriverSession session, JavaNavigationRequest request)
+    {
+        var command = NormalizeNavigationCommand(request.Command, out var error);
+        if (command is null)
+            return Fail(error, session.Id);
+
+        var count = Math.Clamp(request.Count, 1, 100);
+        SetForegroundWindow(session.Window.Hwnd);
+        Thread.Sleep(80);
+
+        var sent = SendNavigationKeys(command.Value, count);
+        if (sent <= 0)
+            return Fail($"Could not send navigation command '{command.Value}'.", session.Id);
+
+        _logger.Log($"API navigation command executed. SessionId={session.Id}, Window='{session.Window.Title}', Command={command.Value}, Count={count}.");
+        return Ok($"Navigation command '{command.Value}' sent.", session.Id, new
+        {
+            command = command.Value,
+            count,
+            sent
         });
     }
 
@@ -1755,6 +1787,52 @@ public sealed class JavaDriverService : IDisposable
         }
     }
 
+    private static JavaNavigationCommand? NormalizeNavigationCommand(string command, out string error)
+    {
+        error = "";
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            error = "Navigation command is required.";
+            return null;
+        }
+
+        return command.Trim().Replace("-", "", StringComparison.OrdinalIgnoreCase).Replace("_", "", StringComparison.OrdinalIgnoreCase).ToLowerInvariant() switch
+        {
+            "pagedown" or "pageforward" => JavaNavigationCommand.PageDown,
+            "pageup" or "pageback" => JavaNavigationCommand.PageUp,
+            "down" => JavaNavigationCommand.Down,
+            "up" => JavaNavigationCommand.Up,
+            "home" => JavaNavigationCommand.Home,
+            "end" => JavaNavigationCommand.End,
+            _ => null
+        };
+    }
+
+    private int SendNavigationKeys(JavaNavigationCommand command, int count)
+    {
+        var key = command switch
+        {
+            JavaNavigationCommand.PageDown => 0x22,
+            JavaNavigationCommand.PageUp => 0x21,
+            JavaNavigationCommand.Down => 0x28,
+            JavaNavigationCommand.Up => 0x26,
+            JavaNavigationCommand.Home => 0x24,
+            JavaNavigationCommand.End => 0x23,
+            _ => 0
+        };
+
+        if (key == 0) return 0;
+
+        var inputs = new List<NativeInput>(count * 2);
+        for (var i = 0; i < count; i++)
+        {
+            inputs.Add(NativeInput.Key((ushort)key, false));
+            inputs.Add(NativeInput.Key((ushort)key, true));
+        }
+
+        return inputs.Count == 0 ? 0 : (int)SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<NativeInput>()) / 2;
+    }
+
     private bool TryGetSession(string sessionId, out JavaDriverSession session, out DriverResult result)
     {
         if (_sessions.TryGetValue(sessionId, out session!))
@@ -1824,6 +1902,15 @@ public sealed class JavaDriverService : IDisposable
     private const uint WmClose = 0x0010;
     private const uint KeyEventUnicode = 0x0004;
     private const uint KeyEventKeyUp = 0x0002;
+    private enum JavaNavigationCommand
+    {
+        PageDown,
+        PageUp,
+        Down,
+        Up,
+        Home,
+        End
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeInput
@@ -1839,6 +1926,19 @@ public sealed class JavaDriverService : IDisposable
                 {
                     Scan = value,
                     Flags = KeyEventUnicode | (keyUp ? KeyEventKeyUp : 0)
+                }
+            }
+        };
+
+        public static NativeInput Key(ushort virtualKey, bool keyUp) => new()
+        {
+            Type = 1,
+            Data = new InputUnion
+            {
+                Keyboard = new KeyboardInput
+                {
+                    VirtualKey = virtualKey,
+                    Flags = keyUp ? KeyEventKeyUp : 0
                 }
             }
         };

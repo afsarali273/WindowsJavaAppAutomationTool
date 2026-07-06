@@ -1,5 +1,6 @@
 package com.afsarali.jab.client;
 
+import com.afsarali.jab.client.model.JavaNavigationCommand;
 import java.util.List;
 
 public final class JavaTable {
@@ -77,6 +78,59 @@ public final class JavaTable {
         return cell(rowIndex, columnHeader).doubleClick();
     }
 
+    public JavaTable pageDown() {
+        target.navigate(JavaNavigationCommand.PAGE_DOWN, 1);
+        return this;
+    }
+
+    public JavaTable pageDown(int count) {
+        target.navigate(JavaNavigationCommand.PAGE_DOWN, Math.max(1, count));
+        return this;
+    }
+
+    public JavaTable pageUp() {
+        target.navigate(JavaNavigationCommand.PAGE_UP, 1);
+        return this;
+    }
+
+    public JavaTable pageUp(int count) {
+        target.navigate(JavaNavigationCommand.PAGE_UP, Math.max(1, count));
+        return this;
+    }
+
+    public JavaTable home() {
+        target.navigate(JavaNavigationCommand.HOME, 1);
+        return this;
+    }
+
+    public JavaTable end() {
+        target.navigate(JavaNavigationCommand.END, 1);
+        return this;
+    }
+
+    public JavaTable scrollToRow(int rowIndex, int maxPageTurns) {
+        var turns = Math.max(1, maxPageTurns);
+        for (var i = 0; i < turns; i++) {
+            if (containsRow(rowIndex)) return this;
+            pageDown();
+        }
+
+        for (var i = 0; i < turns; i++) {
+            if (containsRow(rowIndex)) return this;
+            pageUp();
+        }
+
+        return this;
+    }
+
+    public JavaTable scrollToRow(int rowIndex) {
+        return scrollToRow(rowIndex, 12);
+    }
+
+    private boolean containsRow(int rowIndex) {
+        return cells().stream().anyMatch(handle -> handle.snapshot().tableLikeRowIndex() == rowIndex);
+    }
+
     private interface TableTarget {
         List<JavaElementHandle> rows();
         List<JavaElementHandle> rows(Integer maxResults);
@@ -85,6 +139,7 @@ public final class JavaTable {
         List<JavaElementHandle> cells(String columnHeader);
         JavaElementHandle cell(int rowIndex, int columnIndex);
         JavaElementHandle cell(int rowIndex, String columnHeader);
+        void navigate(JavaNavigationCommand command, int count);
     }
 
     private static final class SessionElementTarget implements TableTarget {
@@ -101,6 +156,7 @@ public final class JavaTable {
         @Override public List<JavaElementHandle> cells(String columnHeader) { return element.findTableCells(columnHeader); }
         @Override public JavaElementHandle cell(int rowIndex, int columnIndex) { return element.findTableCell(rowIndex, columnIndex); }
         @Override public JavaElementHandle cell(int rowIndex, String columnHeader) { return element.findTableCell(rowIndex, columnHeader); }
+        @Override public void navigate(JavaNavigationCommand command, int count) { element.navigate(command, count); }
     }
 
     private static final class StatelessObjectTarget implements TableTarget {
@@ -117,6 +173,7 @@ public final class JavaTable {
         @Override public List<JavaElementHandle> cells(String columnHeader) { return object.findTableCells(columnHeader); }
         @Override public JavaElementHandle cell(int rowIndex, int columnIndex) { return object.findTableCell(rowIndex, columnIndex); }
         @Override public JavaElementHandle cell(int rowIndex, String columnHeader) { return object.findTableCell(rowIndex, columnHeader); }
+        @Override public void navigate(JavaNavigationCommand command, int count) { throw new UnsupportedOperationException("Grid navigation requires a session-based JavaDriver."); }
     }
 
     private static final class HandleTarget implements TableTarget {
@@ -133,6 +190,7 @@ public final class JavaTable {
         @Override public List<JavaElementHandle> cells(String columnHeader) { return handle.findTableCells(columnHeader); }
         @Override public JavaElementHandle cell(int rowIndex, int columnIndex) { return handle.findTableCell(rowIndex, columnIndex); }
         @Override public JavaElementHandle cell(int rowIndex, String columnHeader) { return handle.findTableCell(rowIndex, columnHeader); }
+        @Override public void navigate(JavaNavigationCommand command, int count) { handle.navigate(command, count); }
     }
 
     private static List<JavaElementHandle> take(List<JavaElementHandle> items, Integer maxResults) {

@@ -2,6 +2,7 @@ package com.afsarali.jab.client;
 
 import com.afsarali.jab.client.model.DriverResult;
 import com.afsarali.jab.client.model.JavaAction;
+import com.afsarali.jab.client.model.JavaNavigationCommand;
 import com.afsarali.jab.client.model.JavaWindowSelector;
 import com.afsarali.jab.client.model.LocatorSuggestion;
 
@@ -215,6 +216,16 @@ public final class JavaElement {
 
     public JavaTable asTable() {
         return JavaTable.from(this);
+    }
+
+    public JavaElement navigate(JavaNavigationCommand command) {
+        driver.navigate(command);
+        return this;
+    }
+
+    public JavaElement navigate(JavaNavigationCommand command, int count) {
+        driver.navigate(command, count);
+        return this;
     }
 
     private String label() {

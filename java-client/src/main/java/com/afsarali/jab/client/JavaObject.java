@@ -2,6 +2,7 @@ package com.afsarali.jab.client;
 
 import com.afsarali.jab.client.model.DriverResult;
 import com.afsarali.jab.client.model.JavaAction;
+import com.afsarali.jab.client.model.JavaNavigationCommand;
 import com.afsarali.jab.client.model.JavaWindowSelector;
 import com.afsarali.jab.client.model.LocatorSuggestion;
 
@@ -219,6 +220,14 @@ public final class JavaObject {
 
     public JavaTable asTable() {
         return JavaTable.from(this);
+    }
+
+    public JavaObject navigate(JavaNavigationCommand command) {
+        throw new UnsupportedOperationException("Grid navigation requires a session-based JavaDriver.");
+    }
+
+    public JavaObject navigate(JavaNavigationCommand command, int count) {
+        throw new UnsupportedOperationException("Grid navigation requires a session-based JavaDriver.");
     }
 
     private String label() {

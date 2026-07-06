@@ -191,6 +191,7 @@ try (JavaDriver driver = JavaDriver.attachToWindow(
             .viewport("Reservation Grid")
             .table("reservation_results_grid");
 
+    reservations.scrollToRow(15);
     reservations.row(0).cell("Guest Name").doubleClick();
     String room = reservations.row(0).text("Room");
 }

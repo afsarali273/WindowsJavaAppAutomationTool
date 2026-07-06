@@ -109,6 +109,10 @@ public final class JabApiClient {
         return post("/api/java/sessions/" + encode(sessionId) + "/actions", request, DriverResult.class);
     }
 
+    public DriverResult navigate(String sessionId, JavaNavigationRequest request) {
+        return post("/api/java/sessions/" + encode(sessionId) + "/navigation", request, DriverResult.class);
+    }
+
     public DriverResult runOneShot(JavaOneShotActionRequest request) {
         return post("/api/java/actions/run", request, DriverResult.class);
     }

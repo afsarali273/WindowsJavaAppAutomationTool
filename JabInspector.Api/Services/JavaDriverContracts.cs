@@ -75,6 +75,10 @@ public sealed record JavaActionRequest(
     bool RefreshTree = false,
     bool PreferAccessibleAction = true);
 
+public sealed record JavaNavigationRequest(
+    string Command,
+    int Count = 1);
+
 public sealed record JavaOneShotActionRequest(
     string Action,
     string? RepositoryPath = null,

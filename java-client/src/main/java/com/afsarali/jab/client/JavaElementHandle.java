@@ -1,6 +1,7 @@
 package com.afsarali.jab.client;
 
 import com.afsarali.jab.client.model.JavaWindowSelector;
+import com.afsarali.jab.client.model.JavaNavigationCommand;
 import com.afsarali.jab.client.model.LocatorSuggestion;
 
 import java.time.Duration;
@@ -261,6 +262,16 @@ public final class JavaElementHandle {
         return JavaTable.from(this);
     }
 
+    public JavaElementHandle navigate(JavaNavigationCommand command) {
+        target.navigate(command, 1);
+        return this;
+    }
+
+    public JavaElementHandle navigate(JavaNavigationCommand command, int count) {
+        target.navigate(command, count);
+        return this;
+    }
+
     private List<JavaElementHandle> wrap(List<JavaElementSnapshot> snapshots) {
         if (snapshots == null || snapshots.isEmpty()) return List.of();
         return snapshots.stream()
@@ -341,6 +352,7 @@ public final class JavaElementHandle {
         void waitUntilExists();
         void waitUntilExists(Duration timeout, Duration pollInterval);
         void waitUntilExists(RetryOptions options);
+        void navigate(JavaNavigationCommand command, int count);
         List<JavaElementSnapshot> findChildSnapshots();
         List<JavaElementSnapshot> findChildSnapshots(Integer maxDepth, Integer maxResults, boolean includeSelf);
         JavaElementHandle child(JavaElementSnapshot snapshot);
@@ -386,6 +398,7 @@ public final class JavaElementHandle {
         @Override public void waitUntilExists() { element.waitUntilExists(); }
         @Override public void waitUntilExists(Duration timeout, Duration pollInterval) { element.waitUntilExists(timeout, pollInterval); }
         @Override public void waitUntilExists(RetryOptions options) { element.waitUntilExists(options); }
+        @Override public void navigate(JavaNavigationCommand command, int count) { element.navigate(command, count); }
         @Override public List<JavaElementSnapshot> findChildSnapshots() { return driver.findChildSnapshots(null, locator, null, null, false); }
         @Override public List<JavaElementSnapshot> findChildSnapshots(Integer maxDepth, Integer maxResults, boolean includeSelf) { return driver.findChildSnapshots(null, locator, maxDepth, maxResults, includeSelf); }
         @Override public JavaElementHandle child(JavaElementSnapshot snapshot) { return JavaElementHandle.from(driver, window, snapshot); }
@@ -431,6 +444,7 @@ public final class JavaElementHandle {
         @Override public void waitUntilExists() { object.waitUntilExists(); }
         @Override public void waitUntilExists(Duration timeout, Duration pollInterval) { object.waitUntilExists(timeout, pollInterval); }
         @Override public void waitUntilExists(RetryOptions options) { object.waitUntilExists(options); }
+        @Override public void navigate(JavaNavigationCommand command, int count) { throw new UnsupportedOperationException("Grid navigation requires a session-based JavaDriver."); }
         @Override public List<JavaElementSnapshot> findChildSnapshots() { return automation.findChildSnapshots(null, locator, null, null, false, window); }
         @Override public List<JavaElementSnapshot> findChildSnapshots(Integer maxDepth, Integer maxResults, boolean includeSelf) { return automation.findChildSnapshots(null, locator, maxDepth, maxResults, includeSelf, window); }
         @Override public JavaElementHandle child(JavaElementSnapshot snapshot) { return JavaElementHandle.from(automation, window, snapshot); }
