@@ -45,6 +45,26 @@ public final class JavaWindowScope {
         return object(locator);
     }
 
+    public JavaFormsScope formsScope(String scopeName) {
+        return new JavaFormsScope(automation, selector, scopeName, null, null, null);
+    }
+
+    public JavaFormsScope internalFrame(String frameName) {
+        return formsScope(frameName);
+    }
+
+    public JavaFormsScope formsScopePath(String scopePath) {
+        return new JavaFormsScope(automation, selector, null, scopePath, null, null);
+    }
+
+    public JavaTable table(String objectKey) {
+        return object(objectKey).asTable();
+    }
+
+    public JavaTable table(LocatorSuggestion locator) {
+        return object(locator).asTable();
+    }
+
     public List<JavaElementHandle> findElements(String objectKey) {
         return automation.findElements(objectKey, selector);
     }

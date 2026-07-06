@@ -209,6 +209,26 @@ public final class JavaDriver implements AutoCloseable {
         return element(locator);
     }
 
+    public JavaFormsScope formsScope(String scopeName) {
+        return new JavaFormsScope(this, activeWindow, scopeName, null, null, null);
+    }
+
+    public JavaFormsScope internalFrame(String frameName) {
+        return formsScope(frameName);
+    }
+
+    public JavaFormsScope formsScopePath(String scopePath) {
+        return new JavaFormsScope(this, activeWindow, null, scopePath, null, null);
+    }
+
+    public JavaTable table(String objectKey) {
+        return element(objectKey).asTable();
+    }
+
+    public JavaTable table(LocatorSuggestion locator) {
+        return element(locator).asTable();
+    }
+
     public boolean exists(String objectKey) {
         return validate(objectKey).exists();
     }

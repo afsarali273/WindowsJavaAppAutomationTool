@@ -107,6 +107,26 @@ public final class JavaAutomation {
         return object(locator);
     }
 
+    public JavaFormsScope formsScope(JavaWindowSelector window, String scopeName) {
+        return new JavaFormsScope(this, window, scopeName, null, null, null);
+    }
+
+    public JavaFormsScope internalFrame(JavaWindowSelector window, String frameName) {
+        return formsScope(window, frameName);
+    }
+
+    public JavaFormsScope formsScopePath(JavaWindowSelector window, String scopePath) {
+        return new JavaFormsScope(this, window, null, scopePath, null, null);
+    }
+
+    public JavaTable table(String objectKey) {
+        return object(objectKey).asTable();
+    }
+
+    public JavaTable table(LocatorSuggestion locator) {
+        return object(locator).asTable();
+    }
+
     public List<JavaElementHandle> findElements(String objectKey) {
         return findElements(objectKey, DEFAULT_FIND_MINIMUM_SCORE, DEFAULT_FIND_MAX_RESULTS, null);
     }

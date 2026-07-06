@@ -171,6 +171,20 @@ public final class JavaObject {
         return locator == null ? automation.findTableCells(objectKey, window) : automation.findTableCells(locator, window);
     }
 
+    public List<JavaElementHandle> findTableCells(int rowIndex) {
+        return findTableCells().stream()
+                .filter(handle -> handle.snapshot().tableLikeRowIndex() == rowIndex)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    public List<JavaElementHandle> findTableCells(String columnHeader) {
+        String normalizedHeader = columnHeader == null ? "" : columnHeader.trim();
+        return findTableCells().stream()
+                .filter(handle -> handle.snapshot().tableLikeColumnHeader() != null
+                        && handle.snapshot().tableLikeColumnHeader().equalsIgnoreCase(normalizedHeader))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     public JavaElementHandle findTableCell(int rowIndex, int columnIndex) {
         return locator == null ? automation.findTableCell(objectKey, rowIndex, columnIndex, window) : automation.findTableCell(locator, rowIndex, columnIndex, window);
     }
@@ -201,6 +215,10 @@ public final class JavaObject {
 
     public JavaElementHandle doubleClickTableCell(int rowIndex, String columnHeader) {
         return findTableCell(rowIndex, columnHeader).doubleClick();
+    }
+
+    public JavaTable asTable() {
+        return JavaTable.from(this);
     }
 
     private String label() {

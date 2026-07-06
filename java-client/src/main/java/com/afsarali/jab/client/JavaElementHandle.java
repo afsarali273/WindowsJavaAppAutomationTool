@@ -257,6 +257,10 @@ public final class JavaElementHandle {
         return findTableCell(rowIndex, columnHeader).doubleClick();
     }
 
+    public JavaTable asTable() {
+        return JavaTable.from(this);
+    }
+
     private List<JavaElementHandle> wrap(List<JavaElementSnapshot> snapshots) {
         if (snapshots == null || snapshots.isEmpty()) return List.of();
         return snapshots.stream()
