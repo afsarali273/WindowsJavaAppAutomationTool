@@ -297,6 +297,9 @@ public sealed class JavaClientCodeGenerationService
         AppendBuilderInt(builder, "textCaretIndex", locator.TextCaretIndex);
         AppendBuilderInt(builder, "textIndexAtPoint", locator.TextIndexAtPoint);
         AppendBuilderString(builder, "textSelected", locator.TextSelected);
+        AppendBuilderString(builder, "textLetter", locator.TextLetter);
+        AppendBuilderInt(builder, "textSelectionStartIndex", locator.TextSelectionStartIndex);
+        AppendBuilderInt(builder, "textSelectionEndIndex", locator.TextSelectionEndIndex);
         AppendBuilderString(builder, "textWord", locator.TextWord);
         AppendBuilderString(builder, "textSentence", locator.TextSentence);
         AppendBuilderString(builder, "currentValue", locator.CurrentValue);
@@ -384,6 +387,9 @@ public sealed class JavaClientCodeGenerationService
         AppendBuilderInt(builder, "textCaretIndex", locator.TextCaretIndex);
         AppendBuilderInt(builder, "textIndexAtPoint", locator.TextIndexAtPoint);
         AppendBuilderString(builder, "textSelected", locator.TextSelected);
+        AppendBuilderString(builder, "textLetter", locator.TextLetter);
+        AppendBuilderInt(builder, "textSelectionStartIndex", locator.TextSelectionStartIndex);
+        AppendBuilderInt(builder, "textSelectionEndIndex", locator.TextSelectionEndIndex);
         AppendBuilderString(builder, "textWord", locator.TextWord);
         AppendBuilderString(builder, "textSentence", locator.TextSentence);
         AppendBuilderString(builder, "currentValue", locator.CurrentValue);
@@ -451,17 +457,17 @@ public sealed class JavaClientCodeGenerationService
         {
             return new LocatorSuggestion(
                 "java-access-bridge",
-                step.ObjectRole,
+                step.ObjectRole ?? "",
                 "",
-                step.ObjectName,
-                step.ObjectVirtualAccessibleName,
-                step.ObjectDescription,
+                step.ObjectName ?? "",
+                step.ObjectVirtualAccessibleName ?? "",
+                step.ObjectDescription ?? "",
                 "",
                 "",
                 -1,
                 step.ObjectDepth,
                 -1,
-                step.ObjectPath,
+                step.ObjectPath ?? "",
                 "",
                 "",
                 "",
@@ -486,8 +492,11 @@ public sealed class JavaClientCodeGenerationService
                 "",
                 "",
                 "",
+                "",
+                -1,
+                -1,
                 false,
-                [],
+                Array.Empty<string>(),
                 "",
                 "",
                 -1,

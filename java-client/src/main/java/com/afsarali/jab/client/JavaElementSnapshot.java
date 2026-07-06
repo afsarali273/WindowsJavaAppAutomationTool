@@ -55,6 +55,9 @@ public final class JavaElementSnapshot {
     public String formsViewportName() { return text("formsViewportName"); }
     public String objectKey() { return text("objectKey"); }
     public String textPreview() { return text("textPreview"); }
+    public String textLetter() { return text("textLetter"); }
+    public int textSelectionStartIndex() { return integer("textSelectionStartIndex"); }
+    public int textSelectionEndIndex() { return integer("textSelectionEndIndex"); }
     public String currentValue() { return text("currentValue"); }
     public int score() { return integer("score"); }
     public JsonNode raw() { return data; }

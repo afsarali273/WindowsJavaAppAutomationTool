@@ -51,6 +51,9 @@ public final class LocatorSuggestion {
     @JsonProperty private final Integer textCaretIndex;
     @JsonProperty private final Integer textIndexAtPoint;
     @JsonProperty private final String textSelected;
+    @JsonProperty private final String textLetter;
+    @JsonProperty private final Integer textSelectionStartIndex;
+    @JsonProperty private final Integer textSelectionEndIndex;
     @JsonProperty private final String textWord;
     @JsonProperty private final String textSentence;
     @JsonProperty private final String currentValue;
@@ -104,6 +107,9 @@ public final class LocatorSuggestion {
             @JsonProperty("textCaretIndex") Integer textCaretIndex,
             @JsonProperty("textIndexAtPoint") Integer textIndexAtPoint,
             @JsonProperty("textSelected") String textSelected,
+            @JsonProperty("textLetter") String textLetter,
+            @JsonProperty("textSelectionStartIndex") Integer textSelectionStartIndex,
+            @JsonProperty("textSelectionEndIndex") Integer textSelectionEndIndex,
             @JsonProperty("textWord") String textWord,
             @JsonProperty("textSentence") String textSentence,
             @JsonProperty("currentValue") String currentValue,
@@ -154,6 +160,9 @@ public final class LocatorSuggestion {
         this.textCaretIndex = textCaretIndex;
         this.textIndexAtPoint = textIndexAtPoint;
         this.textSelected = textSelected;
+        this.textLetter = textLetter;
+        this.textSelectionStartIndex = textSelectionStartIndex;
+        this.textSelectionEndIndex = textSelectionEndIndex;
         this.textWord = textWord;
         this.textSentence = textSentence;
         this.currentValue = currentValue;
@@ -206,6 +215,9 @@ public final class LocatorSuggestion {
     public Integer textCaretIndex() { return textCaretIndex; }
     public Integer textIndexAtPoint() { return textIndexAtPoint; }
     public String textSelected() { return textSelected; }
+    public String textLetter() { return textLetter; }
+    public Integer textSelectionStartIndex() { return textSelectionStartIndex; }
+    public Integer textSelectionEndIndex() { return textSelectionEndIndex; }
     public String textWord() { return textWord; }
     public String textSentence() { return textSentence; }
     public String currentValue() { return currentValue; }
@@ -263,6 +275,9 @@ public final class LocatorSuggestion {
                 .textCaretIndex(textCaretIndex)
                 .textIndexAtPoint(textIndexAtPoint)
                 .textSelected(textSelected)
+                .textLetter(textLetter)
+                .textSelectionStartIndex(textSelectionStartIndex)
+                .textSelectionEndIndex(textSelectionEndIndex)
                 .textWord(textWord)
                 .textSentence(textSentence)
                 .currentValue(currentValue)
@@ -352,6 +367,9 @@ public final class LocatorSuggestion {
         private Integer textCaretIndex;
         private Integer textIndexAtPoint;
         private String textSelected;
+        private String textLetter;
+        private Integer textSelectionStartIndex;
+        private Integer textSelectionEndIndex;
         private String textWord;
         private String textSentence;
         private String currentValue;
@@ -403,6 +421,9 @@ public final class LocatorSuggestion {
         public Builder textCaretIndex(Integer textCaretIndex) { this.textCaretIndex = textCaretIndex; return this; }
         public Builder textIndexAtPoint(Integer textIndexAtPoint) { this.textIndexAtPoint = textIndexAtPoint; return this; }
         public Builder textSelected(String textSelected) { this.textSelected = textSelected; return this; }
+        public Builder textLetter(String textLetter) { this.textLetter = textLetter; return this; }
+        public Builder textSelectionStartIndex(Integer textSelectionStartIndex) { this.textSelectionStartIndex = textSelectionStartIndex; return this; }
+        public Builder textSelectionEndIndex(Integer textSelectionEndIndex) { this.textSelectionEndIndex = textSelectionEndIndex; return this; }
         public Builder textWord(String textWord) { this.textWord = textWord; return this; }
         public Builder textSentence(String textSentence) { this.textSentence = textSentence; return this; }
         public Builder currentValue(String currentValue) { this.currentValue = currentValue; return this; }
@@ -456,6 +477,9 @@ public final class LocatorSuggestion {
                     textCaretIndex,
                     textIndexAtPoint,
                     textSelected,
+                    textLetter,
+                    textSelectionStartIndex,
+                    textSelectionEndIndex,
                     textWord,
                     textSentence,
                     currentValue,

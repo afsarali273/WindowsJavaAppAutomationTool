@@ -52,7 +52,10 @@ public sealed class AccessibleNode
     public int TextCharCount { get; set; } = -1;
     public int TextCaretIndex { get; set; } = -1;
     public int TextIndexAtPoint { get; set; } = -1;
+    public string TextLetter { get; set; } = "";
     public string TextSelected { get; set; } = "";
+    public int TextSelectionStartIndex { get; set; } = -1;
+    public int TextSelectionEndIndex { get; set; } = -1;
     public string TextWord { get; set; } = "";
     public string TextSentence { get; set; } = "";
     public string CurrentValue { get; set; } = "";

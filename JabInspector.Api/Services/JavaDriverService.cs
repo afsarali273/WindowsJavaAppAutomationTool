@@ -1088,6 +1088,9 @@ public sealed class JavaDriverService : IDisposable
             node.FormsViewportRole,
             node.FormsViewportName,
             node.TextPreview,
+            node.TextLetter,
+            node.TextSelectionStartIndex,
+            node.TextSelectionEndIndex,
             node.CurrentValue,
             new ElementBounds(node.X, node.Y, node.Width, node.Height),
             LocatorGenerator.GenerateLocator(node),
@@ -1104,6 +1107,9 @@ public sealed class JavaDriverService : IDisposable
         AddScore(ref score, TextEquals(node.Name, locator?.Name ?? entry?.Name), 28);
         AddScore(ref score, TextEquals(node.VirtualAccessibleName, locator?.VirtualAccessibleName ?? entry?.VirtualAccessibleName), 26);
         AddScore(ref score, TextEquals(node.Description, locator?.Description ?? entry?.Description), 12);
+        AddScore(ref score, TextEquals(node.TextPreview, locator?.TextPreview ?? entry?.Locator?.TextPreview), 8);
+        AddScore(ref score, TextEquals(node.TextLetter, locator?.TextLetter ?? entry?.TextLetter), 6);
+        AddScore(ref score, TextEquals(node.TextSelected, locator?.TextSelected ?? entry?.Locator?.TextSelected), 8);
         AddScore(ref score, TextEquals(node.Path, locator?.Path ?? entry?.Path), 35);
         AddScore(ref score, TextEquals(LocatorGenerator.BuildIndexPath(node), locator?.IndexPath ?? entry?.IndexPath), 35);
         AddScore(ref score, TextEquals(LocatorGenerator.BuildXPath(node), locator?.XPath ?? entry?.XPath), 30);
@@ -1885,6 +1891,10 @@ public sealed class JavaDriverService : IDisposable
         entry.FormsViewportPath,
         entry.FormsViewportRole,
         entry.FormsViewportName,
+        entry.TextPreview,
+        entry.TextLetter,
+        entry.TextSelectionStartIndex,
+        entry.TextSelectionEndIndex,
         bounds = new ElementBounds(entry.X, entry.Y, entry.Width, entry.Height),
         entry.Locator
     };

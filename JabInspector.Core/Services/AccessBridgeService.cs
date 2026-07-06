@@ -275,11 +275,12 @@ public sealed class AccessBridgeService : IDisposable
             var itemIndex = Math.Clamp(info.CaretIndex >= 0 ? info.CaretIndex : info.IndexAtPoint, 0, Math.Max(info.CharCount - 1, 0));
             if (AccessBridgeNative.getAccessibleTextItems(node.VmId, node.Context, out var items, itemIndex))
             {
+                node.TextLetter = items.Letter == '\0' ? "" : items.Letter.ToString();
                 node.TextWord = items.Word ?? "";
                 node.TextSentence = items.Sentence ?? "";
                 if (string.IsNullOrWhiteSpace(node.TextPreview))
                 {
-                    node.TextPreview = TrimPreview(FirstNonEmpty(items.Word, items.Sentence, items.Letter == '\0' ? "" : items.Letter.ToString()));
+                    node.TextPreview = TrimPreview(FirstNonEmpty(items.Word, items.Sentence, node.TextLetter));
                     node.TextPreviewSource = "AccessibleText items";
                 }
             }
@@ -288,6 +289,8 @@ public sealed class AccessBridgeService : IDisposable
                 && !string.IsNullOrWhiteSpace(selection.SelectedText))
             {
                 node.TextSelected = selection.SelectedText;
+                node.TextSelectionStartIndex = selection.SelectionStartIndex;
+                node.TextSelectionEndIndex = selection.SelectionEndIndex;
                 if (string.IsNullOrWhiteSpace(node.TextPreview))
                 {
                     node.TextPreview = TrimPreview(selection.SelectedText);
