@@ -78,6 +78,14 @@ public sealed class JavaObjectRepositoryService
             TableLikeColumnIndex = locator.TableLikeColumnIndex,
             TableLikeRowCount = locator.TableLikeRowCount,
             TableLikeColumnCount = locator.TableLikeColumnCount,
+            IsFormsLikeScope = locator.IsFormsLikeScope,
+            IsFormsViewportLikeContainer = locator.IsFormsViewportLikeContainer,
+            FormsScopePath = locator.FormsScopePath,
+            FormsScopeRole = locator.FormsScopeRole,
+            FormsScopeName = locator.FormsScopeName,
+            FormsViewportPath = locator.FormsViewportPath,
+            FormsViewportRole = locator.FormsViewportRole,
+            FormsViewportName = locator.FormsViewportName,
             IndexInParent = locator.IndexInParent,
             ObjectDepth = locator.ObjectDepth,
             ChildrenCount = locator.ChildrenCount,
@@ -129,6 +137,14 @@ public sealed class JavaObjectRepositoryService
             Property("tableLike.columnIndex", entry.TableLikeColumnIndex.ToString(), false),
             Property("tableLike.rowCount", entry.TableLikeRowCount.ToString(), false),
             Property("tableLike.columnCount", entry.TableLikeColumnCount.ToString(), false),
+            Property("forms.scope", entry.IsFormsLikeScope.ToString(), false),
+            Property("forms.viewport", entry.IsFormsViewportLikeContainer.ToString(), false),
+            Property("forms.scopePath", entry.FormsScopePath, false),
+            Property("forms.scopeRole", entry.FormsScopeRole, false),
+            Property("forms.scopeName", entry.FormsScopeName, false),
+            Property("forms.viewportPath", entry.FormsViewportPath, false),
+            Property("forms.viewportRole", entry.FormsViewportRole, false),
+            Property("forms.viewportName", entry.FormsViewportName, false),
             Property("indexInParent", entry.IndexInParent.ToString(), false),
             Property("objectDepth", entry.ObjectDepth.ToString(), false),
             Property("childrenCount", entry.ChildrenCount.ToString(), false),
@@ -330,6 +346,14 @@ public sealed class JavaObjectRepositoryService
         entry.TableLikeColumnIndex = GetIntProperty(entry, "tableLike.columnIndex", entry.TableLikeColumnIndex);
         entry.TableLikeRowCount = GetIntProperty(entry, "tableLike.rowCount", entry.TableLikeRowCount);
         entry.TableLikeColumnCount = GetIntProperty(entry, "tableLike.columnCount", entry.TableLikeColumnCount);
+        entry.IsFormsLikeScope = GetBoolProperty(entry, "forms.scope", entry.IsFormsLikeScope);
+        entry.IsFormsViewportLikeContainer = GetBoolProperty(entry, "forms.viewport", entry.IsFormsViewportLikeContainer);
+        entry.FormsScopePath = GetProperty(entry, "forms.scopePath", entry.FormsScopePath);
+        entry.FormsScopeRole = GetProperty(entry, "forms.scopeRole", entry.FormsScopeRole);
+        entry.FormsScopeName = GetProperty(entry, "forms.scopeName", entry.FormsScopeName);
+        entry.FormsViewportPath = GetProperty(entry, "forms.viewportPath", entry.FormsViewportPath);
+        entry.FormsViewportRole = GetProperty(entry, "forms.viewportRole", entry.FormsViewportRole);
+        entry.FormsViewportName = GetProperty(entry, "forms.viewportName", entry.FormsViewportName);
         entry.IndexInParent = GetIntProperty(entry, "indexInParent", entry.IndexInParent);
         entry.ObjectDepth = GetIntProperty(entry, "objectDepth", entry.ObjectDepth);
         entry.ChildrenCount = GetIntProperty(entry, "childrenCount", entry.ChildrenCount);
@@ -384,6 +408,14 @@ public sealed class JavaObjectRepositoryService
             entry.TableLikeColumnIndex,
             entry.TableLikeRowCount,
             entry.TableLikeColumnCount,
+            entry.IsFormsLikeScope,
+            entry.IsFormsViewportLikeContainer,
+            entry.FormsScopePath,
+            entry.FormsScopeRole,
+            entry.FormsScopeName,
+            entry.FormsViewportPath,
+            entry.FormsViewportRole,
+            entry.FormsViewportName,
             entry.HasManagedDescendantAncestor,
             entry.ActionNames,
             GetProperty(entry, "text.preview", existing?.TextPreview ?? ""),

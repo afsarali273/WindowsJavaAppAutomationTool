@@ -278,6 +278,14 @@ public sealed class JavaClientCodeGenerationService
         AppendBuilderInt(builder, "tableLikeColumnIndex", locator.TableLikeColumnIndex);
         AppendBuilderInt(builder, "tableLikeRowCount", locator.TableLikeRowCount);
         AppendBuilderInt(builder, "tableLikeColumnCount", locator.TableLikeColumnCount);
+        AppendBuilderBool(builder, "isFormsLikeScope", locator.IsFormsLikeScope);
+        AppendBuilderBool(builder, "isFormsViewportLikeContainer", locator.IsFormsViewportLikeContainer);
+        AppendBuilderString(builder, "formsScopePath", locator.FormsScopePath);
+        AppendBuilderString(builder, "formsScopeRole", locator.FormsScopeRole);
+        AppendBuilderString(builder, "formsScopeName", locator.FormsScopeName);
+        AppendBuilderString(builder, "formsViewportPath", locator.FormsViewportPath);
+        AppendBuilderString(builder, "formsViewportRole", locator.FormsViewportRole);
+        AppendBuilderString(builder, "formsViewportName", locator.FormsViewportName);
         builder.AppendLine($"                .hasManagedDescendantAncestor({locator.HasManagedDescendantAncestor.ToString().ToLowerInvariant()})");
         if (locator.ActionNames.Count > 0)
         {
@@ -357,6 +365,14 @@ public sealed class JavaClientCodeGenerationService
         AppendBuilderInt(builder, "tableLikeColumnIndex", locator.TableLikeColumnIndex);
         AppendBuilderInt(builder, "tableLikeRowCount", locator.TableLikeRowCount);
         AppendBuilderInt(builder, "tableLikeColumnCount", locator.TableLikeColumnCount);
+        AppendBuilderBool(builder, "isFormsLikeScope", locator.IsFormsLikeScope);
+        AppendBuilderBool(builder, "isFormsViewportLikeContainer", locator.IsFormsViewportLikeContainer);
+        AppendBuilderString(builder, "formsScopePath", locator.FormsScopePath);
+        AppendBuilderString(builder, "formsScopeRole", locator.FormsScopeRole);
+        AppendBuilderString(builder, "formsScopeName", locator.FormsScopeName);
+        AppendBuilderString(builder, "formsViewportPath", locator.FormsViewportPath);
+        AppendBuilderString(builder, "formsViewportRole", locator.FormsViewportRole);
+        AppendBuilderString(builder, "formsViewportName", locator.FormsViewportName);
         builder.AppendLine($"                .hasManagedDescendantAncestor({locator.HasManagedDescendantAncestor.ToString().ToLowerInvariant()})");
         if (locator.ActionNames.Count > 0)
         {
@@ -462,6 +478,14 @@ public sealed class JavaClientCodeGenerationService
                 -1,
                 -1,
                 -1,
+                false,
+                false,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
                 false,
                 [],
                 "",

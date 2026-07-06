@@ -52,6 +52,14 @@ public sealed class JavaObjectRepositoryEntry
     public int TableLikeColumnIndex { get; set; } = -1;
     public int TableLikeRowCount { get; set; } = -1;
     public int TableLikeColumnCount { get; set; } = -1;
+    public bool IsFormsLikeScope { get; set; }
+    public bool IsFormsViewportLikeContainer { get; set; }
+    public string FormsScopePath { get; set; } = "";
+    public string FormsScopeRole { get; set; } = "";
+    public string FormsScopeName { get; set; } = "";
+    public string FormsViewportPath { get; set; } = "";
+    public string FormsViewportRole { get; set; } = "";
+    public string FormsViewportName { get; set; } = "";
     public bool HasManagedDescendantAncestor { get; set; }
     public List<string> ActionNames { get; set; } = [];
     public List<JavaRepositoryProperty> Properties { get; set; } = [];

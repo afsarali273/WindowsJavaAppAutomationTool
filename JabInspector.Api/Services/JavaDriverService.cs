@@ -1047,6 +1047,14 @@ public sealed class JavaDriverService : IDisposable
             node.TableLikeColumnIndex,
             node.TableLikeRowCount,
             node.TableLikeColumnCount,
+            node.IsFormsLikeScope,
+            node.IsFormsViewportLikeContainer,
+            node.FormsScopePath,
+            node.FormsScopeRole,
+            node.FormsScopeName,
+            node.FormsViewportPath,
+            node.FormsViewportRole,
+            node.FormsViewportName,
             node.TextPreview,
             node.CurrentValue,
             new ElementBounds(node.X, node.Y, node.Width, node.Height),
@@ -1073,6 +1081,10 @@ public sealed class JavaDriverService : IDisposable
         AddScore(ref score, TextEquals(node.TableLikeKind, locator?.TableLikeKind ?? entry?.TableLikeKind), 16);
         AddScore(ref score, TextEquals(node.TableLikeContainerPath, locator?.TableLikeContainerPath ?? entry?.TableLikeContainerPath), 20);
         AddScore(ref score, TextEquals(node.TableLikeColumnHeader, locator?.TableLikeColumnHeader ?? entry?.TableLikeColumnHeader), 12);
+        AddScore(ref score, TextEquals(node.FormsScopePath, locator?.FormsScopePath ?? entry?.FormsScopePath), 22);
+        AddScore(ref score, TextEquals(node.FormsScopeName, locator?.FormsScopeName ?? entry?.FormsScopeName), 10);
+        AddScore(ref score, TextEquals(node.FormsViewportPath, locator?.FormsViewportPath ?? entry?.FormsViewportPath), 20);
+        AddScore(ref score, TextEquals(node.FormsViewportName, locator?.FormsViewportName ?? entry?.FormsViewportName), 8);
         AddScore(ref score, TextEquals(node.TextPreview, locator?.TextPreview ?? entry?.Locator?.TextPreview), 12);
         AddScore(ref score, TextEquals(node.CurrentValue, locator?.CurrentValue ?? entry?.Locator?.CurrentValue), 14);
 
@@ -1534,6 +1546,24 @@ public sealed class JavaDriverService : IDisposable
             SemanticXPath = locator.SemanticXPath ?? "",
             ParentRole = locator.ParentRole ?? "",
             ParentName = locator.ParentName ?? "",
+            IsTableLikeContainer = locator.IsTableLikeContainer,
+            IsTableLikeRow = locator.IsTableLikeRow,
+            IsTableLikeCell = locator.IsTableLikeCell,
+            TableLikeKind = locator.TableLikeKind ?? "",
+            TableLikeContainerPath = locator.TableLikeContainerPath ?? "",
+            TableLikeColumnHeader = locator.TableLikeColumnHeader ?? "",
+            TableLikeRowIndex = locator.TableLikeRowIndex,
+            TableLikeColumnIndex = locator.TableLikeColumnIndex,
+            TableLikeRowCount = locator.TableLikeRowCount,
+            TableLikeColumnCount = locator.TableLikeColumnCount,
+            IsFormsLikeScope = locator.IsFormsLikeScope,
+            IsFormsViewportLikeContainer = locator.IsFormsViewportLikeContainer,
+            FormsScopePath = locator.FormsScopePath ?? "",
+            FormsScopeRole = locator.FormsScopeRole ?? "",
+            FormsScopeName = locator.FormsScopeName ?? "",
+            FormsViewportPath = locator.FormsViewportPath ?? "",
+            FormsViewportRole = locator.FormsViewportRole ?? "",
+            FormsViewportName = locator.FormsViewportName ?? "",
             IndexInParent = locator.IndexInParent,
             ObjectDepth = locator.ObjectDepth,
             ChildrenCount = locator.ChildrenCount,
@@ -1771,6 +1801,12 @@ public sealed class JavaDriverService : IDisposable
         entry.IndexPath,
         entry.XPath,
         entry.SemanticXPath,
+        entry.FormsScopePath,
+        entry.FormsScopeRole,
+        entry.FormsScopeName,
+        entry.FormsViewportPath,
+        entry.FormsViewportRole,
+        entry.FormsViewportName,
         bounds = new ElementBounds(entry.X, entry.Y, entry.Width, entry.Height),
         entry.Locator
     };

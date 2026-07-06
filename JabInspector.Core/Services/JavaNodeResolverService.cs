@@ -167,6 +167,10 @@ public sealed class JavaNodeResolverService
         if (EqualsNormalized(node.TableLikeColumnHeader, entry.TableLikeColumnHeader)) score += 8;
         if (node.TableLikeRowIndex == entry.TableLikeRowIndex && entry.TableLikeRowIndex >= 0) score += 10;
         if (node.TableLikeColumnIndex == entry.TableLikeColumnIndex && entry.TableLikeColumnIndex >= 0) score += 10;
+        if (EqualsNormalized(node.FormsScopePath, entry.FormsScopePath)) score += 16;
+        if (EqualsNormalized(node.FormsScopeName, entry.FormsScopeName)) score += 8;
+        if (EqualsNormalized(node.FormsViewportPath, entry.FormsViewportPath)) score += 14;
+        if (EqualsNormalized(node.FormsViewportName, entry.FormsViewportName)) score += 6;
         if (node.IndexInParent == entry.IndexInParent) score += 5;
         if (entry.ObjectDepth >= 0 && node.ObjectDepth == entry.ObjectDepth) score += 6;
         if (node.ChildrenCount == entry.ChildrenCount) score += 2;
@@ -339,6 +343,12 @@ public sealed class JavaNodeResolverService
         CountMatch(EqualsNormalized(node.TableLikeColumnHeader, locator?.TableLikeColumnHeader ?? entry.TableLikeColumnHeader), HasAny(locator?.TableLikeColumnHeader, entry.TableLikeColumnHeader), ref required, ref matched);
         CountMatch(node.TableLikeRowIndex == (locator?.TableLikeRowIndex ?? entry.TableLikeRowIndex), (locator?.TableLikeRowIndex ?? entry.TableLikeRowIndex) >= 0, ref required, ref matched);
         CountMatch(node.TableLikeColumnIndex == (locator?.TableLikeColumnIndex ?? entry.TableLikeColumnIndex), (locator?.TableLikeColumnIndex ?? entry.TableLikeColumnIndex) >= 0, ref required, ref matched);
+        CountMatch(EqualsNormalized(node.FormsScopePath, locator?.FormsScopePath ?? entry.FormsScopePath), HasAny(locator?.FormsScopePath, entry.FormsScopePath), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.FormsScopeRole, locator?.FormsScopeRole ?? entry.FormsScopeRole), HasAny(locator?.FormsScopeRole, entry.FormsScopeRole), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.FormsScopeName, locator?.FormsScopeName ?? entry.FormsScopeName), HasAny(locator?.FormsScopeName, entry.FormsScopeName), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.FormsViewportPath, locator?.FormsViewportPath ?? entry.FormsViewportPath), HasAny(locator?.FormsViewportPath, entry.FormsViewportPath), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.FormsViewportRole, locator?.FormsViewportRole ?? entry.FormsViewportRole), HasAny(locator?.FormsViewportRole, entry.FormsViewportRole), ref required, ref matched);
+        CountMatch(EqualsNormalized(node.FormsViewportName, locator?.FormsViewportName ?? entry.FormsViewportName), HasAny(locator?.FormsViewportName, entry.FormsViewportName), ref required, ref matched);
         CountMatch(node.IndexInParent == (locator?.IndexInParent ?? entry.IndexInParent), (locator?.IndexInParent ?? entry.IndexInParent) >= 0, ref required, ref matched);
         CountMatch(node.ObjectDepth == (locator?.ObjectDepth ?? entry.ObjectDepth), (locator?.ObjectDepth ?? entry.ObjectDepth) >= 0, ref required, ref matched);
 
@@ -367,13 +377,17 @@ public sealed class JavaNodeResolverService
                             EqualsNormalized(node.TextWord, locator?.TextWord) ||
                             EqualsNormalized(node.TextSentence, locator?.TextSentence) ||
                             EqualsNormalized(node.CurrentValue, locator?.CurrentValue) ||
-                            EqualsNormalized(node.TableLikeColumnHeader, locator?.TableLikeColumnHeader ?? entry.TableLikeColumnHeader);
+                            EqualsNormalized(node.TableLikeColumnHeader, locator?.TableLikeColumnHeader ?? entry.TableLikeColumnHeader) ||
+                            EqualsNormalized(node.FormsScopeName, locator?.FormsScopeName ?? entry.FormsScopeName) ||
+                            EqualsNormalized(node.FormsViewportName, locator?.FormsViewportName ?? entry.FormsViewportName);
         var hasStructure = node.IndexInParent == (locator?.IndexInParent ?? entry.IndexInParent) &&
                            node.ObjectDepth == (locator?.ObjectDepth ?? entry.ObjectDepth) &&
                            node.TableLikeRowIndex == (locator?.TableLikeRowIndex ?? entry.TableLikeRowIndex) &&
                            node.TableLikeColumnIndex == (locator?.TableLikeColumnIndex ?? entry.TableLikeColumnIndex);
         var hasParent = EqualsNormalized(node.Parent?.Role, locator?.ParentRole ?? entry.ParentRole) ||
-                        EqualsNormalized(node.Parent?.Name, locator?.ParentName ?? entry.ParentName);
+                        EqualsNormalized(node.Parent?.Name, locator?.ParentName ?? entry.ParentName) ||
+                        EqualsNormalized(node.FormsScopePath, locator?.FormsScopePath ?? entry.FormsScopePath) ||
+                        EqualsNormalized(node.FormsViewportPath, locator?.FormsViewportPath ?? entry.FormsViewportPath);
 
         return hasStrongName && hasStructure && hasParent;
     }
@@ -391,6 +405,10 @@ public sealed class JavaNodeResolverService
         if (EqualsNormalized(node.TableLikeKind, locator?.TableLikeKind ?? entry.TableLikeKind)) score += 18;
         if (EqualsNormalized(node.TableLikeContainerPath, locator?.TableLikeContainerPath ?? entry.TableLikeContainerPath)) score += 20;
         if (EqualsNormalized(node.TableLikeColumnHeader, locator?.TableLikeColumnHeader ?? entry.TableLikeColumnHeader)) score += 12;
+        if (EqualsNormalized(node.FormsScopePath, locator?.FormsScopePath ?? entry.FormsScopePath)) score += 24;
+        if (EqualsNormalized(node.FormsScopeName, locator?.FormsScopeName ?? entry.FormsScopeName)) score += 10;
+        if (EqualsNormalized(node.FormsViewportPath, locator?.FormsViewportPath ?? entry.FormsViewportPath)) score += 22;
+        if (EqualsNormalized(node.FormsViewportName, locator?.FormsViewportName ?? entry.FormsViewportName)) score += 8;
         score += TextValueScore(node, locator);
         if (EqualsNormalized(node.Parent?.Role, locator?.ParentRole ?? entry.ParentRole)) score += 18;
         if (EqualsNormalized(node.Parent?.Name, locator?.ParentName ?? entry.ParentName)) score += 18;
