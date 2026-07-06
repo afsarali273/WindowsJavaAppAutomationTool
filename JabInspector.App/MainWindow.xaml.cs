@@ -1474,6 +1474,14 @@ public partial class MainWindow : Window, IJavaActionExecutionHost
         else CopyAllLogs();
     }
 
+    private void CopyJavaElementCode_Click(object sender, RoutedEventArgs e)
+    {
+        var code = _viewModel.JavaInlineLocatorCodePreview;
+        if (string.IsNullOrWhiteSpace(code)) return;
+        System.Windows.Clipboard.SetText(code);
+        _viewModel.Log("Selected element Java code copied to the clipboard.");
+    }
+
     private void CopySelectedLogs_Click(object sender, RoutedEventArgs e) => CopySelectedLogs();
     private void CopyAllLogs_Click(object sender, RoutedEventArgs e) => CopyAllLogs();
     private void LogList_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)

@@ -20,6 +20,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly AccessBridgeService _bridge;
     private readonly AutomationService _automation;
     private readonly JavaElementInspectionService _javaInspection;
+    private readonly JavaClientCodeGenerationService _javaCodeGenerator = new();
     private readonly JavaObjectRepositoryService _javaRepository = new();
     private readonly JavaNodeResolverService _javaResolver = new();
     private readonly JavaTableNavigationService _javaTables = new();
@@ -333,6 +334,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string PropertyValueDetailsValue => IsJavaMode ? FormatValueDetails(SelectedNode) : BuildWindowsValueDetails(_selectedWindowsElement);
     public string PropertyTableSummaryValue => IsJavaMode ? _javaTables.BuildSummary(SelectedNode) : "";
     public string PropertyTableDetailsValue => IsJavaMode ? _javaTables.BuildDetails(SelectedNode) : "";
+    public string JavaInlineLocatorCodePreview => IsJavaMode ? _javaCodeGenerator.GenerateElementSnippet(SelectedNode, CurrentWindow) : "";
     public string WindowsEvidenceSummary => IsJavaMode ? "" : BuildWindowsEvidenceSummary(SelectedWindowsNode, _selectedWindowsElement);
     public string WindowsLocatorCandidatesSummary => IsJavaMode ? "" : BuildWindowsLocatorCandidatesSummary(_selectedWindowsElement);
     public string WindowsMetadataSummary => IsJavaMode ? "" : BuildWindowsMetadataSummary(_selectedWindowsElement);
@@ -2212,6 +2214,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(PropertyValueDetailsValue));
         OnPropertyChanged(nameof(PropertyTableSummaryValue));
         OnPropertyChanged(nameof(PropertyTableDetailsValue));
+        OnPropertyChanged(nameof(JavaInlineLocatorCodePreview));
         OnPropertyChanged(nameof(WindowsEvidenceSummary));
         OnPropertyChanged(nameof(WindowsLocatorCandidates));
         OnPropertyChanged(nameof(WindowsLocatorCandidatesSummary));
