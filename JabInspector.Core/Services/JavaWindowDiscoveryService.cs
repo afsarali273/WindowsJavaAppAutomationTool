@@ -33,11 +33,31 @@ public sealed class JavaWindowDiscoveryService(AccessBridgeService bridge, Inspe
             if (!User32Native.IsWindowVisible(hwnd)) return true;
             scanned++;
             var title = new StringBuilder(512); User32Native.GetWindowText(hwnd, title, title.Capacity);
-            if (!bridge.IsJavaWindow(hwnd)) return true;
-            bridge.TryGetAccessibleContextFromHwnd(hwnd, out var vmId, out var root);
             var className = new StringBuilder(256); User32Native.GetClassName(hwnd, className, className.Capacity);
+            var classText = className.ToString();
+            var titleText = title.ToString();
+
+            // Some bridge/runtime combinations stop reporting true from isJavaWindow
+            // even though getAccessibleContextFromHWND still resolves a valid JAB root.
+            var isJavaWindow = bridge.IsJavaWindow(hwnd);
+            var hasContext = bridge.TryGetAccessibleContextFromHwnd(hwnd, out var vmId, out var root);
+            if (!isJavaWindow && !hasContext) return true;
+
+            if (!isJavaWindow && hasContext)
+            {
+                logger.Debug($"JAB fallback discovery matched hwnd 0x{hwnd.ToInt64():X} via getAccessibleContextFromHWND. Title='{titleText}', Class='{classText}', VmId={vmId}, Root={root}.");
+            }
+
             User32Native.GetWindowThreadProcessId(hwnd, out var pid);
-            result.Add(new JavaWindowInfo { Hwnd = hwnd, Title = string.IsNullOrWhiteSpace(title.ToString()) ? "Untitled Java window" : title.ToString(), VmId = vmId, RootContext = root, ClassName = className.ToString(), ProcessId = (int)pid });
+            result.Add(new JavaWindowInfo
+            {
+                Hwnd = hwnd,
+                Title = string.IsNullOrWhiteSpace(titleText) ? "Untitled Java window" : titleText,
+                VmId = vmId,
+                RootContext = root,
+                ClassName = classText,
+                ProcessId = (int)pid
+            });
             return true;
         }, IntPtr.Zero);
         logger.Log($"Scanned {scanned} visible windows; found {result.Count} Java window(s).");

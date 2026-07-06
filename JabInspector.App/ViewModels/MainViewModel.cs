@@ -403,7 +403,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 if (!_bridge.Initialize()) { Status = "Access Bridge initialization failed"; return; }
                 await Task.Delay(500);
                 var service = new JavaWindowDiscoveryService(_bridge, _logger);
-                var windows = await Task.Run(() => service.GetJavaWindows());
+                var windows = await Task.Run(() => service.GetJavaWindows(attempts: 3, retryDelayMs: 350));
                 JavaWindows.Clear();
                 foreach (var window in windows) JavaWindows.Add(new(window));
                 SelectedJavaWindow = JavaWindows.FirstOrDefault();
