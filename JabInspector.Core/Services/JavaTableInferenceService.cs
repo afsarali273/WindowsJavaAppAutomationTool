@@ -75,7 +75,7 @@ public sealed class JavaTableInferenceService
                 .FirstOrDefault(ancestor => ancestor != node
                                             && ancestor.Parent == node
                                             && ancestor.HasValidBounds
-                                            && Math.Abs(ancestor.Y - rows[rowIndex]) <= rowTolerance * 2);
+                                            && Distance(ancestor.Y, rows[rowIndex]) <= rowTolerance * 2);
             if (rowContainer is null) continue;
             rowContainer.IsTableLikeRow = true;
             rowContainer.TableLikeKind = "Row";
@@ -161,7 +161,7 @@ public sealed class JavaTableInferenceService
         var clusters = new List<int>();
         foreach (var value in nodes.Select(selector).OrderBy(x => x))
         {
-            if (clusters.Count == 0 || Math.Abs(value - clusters[^1]) > tolerance)
+            if (clusters.Count == 0 || Distance(value, clusters[^1]) > tolerance)
             {
                 clusters.Add(value);
                 continue;
@@ -180,7 +180,7 @@ public sealed class JavaTableInferenceService
         var bestDistance = int.MaxValue;
         for (var index = 0; index < anchors.Count; index++)
         {
-            var distance = Math.Abs(anchors[index] - value);
+            var distance = Distance(anchors[index], value);
             if (distance >= bestDistance) continue;
             bestDistance = distance;
             bestIndex = index;
@@ -193,7 +193,7 @@ public sealed class JavaTableInferenceService
     {
         var header = candidates
             .Where(node => !string.IsNullOrWhiteSpace(node.Name) || !string.IsNullOrWhiteSpace(node.TextPreview))
-            .Where(node => Math.Abs(node.X - anchorX) <= Math.Max(16, node.Width / 2))
+            .Where(node => Distance(node.X, anchorX) <= Math.Max(16, node.Width / 2))
             .OrderBy(node => node.Y)
             .ThenBy(node => node.ObjectDepth)
             .FirstOrDefault();
@@ -201,6 +201,12 @@ public sealed class JavaTableInferenceService
         var text = header?.Name;
         if (string.IsNullOrWhiteSpace(text)) text = header?.TextPreview;
         return string.IsNullOrWhiteSpace(text) ? $"Column{columnIndex + 1}" : text.Trim();
+    }
+
+    private static int Distance(int left, int right)
+    {
+        var delta = Math.Abs((long)left - right);
+        return delta > int.MaxValue ? int.MaxValue : (int)delta;
     }
 
     private sealed record CellAssignment(AccessibleNode Node, int RowIndex, int ColumnIndex);
