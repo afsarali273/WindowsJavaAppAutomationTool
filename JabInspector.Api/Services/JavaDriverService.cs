@@ -307,6 +307,15 @@ public sealed class JavaDriverService : IDisposable
         }
     }
 
+    public DriverResult ExecuteNavigation(string sessionId, JavaNavigationRequest request)
+    {
+        lock (_sync)
+        {
+            if (!TryGetSession(sessionId, out var session, out var result)) return result;
+            return ExecuteNavigationCore(session, request);
+        }
+    }
+
     public DriverResult ExecuteOneShotAction(JavaOneShotActionRequest request)
     {
         lock (_sync)
@@ -976,6 +985,29 @@ public sealed class JavaDriverService : IDisposable
         });
     }
 
+    private DriverResult ExecuteNavigationCore(JavaDriverSession session, JavaNavigationRequest request)
+    {
+        var command = NormalizeNavigationCommand(request.Command, out var error);
+        if (command is null)
+            return Fail(error, session.Id);
+
+        var count = Math.Clamp(request.Count, 1, 100);
+        SetForegroundWindow(session.Window.Hwnd);
+        Thread.Sleep(80);
+
+        var sent = SendNavigationKeys(command.Value, count);
+        if (sent <= 0)
+            return Fail($"Could not send navigation command '{command.Value}'.", session.Id);
+
+        _logger.Log($"API navigation command executed. SessionId={session.Id}, Window='{session.Window.Title}', Command={command.Value}, Count={count}.");
+        return Ok($"Navigation command '{command.Value}' sent.", session.Id, new
+        {
+            command = command.Value,
+            count,
+            sent
+        });
+    }
+
     private static JavaElementValidationDto CreateMissingValidation(string message) => new(
         Exists: false,
         IsVisible: false,
@@ -1047,7 +1079,18 @@ public sealed class JavaDriverService : IDisposable
             node.TableLikeColumnIndex,
             node.TableLikeRowCount,
             node.TableLikeColumnCount,
+            node.IsFormsLikeScope,
+            node.IsFormsViewportLikeContainer,
+            node.FormsScopePath,
+            node.FormsScopeRole,
+            node.FormsScopeName,
+            node.FormsViewportPath,
+            node.FormsViewportRole,
+            node.FormsViewportName,
             node.TextPreview,
+            node.TextLetter,
+            node.TextSelectionStartIndex,
+            node.TextSelectionEndIndex,
             node.CurrentValue,
             new ElementBounds(node.X, node.Y, node.Width, node.Height),
             LocatorGenerator.GenerateLocator(node),
@@ -1064,6 +1107,9 @@ public sealed class JavaDriverService : IDisposable
         AddScore(ref score, TextEquals(node.Name, locator?.Name ?? entry?.Name), 28);
         AddScore(ref score, TextEquals(node.VirtualAccessibleName, locator?.VirtualAccessibleName ?? entry?.VirtualAccessibleName), 26);
         AddScore(ref score, TextEquals(node.Description, locator?.Description ?? entry?.Description), 12);
+        AddScore(ref score, TextEquals(node.TextPreview, locator?.TextPreview ?? entry?.Locator?.TextPreview), 8);
+        AddScore(ref score, TextEquals(node.TextLetter, locator?.TextLetter ?? entry?.TextLetter), 6);
+        AddScore(ref score, TextEquals(node.TextSelected, locator?.TextSelected ?? entry?.Locator?.TextSelected), 8);
         AddScore(ref score, TextEquals(node.Path, locator?.Path ?? entry?.Path), 35);
         AddScore(ref score, TextEquals(LocatorGenerator.BuildIndexPath(node), locator?.IndexPath ?? entry?.IndexPath), 35);
         AddScore(ref score, TextEquals(LocatorGenerator.BuildXPath(node), locator?.XPath ?? entry?.XPath), 30);
@@ -1073,6 +1119,10 @@ public sealed class JavaDriverService : IDisposable
         AddScore(ref score, TextEquals(node.TableLikeKind, locator?.TableLikeKind ?? entry?.TableLikeKind), 16);
         AddScore(ref score, TextEquals(node.TableLikeContainerPath, locator?.TableLikeContainerPath ?? entry?.TableLikeContainerPath), 20);
         AddScore(ref score, TextEquals(node.TableLikeColumnHeader, locator?.TableLikeColumnHeader ?? entry?.TableLikeColumnHeader), 12);
+        AddScore(ref score, TextEquals(node.FormsScopePath, locator?.FormsScopePath ?? entry?.FormsScopePath), 22);
+        AddScore(ref score, TextEquals(node.FormsScopeName, locator?.FormsScopeName ?? entry?.FormsScopeName), 10);
+        AddScore(ref score, TextEquals(node.FormsViewportPath, locator?.FormsViewportPath ?? entry?.FormsViewportPath), 20);
+        AddScore(ref score, TextEquals(node.FormsViewportName, locator?.FormsViewportName ?? entry?.FormsViewportName), 8);
         AddScore(ref score, TextEquals(node.TextPreview, locator?.TextPreview ?? entry?.Locator?.TextPreview), 12);
         AddScore(ref score, TextEquals(node.CurrentValue, locator?.CurrentValue ?? entry?.Locator?.CurrentValue), 14);
 
@@ -1534,6 +1584,24 @@ public sealed class JavaDriverService : IDisposable
             SemanticXPath = locator.SemanticXPath ?? "",
             ParentRole = locator.ParentRole ?? "",
             ParentName = locator.ParentName ?? "",
+            IsTableLikeContainer = locator.IsTableLikeContainer,
+            IsTableLikeRow = locator.IsTableLikeRow,
+            IsTableLikeCell = locator.IsTableLikeCell,
+            TableLikeKind = locator.TableLikeKind ?? "",
+            TableLikeContainerPath = locator.TableLikeContainerPath ?? "",
+            TableLikeColumnHeader = locator.TableLikeColumnHeader ?? "",
+            TableLikeRowIndex = locator.TableLikeRowIndex,
+            TableLikeColumnIndex = locator.TableLikeColumnIndex,
+            TableLikeRowCount = locator.TableLikeRowCount,
+            TableLikeColumnCount = locator.TableLikeColumnCount,
+            IsFormsLikeScope = locator.IsFormsLikeScope,
+            IsFormsViewportLikeContainer = locator.IsFormsViewportLikeContainer,
+            FormsScopePath = locator.FormsScopePath ?? "",
+            FormsScopeRole = locator.FormsScopeRole ?? "",
+            FormsScopeName = locator.FormsScopeName ?? "",
+            FormsViewportPath = locator.FormsViewportPath ?? "",
+            FormsViewportRole = locator.FormsViewportRole ?? "",
+            FormsViewportName = locator.FormsViewportName ?? "",
             IndexInParent = locator.IndexInParent,
             ObjectDepth = locator.ObjectDepth,
             ChildrenCount = locator.ChildrenCount,
@@ -1725,6 +1793,52 @@ public sealed class JavaDriverService : IDisposable
         }
     }
 
+    private static JavaNavigationCommand? NormalizeNavigationCommand(string command, out string error)
+    {
+        error = "";
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            error = "Navigation command is required.";
+            return null;
+        }
+
+        return command.Trim().Replace("-", "", StringComparison.OrdinalIgnoreCase).Replace("_", "", StringComparison.OrdinalIgnoreCase).ToLowerInvariant() switch
+        {
+            "pagedown" or "pageforward" => JavaNavigationCommand.PageDown,
+            "pageup" or "pageback" => JavaNavigationCommand.PageUp,
+            "down" => JavaNavigationCommand.Down,
+            "up" => JavaNavigationCommand.Up,
+            "home" => JavaNavigationCommand.Home,
+            "end" => JavaNavigationCommand.End,
+            _ => null
+        };
+    }
+
+    private int SendNavigationKeys(JavaNavigationCommand command, int count)
+    {
+        var key = command switch
+        {
+            JavaNavigationCommand.PageDown => 0x22,
+            JavaNavigationCommand.PageUp => 0x21,
+            JavaNavigationCommand.Down => 0x28,
+            JavaNavigationCommand.Up => 0x26,
+            JavaNavigationCommand.Home => 0x24,
+            JavaNavigationCommand.End => 0x23,
+            _ => 0
+        };
+
+        if (key == 0) return 0;
+
+        var inputs = new List<NativeInput>(count * 2);
+        for (var i = 0; i < count; i++)
+        {
+            inputs.Add(NativeInput.Key((ushort)key, false));
+            inputs.Add(NativeInput.Key((ushort)key, true));
+        }
+
+        return inputs.Count == 0 ? 0 : (int)SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<NativeInput>()) / 2;
+    }
+
     private bool TryGetSession(string sessionId, out JavaDriverSession session, out DriverResult result)
     {
         if (_sessions.TryGetValue(sessionId, out session!))
@@ -1771,6 +1885,16 @@ public sealed class JavaDriverService : IDisposable
         entry.IndexPath,
         entry.XPath,
         entry.SemanticXPath,
+        entry.FormsScopePath,
+        entry.FormsScopeRole,
+        entry.FormsScopeName,
+        entry.FormsViewportPath,
+        entry.FormsViewportRole,
+        entry.FormsViewportName,
+        entry.TextPreview,
+        entry.TextLetter,
+        entry.TextSelectionStartIndex,
+        entry.TextSelectionEndIndex,
         bounds = new ElementBounds(entry.X, entry.Y, entry.Width, entry.Height),
         entry.Locator
     };
@@ -1788,6 +1912,15 @@ public sealed class JavaDriverService : IDisposable
     private const uint WmClose = 0x0010;
     private const uint KeyEventUnicode = 0x0004;
     private const uint KeyEventKeyUp = 0x0002;
+    private enum JavaNavigationCommand
+    {
+        PageDown,
+        PageUp,
+        Down,
+        Up,
+        Home,
+        End
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeInput
@@ -1803,6 +1936,19 @@ public sealed class JavaDriverService : IDisposable
                 {
                     Scan = value,
                     Flags = KeyEventUnicode | (keyUp ? KeyEventKeyUp : 0)
+                }
+            }
+        };
+
+        public static NativeInput Key(ushort virtualKey, bool keyUp) => new()
+        {
+            Type = 1,
+            Data = new InputUnion
+            {
+                Keyboard = new KeyboardInput
+                {
+                    VirtualKey = virtualKey,
+                    Flags = keyUp ? KeyEventKeyUp : 0
                 }
             }
         };

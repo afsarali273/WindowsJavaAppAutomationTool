@@ -33,6 +33,17 @@ public static class LocatorGenerator
         node.TableLikeColumnIndex,
         node.TableLikeRowCount,
         node.TableLikeColumnCount,
+        node.IsFormsLikeScope,
+        node.IsFormsViewportLikeContainer,
+        node.FormsScopePath,
+        node.FormsScopeRole,
+        node.FormsScopeName,
+        node.FormsViewportPath,
+        node.FormsViewportRole,
+        node.FormsViewportName,
+        node.TextLetter,
+        node.TextSelectionStartIndex,
+        node.TextSelectionEndIndex,
         node.HasManagedDescendantAncestor,
         node.ActionNames,
         node.TextPreview,
@@ -113,6 +124,9 @@ public static class LocatorGenerator
         AddPredicate(predicates, "tableLikeKind", node.TableLikeKind);
         AddPredicate(predicates, "tableLikeColumnHeader", node.TableLikeColumnHeader);
         AddPredicate(predicates, "tableLikeContainerPath", node.TableLikeContainerPath);
+        AddPredicate(predicates, "formsScopePath", node.FormsScopePath);
+        AddPredicate(predicates, "formsScopeName", node.FormsScopeName);
+        AddPredicate(predicates, "formsViewportPath", node.FormsViewportPath);
         AddPredicate(predicates, "parentRole", node.Parent?.Role);
         AddPredicate(predicates, "parentName", node.Parent?.Name);
         if (node.ObjectDepth >= 0) predicates.Add($"@objectDepth='{node.ObjectDepth}'");

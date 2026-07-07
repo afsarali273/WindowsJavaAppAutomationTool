@@ -38,13 +38,24 @@ public sealed class AccessibleNode
     public int TableLikeColumnIndex { get; set; } = -1;
     public int TableLikeRowCount { get; set; } = -1;
     public int TableLikeColumnCount { get; set; } = -1;
+    public bool IsFormsLikeScope { get; set; }
+    public bool IsFormsViewportLikeContainer { get; set; }
+    public string FormsScopePath { get; set; } = "";
+    public string FormsScopeRole { get; set; } = "";
+    public string FormsScopeName { get; set; } = "";
+    public string FormsViewportPath { get; set; } = "";
+    public string FormsViewportRole { get; set; } = "";
+    public string FormsViewportName { get; set; } = "";
     public List<string> ActionNames { get; set; } = [];
     public string TextPreview { get; set; } = "";
     public string TextPreviewSource { get; set; } = "";
     public int TextCharCount { get; set; } = -1;
     public int TextCaretIndex { get; set; } = -1;
     public int TextIndexAtPoint { get; set; } = -1;
+    public string TextLetter { get; set; } = "";
     public string TextSelected { get; set; } = "";
+    public int TextSelectionStartIndex { get; set; } = -1;
+    public int TextSelectionEndIndex { get; set; } = -1;
     public string TextWord { get; set; } = "";
     public string TextSentence { get; set; } = "";
     public string CurrentValue { get; set; } = "";

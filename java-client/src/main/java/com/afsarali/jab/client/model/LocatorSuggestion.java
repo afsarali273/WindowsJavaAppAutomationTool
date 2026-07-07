@@ -35,6 +35,14 @@ public final class LocatorSuggestion {
     @JsonProperty private final Integer tableLikeColumnIndex;
     @JsonProperty private final Integer tableLikeRowCount;
     @JsonProperty private final Integer tableLikeColumnCount;
+    @JsonProperty private final Boolean isFormsLikeScope;
+    @JsonProperty private final Boolean isFormsViewportLikeContainer;
+    @JsonProperty private final String formsScopePath;
+    @JsonProperty private final String formsScopeRole;
+    @JsonProperty private final String formsScopeName;
+    @JsonProperty private final String formsViewportPath;
+    @JsonProperty private final String formsViewportRole;
+    @JsonProperty private final String formsViewportName;
     @JsonProperty private final Boolean hasManagedDescendantAncestor;
     @JsonProperty private final List<String> actionNames;
     @JsonProperty private final String textPreview;
@@ -43,6 +51,9 @@ public final class LocatorSuggestion {
     @JsonProperty private final Integer textCaretIndex;
     @JsonProperty private final Integer textIndexAtPoint;
     @JsonProperty private final String textSelected;
+    @JsonProperty private final String textLetter;
+    @JsonProperty private final Integer textSelectionStartIndex;
+    @JsonProperty private final Integer textSelectionEndIndex;
     @JsonProperty private final String textWord;
     @JsonProperty private final String textSentence;
     @JsonProperty private final String currentValue;
@@ -80,6 +91,14 @@ public final class LocatorSuggestion {
             @JsonProperty("tableLikeColumnIndex") Integer tableLikeColumnIndex,
             @JsonProperty("tableLikeRowCount") Integer tableLikeRowCount,
             @JsonProperty("tableLikeColumnCount") Integer tableLikeColumnCount,
+            @JsonProperty("isFormsLikeScope") Boolean isFormsLikeScope,
+            @JsonProperty("isFormsViewportLikeContainer") Boolean isFormsViewportLikeContainer,
+            @JsonProperty("formsScopePath") String formsScopePath,
+            @JsonProperty("formsScopeRole") String formsScopeRole,
+            @JsonProperty("formsScopeName") String formsScopeName,
+            @JsonProperty("formsViewportPath") String formsViewportPath,
+            @JsonProperty("formsViewportRole") String formsViewportRole,
+            @JsonProperty("formsViewportName") String formsViewportName,
             @JsonProperty("hasManagedDescendantAncestor") Boolean hasManagedDescendantAncestor,
             @JsonProperty("actionNames") List<String> actionNames,
             @JsonProperty("textPreview") String textPreview,
@@ -88,6 +107,9 @@ public final class LocatorSuggestion {
             @JsonProperty("textCaretIndex") Integer textCaretIndex,
             @JsonProperty("textIndexAtPoint") Integer textIndexAtPoint,
             @JsonProperty("textSelected") String textSelected,
+            @JsonProperty("textLetter") String textLetter,
+            @JsonProperty("textSelectionStartIndex") Integer textSelectionStartIndex,
+            @JsonProperty("textSelectionEndIndex") Integer textSelectionEndIndex,
             @JsonProperty("textWord") String textWord,
             @JsonProperty("textSentence") String textSentence,
             @JsonProperty("currentValue") String currentValue,
@@ -122,6 +144,14 @@ public final class LocatorSuggestion {
         this.tableLikeColumnIndex = tableLikeColumnIndex;
         this.tableLikeRowCount = tableLikeRowCount;
         this.tableLikeColumnCount = tableLikeColumnCount;
+        this.isFormsLikeScope = isFormsLikeScope;
+        this.isFormsViewportLikeContainer = isFormsViewportLikeContainer;
+        this.formsScopePath = formsScopePath;
+        this.formsScopeRole = formsScopeRole;
+        this.formsScopeName = formsScopeName;
+        this.formsViewportPath = formsViewportPath;
+        this.formsViewportRole = formsViewportRole;
+        this.formsViewportName = formsViewportName;
         this.hasManagedDescendantAncestor = hasManagedDescendantAncestor;
         this.actionNames = actionNames;
         this.textPreview = textPreview;
@@ -130,6 +160,9 @@ public final class LocatorSuggestion {
         this.textCaretIndex = textCaretIndex;
         this.textIndexAtPoint = textIndexAtPoint;
         this.textSelected = textSelected;
+        this.textLetter = textLetter;
+        this.textSelectionStartIndex = textSelectionStartIndex;
+        this.textSelectionEndIndex = textSelectionEndIndex;
         this.textWord = textWord;
         this.textSentence = textSentence;
         this.currentValue = currentValue;
@@ -166,6 +199,14 @@ public final class LocatorSuggestion {
     public Integer tableLikeColumnIndex() { return tableLikeColumnIndex; }
     public Integer tableLikeRowCount() { return tableLikeRowCount; }
     public Integer tableLikeColumnCount() { return tableLikeColumnCount; }
+    public Boolean isFormsLikeScope() { return isFormsLikeScope; }
+    public Boolean isFormsViewportLikeContainer() { return isFormsViewportLikeContainer; }
+    public String formsScopePath() { return formsScopePath; }
+    public String formsScopeRole() { return formsScopeRole; }
+    public String formsScopeName() { return formsScopeName; }
+    public String formsViewportPath() { return formsViewportPath; }
+    public String formsViewportRole() { return formsViewportRole; }
+    public String formsViewportName() { return formsViewportName; }
     public Boolean hasManagedDescendantAncestor() { return hasManagedDescendantAncestor; }
     public List<String> actionNames() { return actionNames; }
     public String textPreview() { return textPreview; }
@@ -174,6 +215,9 @@ public final class LocatorSuggestion {
     public Integer textCaretIndex() { return textCaretIndex; }
     public Integer textIndexAtPoint() { return textIndexAtPoint; }
     public String textSelected() { return textSelected; }
+    public String textLetter() { return textLetter; }
+    public Integer textSelectionStartIndex() { return textSelectionStartIndex; }
+    public Integer textSelectionEndIndex() { return textSelectionEndIndex; }
     public String textWord() { return textWord; }
     public String textSentence() { return textSentence; }
     public String currentValue() { return currentValue; }
@@ -183,6 +227,63 @@ public final class LocatorSuggestion {
 
     public static Builder builder() {
         return new Builder();
+    }
+
+    public Builder toBuilder() {
+        return builder()
+                .engine(engine)
+                .role(role)
+                .roleEnUs(roleEnUs)
+                .name(name)
+                .virtualAccessibleName(virtualAccessibleName)
+                .description(description)
+                .states(states)
+                .statesEnUs(statesEnUs)
+                .indexInParent(indexInParent)
+                .objectDepth(objectDepth)
+                .childrenCount(childrenCount)
+                .path(path)
+                .indexPath(indexPath)
+                .xPath(xPath)
+                .indexXPath(indexXPath)
+                .semanticXPath(semanticXPath)
+                .parentRole(parentRole)
+                .parentName(parentName)
+                .isTableLikeContainer(isTableLikeContainer)
+                .isTableLikeRow(isTableLikeRow)
+                .isTableLikeCell(isTableLikeCell)
+                .tableLikeKind(tableLikeKind)
+                .tableLikeContainerPath(tableLikeContainerPath)
+                .tableLikeColumnHeader(tableLikeColumnHeader)
+                .tableLikeRowIndex(tableLikeRowIndex)
+                .tableLikeColumnIndex(tableLikeColumnIndex)
+                .tableLikeRowCount(tableLikeRowCount)
+                .tableLikeColumnCount(tableLikeColumnCount)
+                .isFormsLikeScope(isFormsLikeScope)
+                .isFormsViewportLikeContainer(isFormsViewportLikeContainer)
+                .formsScopePath(formsScopePath)
+                .formsScopeRole(formsScopeRole)
+                .formsScopeName(formsScopeName)
+                .formsViewportPath(formsViewportPath)
+                .formsViewportRole(formsViewportRole)
+                .formsViewportName(formsViewportName)
+                .hasManagedDescendantAncestor(hasManagedDescendantAncestor)
+                .actionNames(actionNames)
+                .textPreview(textPreview)
+                .textPreviewSource(textPreviewSource)
+                .textCharCount(textCharCount)
+                .textCaretIndex(textCaretIndex)
+                .textIndexAtPoint(textIndexAtPoint)
+                .textSelected(textSelected)
+                .textLetter(textLetter)
+                .textSelectionStartIndex(textSelectionStartIndex)
+                .textSelectionEndIndex(textSelectionEndIndex)
+                .textWord(textWord)
+                .textSentence(textSentence)
+                .currentValue(currentValue)
+                .minimumValue(minimumValue)
+                .maximumValue(maximumValue)
+                .bounds(bounds);
     }
 
     public static LocatorSuggestion role(String role) {
@@ -250,6 +351,14 @@ public final class LocatorSuggestion {
         private Integer tableLikeColumnIndex;
         private Integer tableLikeRowCount;
         private Integer tableLikeColumnCount;
+        private Boolean isFormsLikeScope;
+        private Boolean isFormsViewportLikeContainer;
+        private String formsScopePath;
+        private String formsScopeRole;
+        private String formsScopeName;
+        private String formsViewportPath;
+        private String formsViewportRole;
+        private String formsViewportName;
         private Boolean hasManagedDescendantAncestor;
         private List<String> actionNames;
         private String textPreview;
@@ -258,6 +367,9 @@ public final class LocatorSuggestion {
         private Integer textCaretIndex;
         private Integer textIndexAtPoint;
         private String textSelected;
+        private String textLetter;
+        private Integer textSelectionStartIndex;
+        private Integer textSelectionEndIndex;
         private String textWord;
         private String textSentence;
         private String currentValue;
@@ -293,6 +405,14 @@ public final class LocatorSuggestion {
         public Builder tableLikeColumnIndex(Integer tableLikeColumnIndex) { this.tableLikeColumnIndex = tableLikeColumnIndex; return this; }
         public Builder tableLikeRowCount(Integer tableLikeRowCount) { this.tableLikeRowCount = tableLikeRowCount; return this; }
         public Builder tableLikeColumnCount(Integer tableLikeColumnCount) { this.tableLikeColumnCount = tableLikeColumnCount; return this; }
+        public Builder isFormsLikeScope(Boolean isFormsLikeScope) { this.isFormsLikeScope = isFormsLikeScope; return this; }
+        public Builder isFormsViewportLikeContainer(Boolean isFormsViewportLikeContainer) { this.isFormsViewportLikeContainer = isFormsViewportLikeContainer; return this; }
+        public Builder formsScopePath(String formsScopePath) { this.formsScopePath = formsScopePath; return this; }
+        public Builder formsScopeRole(String formsScopeRole) { this.formsScopeRole = formsScopeRole; return this; }
+        public Builder formsScopeName(String formsScopeName) { this.formsScopeName = formsScopeName; return this; }
+        public Builder formsViewportPath(String formsViewportPath) { this.formsViewportPath = formsViewportPath; return this; }
+        public Builder formsViewportRole(String formsViewportRole) { this.formsViewportRole = formsViewportRole; return this; }
+        public Builder formsViewportName(String formsViewportName) { this.formsViewportName = formsViewportName; return this; }
         public Builder hasManagedDescendantAncestor(Boolean hasManagedDescendantAncestor) { this.hasManagedDescendantAncestor = hasManagedDescendantAncestor; return this; }
         public Builder actionNames(List<String> actionNames) { this.actionNames = actionNames; return this; }
         public Builder textPreview(String textPreview) { this.textPreview = textPreview; return this; }
@@ -301,6 +421,9 @@ public final class LocatorSuggestion {
         public Builder textCaretIndex(Integer textCaretIndex) { this.textCaretIndex = textCaretIndex; return this; }
         public Builder textIndexAtPoint(Integer textIndexAtPoint) { this.textIndexAtPoint = textIndexAtPoint; return this; }
         public Builder textSelected(String textSelected) { this.textSelected = textSelected; return this; }
+        public Builder textLetter(String textLetter) { this.textLetter = textLetter; return this; }
+        public Builder textSelectionStartIndex(Integer textSelectionStartIndex) { this.textSelectionStartIndex = textSelectionStartIndex; return this; }
+        public Builder textSelectionEndIndex(Integer textSelectionEndIndex) { this.textSelectionEndIndex = textSelectionEndIndex; return this; }
         public Builder textWord(String textWord) { this.textWord = textWord; return this; }
         public Builder textSentence(String textSentence) { this.textSentence = textSentence; return this; }
         public Builder currentValue(String currentValue) { this.currentValue = currentValue; return this; }
@@ -338,6 +461,14 @@ public final class LocatorSuggestion {
                     tableLikeColumnIndex,
                     tableLikeRowCount,
                     tableLikeColumnCount,
+                    isFormsLikeScope,
+                    isFormsViewportLikeContainer,
+                    formsScopePath,
+                    formsScopeRole,
+                    formsScopeName,
+                    formsViewportPath,
+                    formsViewportRole,
+                    formsViewportName,
                     hasManagedDescendantAncestor,
                     actionNames,
                     textPreview,
@@ -346,6 +477,9 @@ public final class LocatorSuggestion {
                     textCaretIndex,
                     textIndexAtPoint,
                     textSelected,
+                    textLetter,
+                    textSelectionStartIndex,
+                    textSelectionEndIndex,
                     textWord,
                     textSentence,
                     currentValue,

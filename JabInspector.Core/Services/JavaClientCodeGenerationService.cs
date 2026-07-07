@@ -64,6 +64,63 @@ public sealed class JavaClientCodeGenerationService
         return builder.ToString();
     }
 
+    public string GenerateElementSnippet(
+        AccessibleNode? node,
+        JavaWindowInfo? window = null,
+        string? className = null,
+        string defaultApiUrl = "http://localhost:5000")
+    {
+        if (node is null)
+        {
+            return "// Select a Java element to generate a code snippet.";
+        }
+
+        var locator = LocatorGenerator.GenerateLocator(node);
+        var normalizedClassName = NormalizeClassName(string.IsNullOrWhiteSpace(className)
+            ? $"{SanitizeIdentifier(node.DisplayName)}ElementSnippet"
+            : className);
+
+        var builder = new StringBuilder();
+        builder.AppendLine("import com.afsarali.jab.client.JavaAutomation;");
+        builder.AppendLine("import com.afsarali.jab.client.RetryOptions;");
+        builder.AppendLine("import com.afsarali.jab.client.model.JavaWindowSelector;");
+        builder.AppendLine("import com.afsarali.jab.client.model.LocatorSuggestion;");
+        builder.AppendLine("import com.afsarali.jab.client.model.ResolutionPolicy;");
+        builder.AppendLine();
+        builder.AppendLine("import java.net.URI;");
+        builder.AppendLine("import java.time.Duration;");
+        builder.AppendLine("import java.util.List;");
+        builder.AppendLine();
+        builder.AppendLine($"public final class {normalizedClassName} {{");
+        builder.AppendLine($"    private static final String DEFAULT_API = {JavaString(defaultApiUrl)};");
+        builder.AppendLine();
+        builder.AppendLine($"    private {normalizedClassName}() {{");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    public static void main(String[] args) {");
+        builder.AppendLine("        URI api = URI.create(args.length > 0 ? args[0] : DEFAULT_API);");
+        builder.AppendLine("        JavaAutomation automation = JavaAutomation.connect(api)");
+        builder.AppendLine("                .resolutionPolicy(ResolutionPolicy.inline());");
+        builder.AppendLine();
+        builder.AppendLine($"        JavaWindowSelector window = {WindowSelectorLiteral(window)};");
+        builder.AppendLine("        LocatorSuggestion locator =");
+        builder.AppendLine(IndentBlock(LocatorLiteral(locator), 8));
+        builder.AppendLine("        var element = automation.window(window).element(locator);");
+        builder.AppendLine();
+        builder.AppendLine("        RetryOptions retry = RetryOptions.of(Duration.ofSeconds(5), Duration.ofMillis(200));");
+        builder.AppendLine("        element.waitUntilExists(retry);");
+        builder.AppendLine("        element.click(retry);");
+        builder.AppendLine("        String text = element.getText(retry);");
+        builder.AppendLine("        boolean visible = element.isVisible();");
+        builder.AppendLine("        boolean enabled = element.isEnabled();");
+        builder.AppendLine("        List<?> children = element.findChildElements();");
+        builder.AppendLine("        System.out.println(text);");
+        builder.AppendLine("        System.out.println(\"visible=\" + visible + \", enabled=\" + enabled + \", childCount=\" + children.size());");
+        builder.AppendLine("    }");
+        builder.AppendLine("}");
+        return builder.ToString();
+    }
+
     public string GenerateInlineLocatorMainClass(
         IEnumerable<JavaRecordedStep> recordedSteps,
         string? className = null,
@@ -221,6 +278,14 @@ public sealed class JavaClientCodeGenerationService
         AppendBuilderInt(builder, "tableLikeColumnIndex", locator.TableLikeColumnIndex);
         AppendBuilderInt(builder, "tableLikeRowCount", locator.TableLikeRowCount);
         AppendBuilderInt(builder, "tableLikeColumnCount", locator.TableLikeColumnCount);
+        AppendBuilderBool(builder, "isFormsLikeScope", locator.IsFormsLikeScope);
+        AppendBuilderBool(builder, "isFormsViewportLikeContainer", locator.IsFormsViewportLikeContainer);
+        AppendBuilderString(builder, "formsScopePath", locator.FormsScopePath);
+        AppendBuilderString(builder, "formsScopeRole", locator.FormsScopeRole);
+        AppendBuilderString(builder, "formsScopeName", locator.FormsScopeName);
+        AppendBuilderString(builder, "formsViewportPath", locator.FormsViewportPath);
+        AppendBuilderString(builder, "formsViewportRole", locator.FormsViewportRole);
+        AppendBuilderString(builder, "formsViewportName", locator.FormsViewportName);
         builder.AppendLine($"                .hasManagedDescendantAncestor({locator.HasManagedDescendantAncestor.ToString().ToLowerInvariant()})");
         if (locator.ActionNames.Count > 0)
         {
@@ -232,6 +297,9 @@ public sealed class JavaClientCodeGenerationService
         AppendBuilderInt(builder, "textCaretIndex", locator.TextCaretIndex);
         AppendBuilderInt(builder, "textIndexAtPoint", locator.TextIndexAtPoint);
         AppendBuilderString(builder, "textSelected", locator.TextSelected);
+        AppendBuilderString(builder, "textLetter", locator.TextLetter);
+        AppendBuilderInt(builder, "textSelectionStartIndex", locator.TextSelectionStartIndex);
+        AppendBuilderInt(builder, "textSelectionEndIndex", locator.TextSelectionEndIndex);
         AppendBuilderString(builder, "textWord", locator.TextWord);
         AppendBuilderString(builder, "textSentence", locator.TextSentence);
         AppendBuilderString(builder, "currentValue", locator.CurrentValue);
@@ -268,6 +336,117 @@ public sealed class JavaClientCodeGenerationService
         }
     }
 
+    private static string LocatorLiteral(LocatorSuggestion locator)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("LocatorSuggestion.builder()");
+        AppendBuilderString(builder, "engine", locator.Engine);
+        AppendBuilderString(builder, "role", locator.Role);
+        AppendBuilderString(builder, "roleEnUs", locator.RoleEnUs);
+        AppendBuilderString(builder, "name", locator.Name);
+        AppendBuilderString(builder, "virtualAccessibleName", locator.VirtualAccessibleName);
+        AppendBuilderString(builder, "description", locator.Description);
+        AppendBuilderString(builder, "states", locator.States);
+        AppendBuilderString(builder, "statesEnUs", locator.StatesEnUs);
+        AppendBuilderInt(builder, "indexInParent", locator.IndexInParent);
+        AppendBuilderInt(builder, "objectDepth", locator.ObjectDepth);
+        AppendBuilderInt(builder, "childrenCount", locator.ChildrenCount);
+        AppendBuilderString(builder, "path", locator.Path);
+        AppendBuilderString(builder, "indexPath", locator.IndexPath);
+        AppendBuilderString(builder, "xPath", locator.XPath);
+        AppendBuilderString(builder, "indexXPath", locator.IndexXPath);
+        AppendBuilderString(builder, "semanticXPath", locator.SemanticXPath);
+        AppendBuilderString(builder, "parentRole", locator.ParentRole);
+        AppendBuilderString(builder, "parentName", locator.ParentName);
+        AppendBuilderBool(builder, "isTableLikeContainer", locator.IsTableLikeContainer);
+        AppendBuilderBool(builder, "isTableLikeRow", locator.IsTableLikeRow);
+        AppendBuilderBool(builder, "isTableLikeCell", locator.IsTableLikeCell);
+        AppendBuilderString(builder, "tableLikeKind", locator.TableLikeKind);
+        AppendBuilderString(builder, "tableLikeContainerPath", locator.TableLikeContainerPath);
+        AppendBuilderString(builder, "tableLikeColumnHeader", locator.TableLikeColumnHeader);
+        AppendBuilderInt(builder, "tableLikeRowIndex", locator.TableLikeRowIndex);
+        AppendBuilderInt(builder, "tableLikeColumnIndex", locator.TableLikeColumnIndex);
+        AppendBuilderInt(builder, "tableLikeRowCount", locator.TableLikeRowCount);
+        AppendBuilderInt(builder, "tableLikeColumnCount", locator.TableLikeColumnCount);
+        AppendBuilderBool(builder, "isFormsLikeScope", locator.IsFormsLikeScope);
+        AppendBuilderBool(builder, "isFormsViewportLikeContainer", locator.IsFormsViewportLikeContainer);
+        AppendBuilderString(builder, "formsScopePath", locator.FormsScopePath);
+        AppendBuilderString(builder, "formsScopeRole", locator.FormsScopeRole);
+        AppendBuilderString(builder, "formsScopeName", locator.FormsScopeName);
+        AppendBuilderString(builder, "formsViewportPath", locator.FormsViewportPath);
+        AppendBuilderString(builder, "formsViewportRole", locator.FormsViewportRole);
+        AppendBuilderString(builder, "formsViewportName", locator.FormsViewportName);
+        builder.AppendLine($"                .hasManagedDescendantAncestor({locator.HasManagedDescendantAncestor.ToString().ToLowerInvariant()})");
+        if (locator.ActionNames.Count > 0)
+        {
+            builder.AppendLine($"                .actionNames(List.of({string.Join(", ", locator.ActionNames.Select(JavaString))}))");
+        }
+        AppendBuilderString(builder, "textPreview", locator.TextPreview);
+        AppendBuilderString(builder, "textPreviewSource", locator.TextPreviewSource);
+        AppendBuilderInt(builder, "textCharCount", locator.TextCharCount);
+        AppendBuilderInt(builder, "textCaretIndex", locator.TextCaretIndex);
+        AppendBuilderInt(builder, "textIndexAtPoint", locator.TextIndexAtPoint);
+        AppendBuilderString(builder, "textSelected", locator.TextSelected);
+        AppendBuilderString(builder, "textLetter", locator.TextLetter);
+        AppendBuilderInt(builder, "textSelectionStartIndex", locator.TextSelectionStartIndex);
+        AppendBuilderInt(builder, "textSelectionEndIndex", locator.TextSelectionEndIndex);
+        AppendBuilderString(builder, "textWord", locator.TextWord);
+        AppendBuilderString(builder, "textSentence", locator.TextSentence);
+        AppendBuilderString(builder, "currentValue", locator.CurrentValue);
+        AppendBuilderString(builder, "minimumValue", locator.MinimumValue);
+        AppendBuilderString(builder, "maximumValue", locator.MaximumValue);
+        if (locator.Bounds.Width != 0 || locator.Bounds.Height != 0)
+        {
+            builder.AppendLine($"                .bounds(new com.afsarali.jab.client.model.ElementBounds({locator.Bounds.X}, {locator.Bounds.Y}, {locator.Bounds.Width}, {locator.Bounds.Height}))");
+        }
+        builder.Append("                .build();");
+        return builder.ToString();
+    }
+
+    private static string WindowSelectorLiteral(JavaWindowInfo? window)
+    {
+        if (window is null)
+        {
+            return "JavaWindowSelector.title(\"<window title>\")";
+        }
+
+        var selector = $"JavaWindowSelector.title({JavaString(window.Title)})";
+        if (!string.IsNullOrWhiteSpace(window.ClassName))
+        {
+            selector += $".className({JavaString(window.ClassName)})";
+        }
+
+        return selector;
+    }
+
+    private static string SanitizeIdentifier(string value)
+    {
+        var builder = new StringBuilder();
+        var capitalizeNext = true;
+        foreach (var ch in value)
+        {
+            if (char.IsLetterOrDigit(ch))
+            {
+                builder.Append(capitalizeNext ? char.ToUpperInvariant(ch) : ch);
+                capitalizeNext = false;
+            }
+            else
+            {
+                capitalizeNext = true;
+            }
+        }
+
+        var sanitized = builder.Length == 0 ? "GeneratedJavaElement" : builder.ToString();
+        if (char.IsDigit(sanitized[0])) sanitized = "_" + sanitized;
+        return sanitized;
+    }
+
+    private static string IndentBlock(string value, int spaces)
+    {
+        var indent = new string(' ', spaces);
+        return string.Join(Environment.NewLine, value.Split(Environment.NewLine, StringSplitOptions.None).Select(line => indent + line));
+    }
+
     private static LocatorSuggestion? GetLocator(JavaRecordedStep step)
     {
         if (step.ObjectLocator is not null) return step.ObjectLocator;
@@ -278,17 +457,17 @@ public sealed class JavaClientCodeGenerationService
         {
             return new LocatorSuggestion(
                 "java-access-bridge",
-                step.ObjectRole,
+                step.ObjectRole ?? "",
                 "",
-                step.ObjectName,
-                step.ObjectVirtualAccessibleName,
-                step.ObjectDescription,
+                step.ObjectName ?? "",
+                step.ObjectVirtualAccessibleName ?? "",
+                step.ObjectDescription ?? "",
                 "",
                 "",
                 -1,
                 step.ObjectDepth,
                 -1,
-                step.ObjectPath,
+                step.ObjectPath ?? "",
                 "",
                 "",
                 "",
@@ -306,7 +485,18 @@ public sealed class JavaClientCodeGenerationService
                 -1,
                 -1,
                 false,
-                [],
+                false,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                -1,
+                -1,
+                false,
+                Array.Empty<string>(),
                 "",
                 "",
                 -1,

@@ -2,6 +2,7 @@ package com.afsarali.jab.client;
 
 import com.afsarali.jab.client.model.DriverResult;
 import com.afsarali.jab.client.model.JavaAction;
+import com.afsarali.jab.client.model.JavaNavigationCommand;
 import com.afsarali.jab.client.model.JavaWindowSelector;
 import com.afsarali.jab.client.model.LocatorSuggestion;
 
@@ -171,6 +172,20 @@ public final class JavaElement {
         return locator == null ? driver.findTableCells(objectKey) : driver.findTableCells(locator);
     }
 
+    public List<JavaElementHandle> findTableCells(int rowIndex) {
+        return findTableCells().stream()
+                .filter(handle -> handle.snapshot().tableLikeRowIndex() == rowIndex)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    public List<JavaElementHandle> findTableCells(String columnHeader) {
+        String normalizedHeader = columnHeader == null ? "" : columnHeader.trim();
+        return findTableCells().stream()
+                .filter(handle -> handle.snapshot().tableLikeColumnHeader() != null
+                        && handle.snapshot().tableLikeColumnHeader().equalsIgnoreCase(normalizedHeader))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     public JavaElementHandle findTableCell(int rowIndex, int columnIndex) {
         return locator == null
                 ? driver.findTableCell(objectKey, rowIndex, columnIndex)
@@ -197,6 +212,20 @@ public final class JavaElement {
 
     public JavaElementHandle clickTableCell(int rowIndex, String columnHeader) {
         return findTableCell(rowIndex, columnHeader).click();
+    }
+
+    public JavaTable asTable() {
+        return JavaTable.from(this);
+    }
+
+    public JavaElement navigate(JavaNavigationCommand command) {
+        driver.navigate(command);
+        return this;
+    }
+
+    public JavaElement navigate(JavaNavigationCommand command, int count) {
+        driver.navigate(command, count);
+        return this;
     }
 
     private String label() {

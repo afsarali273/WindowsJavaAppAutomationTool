@@ -75,6 +75,10 @@ public sealed record JavaActionRequest(
     bool RefreshTree = false,
     bool PreferAccessibleAction = true);
 
+public sealed record JavaNavigationRequest(
+    string Command,
+    int Count = 1);
+
 public sealed record JavaOneShotActionRequest(
     string Action,
     string? RepositoryPath = null,
@@ -194,7 +198,18 @@ public sealed record JavaElementSnapshotDto(
     int TableLikeColumnIndex,
     int TableLikeRowCount,
     int TableLikeColumnCount,
+    bool IsFormsLikeScope,
+    bool IsFormsViewportLikeContainer,
+    string FormsScopePath,
+    string FormsScopeRole,
+    string FormsScopeName,
+    string FormsViewportPath,
+    string FormsViewportRole,
+    string FormsViewportName,
     string TextPreview,
+    string TextLetter,
+    int TextSelectionStartIndex,
+    int TextSelectionEndIndex,
     string CurrentValue,
     ElementBounds Bounds,
     LocatorSuggestion Locator,

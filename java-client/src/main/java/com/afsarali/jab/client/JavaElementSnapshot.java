@@ -45,8 +45,19 @@ public final class JavaElementSnapshot {
     public int tableLikeColumnIndex() { return integer("tableLikeColumnIndex"); }
     public int tableLikeRowCount() { return integer("tableLikeRowCount"); }
     public int tableLikeColumnCount() { return integer("tableLikeColumnCount"); }
+    public boolean isFormsLikeScope() { return bool("isFormsLikeScope"); }
+    public boolean isFormsViewportLikeContainer() { return bool("isFormsViewportLikeContainer"); }
+    public String formsScopePath() { return text("formsScopePath"); }
+    public String formsScopeRole() { return text("formsScopeRole"); }
+    public String formsScopeName() { return text("formsScopeName"); }
+    public String formsViewportPath() { return text("formsViewportPath"); }
+    public String formsViewportRole() { return text("formsViewportRole"); }
+    public String formsViewportName() { return text("formsViewportName"); }
     public String objectKey() { return text("objectKey"); }
     public String textPreview() { return text("textPreview"); }
+    public String textLetter() { return text("textLetter"); }
+    public int textSelectionStartIndex() { return integer("textSelectionStartIndex"); }
+    public int textSelectionEndIndex() { return integer("textSelectionEndIndex"); }
     public String currentValue() { return text("currentValue"); }
     public int score() { return integer("score"); }
     public JsonNode raw() { return data; }

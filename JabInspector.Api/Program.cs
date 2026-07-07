@@ -89,6 +89,7 @@ app.MapGet("/", () => Results.Ok(new
         findElements = "POST /api/java/sessions/{sessionId}/elements/find",
         findChildElements = "POST /api/java/sessions/{sessionId}/elements/children",
         actions = "POST /api/java/sessions/{sessionId}/actions",
+        navigation = "POST /api/java/sessions/{sessionId}/navigation",
         oneShotAction = "POST /api/java/actions/run",
         oneShotValidate = "POST /api/java/validate/run",
         oneShotFindElements = "POST /api/java/elements/find",
@@ -198,6 +199,12 @@ app.MapPost("/api/java/sessions/{sessionId}/elements/children", (string sessionI
 app.MapPost("/api/java/sessions/{sessionId}/actions", (string sessionId, JavaActionRequest request, JavaDriverService driver) =>
 {
     var result = driver.ExecuteAction(sessionId, request);
+    return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+});
+
+app.MapPost("/api/java/sessions/{sessionId}/navigation", (string sessionId, JavaNavigationRequest request, JavaDriverService driver) =>
+{
+    var result = driver.ExecuteNavigation(sessionId, request);
     return result.Success ? Results.Ok(result) : Results.BadRequest(result);
 });
 

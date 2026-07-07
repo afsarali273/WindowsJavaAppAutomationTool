@@ -8,6 +8,7 @@ namespace JabInspector.Core.Services;
 public sealed class AccessibleTreeCrawler(AccessBridgeService bridge, InspectorLogger logger)
 {
     private readonly JavaTableInferenceService _tableInference = new();
+    private readonly JavaFormsScopeInferenceService _formsScopeInference = new();
     public int MaxDepth { get; init; } = 25;
     public int MaxChildrenPerNode { get; init; } = 500;
     public int NodeCount { get; private set; }
@@ -23,6 +24,7 @@ public sealed class AccessibleTreeCrawler(AccessBridgeService bridge, InspectorL
         {
             LocatorGenerator.AssignPaths(root);
             _tableInference.Annotate(root);
+            _formsScopeInference.Annotate(root);
         }
         logger.Log($"Tree crawl completed: {NodeCount:N0} nodes in {sw.ElapsedMilliseconds:N0} ms.");
         if (root is not null && root.Children.Count == 0) logger.Log("The root has no exposed children. The app may use custom controls or a separately bundled JRE.");

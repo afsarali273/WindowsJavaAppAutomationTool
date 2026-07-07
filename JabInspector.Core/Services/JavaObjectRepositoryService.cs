@@ -78,6 +78,28 @@ public sealed class JavaObjectRepositoryService
             TableLikeColumnIndex = locator.TableLikeColumnIndex,
             TableLikeRowCount = locator.TableLikeRowCount,
             TableLikeColumnCount = locator.TableLikeColumnCount,
+            IsFormsLikeScope = locator.IsFormsLikeScope,
+            IsFormsViewportLikeContainer = locator.IsFormsViewportLikeContainer,
+            FormsScopePath = locator.FormsScopePath,
+            FormsScopeRole = locator.FormsScopeRole,
+            FormsScopeName = locator.FormsScopeName,
+            FormsViewportPath = locator.FormsViewportPath,
+            FormsViewportRole = locator.FormsViewportRole,
+            FormsViewportName = locator.FormsViewportName,
+            TextPreview = locator.TextPreview,
+            TextPreviewSource = locator.TextPreviewSource,
+            TextCharCount = locator.TextCharCount,
+            TextCaretIndex = locator.TextCaretIndex,
+            TextIndexAtPoint = locator.TextIndexAtPoint,
+            TextSelected = locator.TextSelected,
+            TextLetter = locator.TextLetter,
+            TextSelectionStartIndex = locator.TextSelectionStartIndex,
+            TextSelectionEndIndex = locator.TextSelectionEndIndex,
+            TextWord = locator.TextWord,
+            TextSentence = locator.TextSentence,
+            CurrentValue = locator.CurrentValue,
+            MinimumValue = locator.MinimumValue,
+            MaximumValue = locator.MaximumValue,
             IndexInParent = locator.IndexInParent,
             ObjectDepth = locator.ObjectDepth,
             ChildrenCount = locator.ChildrenCount,
@@ -129,6 +151,14 @@ public sealed class JavaObjectRepositoryService
             Property("tableLike.columnIndex", entry.TableLikeColumnIndex.ToString(), false),
             Property("tableLike.rowCount", entry.TableLikeRowCount.ToString(), false),
             Property("tableLike.columnCount", entry.TableLikeColumnCount.ToString(), false),
+            Property("forms.scope", entry.IsFormsLikeScope.ToString(), false),
+            Property("forms.viewport", entry.IsFormsViewportLikeContainer.ToString(), false),
+            Property("forms.scopePath", entry.FormsScopePath, false),
+            Property("forms.scopeRole", entry.FormsScopeRole, false),
+            Property("forms.scopeName", entry.FormsScopeName, false),
+            Property("forms.viewportPath", entry.FormsViewportPath, false),
+            Property("forms.viewportRole", entry.FormsViewportRole, false),
+            Property("forms.viewportName", entry.FormsViewportName, false),
             Property("indexInParent", entry.IndexInParent.ToString(), false),
             Property("objectDepth", entry.ObjectDepth.ToString(), false),
             Property("childrenCount", entry.ChildrenCount.ToString(), false),
@@ -147,7 +177,10 @@ public sealed class JavaObjectRepositoryService
             Property("text.charCount", locator.TextCharCount.ToString(), false),
             Property("text.caretIndex", locator.TextCaretIndex.ToString(), false),
             Property("text.indexAtPoint", locator.TextIndexAtPoint.ToString(), false),
+            Property("text.letter", locator.TextLetter, false),
             Property("text.selected", locator.TextSelected, false),
+            Property("text.selectionStartIndex", locator.TextSelectionStartIndex.ToString(), false),
+            Property("text.selectionEndIndex", locator.TextSelectionEndIndex.ToString(), false),
             Property("text.word", locator.TextWord, false),
             Property("text.sentence", locator.TextSentence, false),
             Property("value.current", locator.CurrentValue, false),
@@ -330,6 +363,28 @@ public sealed class JavaObjectRepositoryService
         entry.TableLikeColumnIndex = GetIntProperty(entry, "tableLike.columnIndex", entry.TableLikeColumnIndex);
         entry.TableLikeRowCount = GetIntProperty(entry, "tableLike.rowCount", entry.TableLikeRowCount);
         entry.TableLikeColumnCount = GetIntProperty(entry, "tableLike.columnCount", entry.TableLikeColumnCount);
+        entry.IsFormsLikeScope = GetBoolProperty(entry, "forms.scope", entry.IsFormsLikeScope);
+        entry.IsFormsViewportLikeContainer = GetBoolProperty(entry, "forms.viewport", entry.IsFormsViewportLikeContainer);
+        entry.FormsScopePath = GetProperty(entry, "forms.scopePath", entry.FormsScopePath);
+        entry.FormsScopeRole = GetProperty(entry, "forms.scopeRole", entry.FormsScopeRole);
+        entry.FormsScopeName = GetProperty(entry, "forms.scopeName", entry.FormsScopeName);
+        entry.FormsViewportPath = GetProperty(entry, "forms.viewportPath", entry.FormsViewportPath);
+        entry.FormsViewportRole = GetProperty(entry, "forms.viewportRole", entry.FormsViewportRole);
+        entry.FormsViewportName = GetProperty(entry, "forms.viewportName", entry.FormsViewportName);
+        entry.TextPreview = GetProperty(entry, "text.preview", entry.TextPreview);
+        entry.TextPreviewSource = GetProperty(entry, "text.previewSource", entry.TextPreviewSource);
+        entry.TextCharCount = GetIntProperty(entry, "text.charCount", entry.TextCharCount);
+        entry.TextCaretIndex = GetIntProperty(entry, "text.caretIndex", entry.TextCaretIndex);
+        entry.TextIndexAtPoint = GetIntProperty(entry, "text.indexAtPoint", entry.TextIndexAtPoint);
+        entry.TextSelected = GetProperty(entry, "text.selected", entry.TextSelected);
+        entry.TextLetter = GetProperty(entry, "text.letter", entry.TextLetter);
+        entry.TextSelectionStartIndex = GetIntProperty(entry, "text.selectionStartIndex", entry.TextSelectionStartIndex);
+        entry.TextSelectionEndIndex = GetIntProperty(entry, "text.selectionEndIndex", entry.TextSelectionEndIndex);
+        entry.TextWord = GetProperty(entry, "text.word", entry.TextWord);
+        entry.TextSentence = GetProperty(entry, "text.sentence", entry.TextSentence);
+        entry.CurrentValue = GetProperty(entry, "value.current", entry.CurrentValue);
+        entry.MinimumValue = GetProperty(entry, "value.minimum", entry.MinimumValue);
+        entry.MaximumValue = GetProperty(entry, "value.maximum", entry.MaximumValue);
         entry.IndexInParent = GetIntProperty(entry, "indexInParent", entry.IndexInParent);
         entry.ObjectDepth = GetIntProperty(entry, "objectDepth", entry.ObjectDepth);
         entry.ChildrenCount = GetIntProperty(entry, "childrenCount", entry.ChildrenCount);
@@ -356,48 +411,59 @@ public sealed class JavaObjectRepositoryService
 
         var existing = entry.Locator ?? TryDeserializeLocator(entry.LocatorJson);
         entry.Locator = new LocatorSuggestion(
-            string.IsNullOrWhiteSpace(entry.Engine) ? "java-access-bridge" : entry.Engine,
-            entry.Role,
-            entry.RoleEnUs,
-            entry.Name,
-            entry.VirtualAccessibleName,
-            entry.Description,
-            entry.States,
-            entry.StatesEnUs,
-            entry.IndexInParent,
-            entry.ObjectDepth,
-            entry.ChildrenCount,
-            entry.Path,
-            entry.IndexPath,
-            entry.XPath,
-            entry.IndexXPath,
-            entry.SemanticXPath,
-            entry.ParentRole,
-            entry.ParentName,
-            entry.IsTableLikeContainer,
-            entry.IsTableLikeRow,
-            entry.IsTableLikeCell,
-            entry.TableLikeKind,
-            entry.TableLikeContainerPath,
-            entry.TableLikeColumnHeader,
-            entry.TableLikeRowIndex,
-            entry.TableLikeColumnIndex,
-            entry.TableLikeRowCount,
-            entry.TableLikeColumnCount,
-            entry.HasManagedDescendantAncestor,
-            entry.ActionNames,
-            GetProperty(entry, "text.preview", existing?.TextPreview ?? ""),
-            GetProperty(entry, "text.previewSource", existing?.TextPreviewSource ?? ""),
-            GetIntProperty(entry, "text.charCount", existing?.TextCharCount ?? -1),
-            GetIntProperty(entry, "text.caretIndex", existing?.TextCaretIndex ?? -1),
-            GetIntProperty(entry, "text.indexAtPoint", existing?.TextIndexAtPoint ?? -1),
-            GetProperty(entry, "text.selected", existing?.TextSelected ?? ""),
-            GetProperty(entry, "text.word", existing?.TextWord ?? ""),
-            GetProperty(entry, "text.sentence", existing?.TextSentence ?? ""),
-            GetProperty(entry, "value.current", existing?.CurrentValue ?? ""),
-            GetProperty(entry, "value.minimum", existing?.MinimumValue ?? ""),
-            GetProperty(entry, "value.maximum", existing?.MaximumValue ?? ""),
-            new ElementBounds(entry.X, entry.Y, entry.Width, entry.Height));
+            Engine: string.IsNullOrWhiteSpace(entry.Engine) ? "java-access-bridge" : entry.Engine,
+            Role: entry.Role,
+            RoleEnUs: entry.RoleEnUs,
+            Name: entry.Name,
+            VirtualAccessibleName: entry.VirtualAccessibleName,
+            Description: entry.Description,
+            States: entry.States,
+            StatesEnUs: entry.StatesEnUs,
+            IndexInParent: entry.IndexInParent,
+            ObjectDepth: entry.ObjectDepth,
+            ChildrenCount: entry.ChildrenCount,
+            Path: entry.Path,
+            IndexPath: entry.IndexPath,
+            XPath: entry.XPath,
+            IndexXPath: entry.IndexXPath,
+            SemanticXPath: entry.SemanticXPath,
+            ParentRole: entry.ParentRole,
+            ParentName: entry.ParentName,
+            IsTableLikeContainer: entry.IsTableLikeContainer,
+            IsTableLikeRow: entry.IsTableLikeRow,
+            IsTableLikeCell: entry.IsTableLikeCell,
+            TableLikeKind: entry.TableLikeKind,
+            TableLikeContainerPath: entry.TableLikeContainerPath,
+            TableLikeColumnHeader: entry.TableLikeColumnHeader,
+            TableLikeRowIndex: entry.TableLikeRowIndex,
+            TableLikeColumnIndex: entry.TableLikeColumnIndex,
+            TableLikeRowCount: entry.TableLikeRowCount,
+            TableLikeColumnCount: entry.TableLikeColumnCount,
+            IsFormsLikeScope: entry.IsFormsLikeScope,
+            IsFormsViewportLikeContainer: entry.IsFormsViewportLikeContainer,
+            FormsScopePath: entry.FormsScopePath,
+            FormsScopeRole: entry.FormsScopeRole,
+            FormsScopeName: entry.FormsScopeName,
+            FormsViewportPath: entry.FormsViewportPath,
+            FormsViewportRole: entry.FormsViewportRole,
+            FormsViewportName: entry.FormsViewportName,
+            TextLetter: entry.TextLetter,
+            TextSelectionStartIndex: entry.TextSelectionStartIndex,
+            TextSelectionEndIndex: entry.TextSelectionEndIndex,
+            HasManagedDescendantAncestor: entry.HasManagedDescendantAncestor,
+            ActionNames: entry.ActionNames,
+            TextPreview: GetProperty(entry, "text.preview", existing?.TextPreview ?? ""),
+            TextPreviewSource: GetProperty(entry, "text.previewSource", existing?.TextPreviewSource ?? ""),
+            TextCharCount: GetIntProperty(entry, "text.charCount", existing?.TextCharCount ?? -1),
+            TextCaretIndex: GetIntProperty(entry, "text.caretIndex", existing?.TextCaretIndex ?? -1),
+            TextIndexAtPoint: GetIntProperty(entry, "text.indexAtPoint", existing?.TextIndexAtPoint ?? -1),
+            TextSelected: GetProperty(entry, "text.selected", existing?.TextSelected ?? ""),
+            TextWord: GetProperty(entry, "text.word", existing?.TextWord ?? ""),
+            TextSentence: GetProperty(entry, "text.sentence", existing?.TextSentence ?? ""),
+            CurrentValue: GetProperty(entry, "value.current", existing?.CurrentValue ?? ""),
+            MinimumValue: GetProperty(entry, "value.minimum", existing?.MinimumValue ?? ""),
+            MaximumValue: GetProperty(entry, "value.maximum", existing?.MaximumValue ?? ""),
+            Bounds: new ElementBounds(entry.X, entry.Y, entry.Width, entry.Height));
         entry.LocatorJson = JsonExportService.Serialize(entry.Locator);
 
         EnsureWindowKeyProperty(entry);

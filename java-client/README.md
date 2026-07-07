@@ -170,11 +170,69 @@ cell.click();
 
 When the live app does not expose actual row containers, the client synthesizes row handles from the first visible cell in each inferred row so Oracle-style multi-record blocks remain navigable.
 
+## Oracle Forms / internal frame DSL
+
+For Oracle Fusion Forms, Opera PMS, and other Forms-style Java applications, prefer the Forms DSL when the UI has internal frames, canvases, scroll panes, or viewport-backed grids:
+
+```java
+try (JavaDriver driver = JavaDriver.attachToWindow(
+        api,
+        JavaWindowSelector.title("Opera"),
+        RetryOptions.of(Duration.ofSeconds(30), Duration.ofMillis(500)))) {
+
+    driver.loadRepository(repository);
+
+    driver.internalFrame("Reservations")
+            .element("guest_name_text")
+            .waitUntilExists()
+            .setText("ALI");
+
+    JavaTable reservations = driver.internalFrame("Reservations")
+            .viewport("Reservation Grid")
+            .table("reservation_results_grid");
+
+    reservations.scrollToRow(15);
+    reservations.row(0).cell("Guest Name").doubleClick();
+    String room = reservations.row(0).text("Room");
+}
+```
+
+The same style works without a persistent session:
+
+```java
+JavaAutomation automation = JavaAutomation.connect(api)
+        .repository(repository);
+
+automation.window(JavaWindowSelector.title("Opera"))
+        .internalFrame("Billing")
+        .table("payment_grid")
+        .row(0)
+        .cell("Amount")
+        .click();
+```
+
+Inline locators can also be scoped to an internal frame or viewport:
+
+```java
+LocatorSuggestion amountField = LocatorSuggestion.builder()
+        .role("text")
+        .name("Amount")
+        .build();
+
+driver.internalFrame("Billing")
+        .viewport("Payment Grid")
+        .element(amountField)
+        .click();
+```
+
+Internally this stamps the locator with the shared `formsScope*` and `formsViewport*` metadata used by the API resolver, recorder playback, object repository, and inspector locator JSON.
+
 ## Runnable example
 
 See this sample:
 
 - [FindElementsExample.java](C:/Users/Afsar/POC/JavaAutomation/java-client/src/main/java/com/afsarali/jab/client/examples/FindElementsExample.java)
+- [OracleFormsStyleExample.java](C:/Users/Afsar/POC/JavaAutomation/java-client/src/main/java/com/afsarali/jab/client/examples/OracleFormsStyleExample.java)
 
 It demonstrates:
 
